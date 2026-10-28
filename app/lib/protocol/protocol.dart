@@ -751,6 +751,34 @@ class ListModels extends ClientMessage {
   Map<String, dynamic> toJson() => {'type': 'list_models', 'id': id};
 }
 
+class WorkspaceBrowse extends ClientMessage {
+  WorkspaceBrowse({required this.id, this.path, this.showHidden = false});
+  final String id;
+  final String? path;
+  final bool showHidden;
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_browse',
+    'id': id,
+    if (path != null) 'path': path,
+    'show_hidden': showHidden,
+  };
+}
+
+class WorkspaceOpen extends ClientMessage {
+  WorkspaceOpen({required this.id, required this.path, required this.agent});
+  final String id;
+  final String path;
+  final String agent;
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_open',
+    'id': id,
+    'path': path,
+    'agent': agent,
+  };
+}
+
 // --- ServerMessage (extension → app) ---
 // 1 pairing = 1 session: no session_id on any message.
 // Sealed: all subtypes in this file — switch exhaustiveness enforced by compiler.
@@ -787,6 +815,18 @@ sealed class ServerMessage {
       'action_ok' => ActionOk.fromJson(json),
       'action_error' => ActionError.fromJson(json),
       'models_list' => ModelsList.fromJson(json),
+      'workspace_listing' => WorkspaceListing(
+        inReplyTo: json['in_reply_to'] as String,
+        directory: Map<String, dynamic>.from(json['directory'] as Map),
+      ),
+      'workspace_opened' => WorkspaceOpened(
+        inReplyTo: json['in_reply_to'] as String,
+        workspace: Map<String, dynamic>.from(json['workspace'] as Map),
+      ),
+      'workspace_error' => WorkspaceError(
+        inReplyTo: json['in_reply_to'] as String,
+        error: json['error'] as String,
+      ),
       // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
       // the SDK's extension_ui_request RPC contract; optional `ask` envelope
       // carries pi-ask's full question so the app renders multi/preview/notes.
@@ -795,6 +835,24 @@ sealed class ServerMessage {
       _ => throw UnsupportedTypeException(type ?? ''),
     };
   }
+}
+
+class WorkspaceListing extends ServerMessage {
+  const WorkspaceListing({required this.inReplyTo, required this.directory});
+  final String inReplyTo;
+  final Map<String, dynamic> directory;
+}
+
+class WorkspaceOpened extends ServerMessage {
+  const WorkspaceOpened({required this.inReplyTo, required this.workspace});
+  final String inReplyTo;
+  final Map<String, dynamic> workspace;
+}
+
+class WorkspaceError extends ServerMessage {
+  const WorkspaceError({required this.inReplyTo, required this.error});
+  final String inReplyTo;
+  final String error;
 }
 
 class AgentChunk extends ServerMessage {
@@ -1481,21 +1539,20 @@ class AskQuestionWire {
   });
 
   factory AskQuestionWire.fromJson(Map<String, dynamic> j) => AskQuestionWire(
-        id: j['id'] as String? ?? '',
-        label: (j['label'] as String?) ?? (j['prompt'] as String?) ?? '',
-        prompt: j['prompt'] as String? ?? '',
-        type: AskQuestionWireType.fromWire(j['type'] as String?) ??
-            AskQuestionWireType.single,
-        required: (j['required'] as bool?) ?? false,
-        presentedType:
-            AskQuestionWireType.fromWire(j['presentedType'] as String?),
-        requestedType:
-            AskQuestionWireType.fromWire(j['requestedType'] as String?),
-        options: (j['options'] as List<dynamic>? ?? const <dynamic>[])
-            .whereType<Map>()
-            .map((m) => AskOptionWire.fromJson(m.cast<String, dynamic>()))
-            .toList(growable: false),
-      );
+    id: j['id'] as String? ?? '',
+    label: (j['label'] as String?) ?? (j['prompt'] as String?) ?? '',
+    prompt: j['prompt'] as String? ?? '',
+    type:
+        AskQuestionWireType.fromWire(j['type'] as String?) ??
+        AskQuestionWireType.single,
+    required: (j['required'] as bool?) ?? false,
+    presentedType: AskQuestionWireType.fromWire(j['presentedType'] as String?),
+    requestedType: AskQuestionWireType.fromWire(j['requestedType'] as String?),
+    options: (j['options'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((m) => AskOptionWire.fromJson(m.cast<String, dynamic>()))
+        .toList(growable: false),
+  );
 }
 
 /// Optional pi-ask enrichment on an `extension_ui_request`. When present, the
@@ -1516,7 +1573,8 @@ class AskEnrichmentWire {
     this.questions = const <AskQuestionWire>[],
   });
 
-  factory AskEnrichmentWire.fromJson(Map<String, dynamic> j) => AskEnrichmentWire(
+  factory AskEnrichmentWire.fromJson(Map<String, dynamic> j) =>
+      AskEnrichmentWire(
         flowId: j['flow_id'] as String? ?? '',
         toolCallId: j['tool_call_id'] as String?,
         source: (j['source'] as String?) ?? 'tool',
@@ -1556,7 +1614,8 @@ class ExtensionUiRequest extends ServerMessage {
   factory ExtensionUiRequest.fromJson(Map<String, dynamic> j) =>
       ExtensionUiRequest(
         id: j['id'] as String? ?? '',
-        method: ExtensionUiMethod.fromWire(j['method'] as String?) ??
+        method:
+            ExtensionUiMethod.fromWire(j['method'] as String?) ??
             ExtensionUiMethod.select,
         title: j['title'] as String?,
         message: j['message'] as String?,
@@ -1589,7 +1648,9 @@ class AskAnswerWire {
   Map<String, dynamic> toJson() {
     final m = <String, dynamic>{};
     if (values.isNotEmpty) m['values'] = values;
-    if (customText != null && customText!.isNotEmpty) m['customText'] = customText;
+    if (customText != null && customText!.isNotEmpty) {
+      m['customText'] = customText;
+    }
     if (note != null && note!.isNotEmpty) m['note'] = note;
     if (optionNotes.isNotEmpty) m['optionNotes'] = optionNotes;
     return m;
@@ -1601,6 +1662,7 @@ class AskAnswerWire {
 class AskResponseEnrichmentWire {
   final String flowId;
   final bool isCancel;
+
   /// 'submit' | 'elaborate' (null when cancel). Raw string for forward-compat.
   final String? mode;
   final Map<String, AskAnswerWire> answers;

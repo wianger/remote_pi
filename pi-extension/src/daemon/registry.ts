@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
-import { daemonIdForCwd } from "./id.js";
+import { daemonIdForAgent } from "./id.js";
+import type { WorkspaceAgent } from "../workspace/types.js";
 import { defaultAgentName } from "../session/local_config.js";
 
 /**
@@ -28,6 +29,8 @@ function registryPathInternal(): string {
 }
 
 export interface DaemonEntry {
+  /** Absent in existing registries; defaults to Pi. */
+  agent?: WorkspaceAgent;
   /** Absolute realpath of the cwd this daemon manages. */
   cwd: string;
   /**
@@ -81,6 +84,7 @@ export function loadRegistry(): DaemonRegistry {
         const rawName = (item as { name?: unknown }).name;
         const entry: DaemonEntry = { cwd };
         if (typeof rawName === "string" && rawName.length > 0) entry.name = rawName;
+        if ((item as { agent?: unknown }).agent === "codex") entry.agent = "codex";
         daemons.push(entry);
       }
     }
@@ -100,18 +104,18 @@ export function saveRegistry(reg: DaemonRegistry): void {
  * present). Returns the derived id + normalized cwd so the caller can
  * report it back to the user.
  */
-export function addDaemon(rawCwd: string, name?: string): { id: string; cwd: string; name: string } {
+export function addDaemon(rawCwd: string, name?: string, agent: WorkspaceAgent = "pi"): { id: string; cwd: string; name: string } {
   const cwd = normalizeCwd(rawCwd);
   const reg = loadRegistry();
-  if (reg.daemons.some((d) => d.cwd === cwd)) {
+  if (reg.daemons.some((d) => d.cwd === cwd && (d.agent ?? "pi") === agent)) {
     throw new Error(`Daemon already registered for cwd: ${cwd}`);
   }
   // Always persist a name (the registry is the source of truth now that the
   // supervisor injects config via env instead of a local config file).
-  const resolvedName = name?.trim() || defaultAgentName(cwd);
-  reg.daemons.push({ cwd, name: resolvedName });
+  const resolvedName = name?.trim() || (agent === "codex" ? `Codex · ${defaultAgentName(cwd)}` : defaultAgentName(cwd));
+  reg.daemons.push({ cwd, name: resolvedName, ...(agent === "codex" ? { agent } : {}) });
   saveRegistry(reg);
-  return { id: daemonIdForCwd(cwd), cwd, name: resolvedName };
+  return { id: daemonIdForAgent(cwd, agent), cwd, name: resolvedName };
 }
 
 /**
@@ -121,7 +125,7 @@ export function addDaemon(rawCwd: string, name?: string): { id: string; cwd: str
  */
 export function removeDaemon(id: string): { removed: boolean; cwd?: string } {
   const reg = loadRegistry();
-  const idx = reg.daemons.findIndex((d) => daemonIdForCwd(d.cwd) === id);
+  const idx = reg.daemons.findIndex((d) => daemonIdForAgent(d.cwd, d.agent) === id);
   if (idx === -1) return { removed: false };
   const [removed] = reg.daemons.splice(idx, 1);
   saveRegistry(reg);
@@ -130,13 +134,14 @@ export function removeDaemon(id: string): { removed: boolean; cwd?: string } {
 
 /** Snapshot of all registered daemons with derived ids. Order matches the
  *  file's insertion order — first-registered first. */
-export function listDaemons(): Array<{ id: string; cwd: string; name: string }> {
+export function listDaemons(): Array<{ id: string; cwd: string; name: string; agent?: WorkspaceAgent }> {
   return loadRegistry().daemons.map((d) => ({
-    id: daemonIdForCwd(d.cwd),
+    id: daemonIdForAgent(d.cwd, d.agent),
     cwd: d.cwd,
     // Legacy entries (cwd only) fall back to the folder-derived name so a
     // daemon is never nameless. New entries already carry an explicit name.
     name: d.name ?? defaultAgentName(d.cwd),
+    ...(d.agent === "codex" ? { agent: d.agent } : {}),
   }));
 }
 

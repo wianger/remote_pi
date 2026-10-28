@@ -11,16 +11,19 @@ import 'package:flutter/material.dart';
 // SDK has already accepted the tool (`tool_execution_start` fires post
 // auto-approval), so the buttons could only blink for a few hundred
 // milliseconds before `tool_result` arrived — confusing UX with no real
-// gating. The card is now purely informational.
-//
-// `onDecide` is kept on the API for forward compat — when the Pi adds a
-// real approval pause we can re-enable the controls. Today it is unused.
+// gating. Pi cards stay informational. Codex explicitly marks requests
+// that are paused for a real decision with `approval_required`.
 
 class ToolRequestCard extends StatelessWidget {
   final ToolEvent tool;
   final void Function(String toolCallId, ApproveDecision decision)? onDecide;
 
   const ToolRequestCard({super.key, required this.tool, this.onDecide});
+
+  bool get _needsApproval =>
+      tool.status == ToolEventStatus.pending &&
+      tool.args is Map &&
+      tool.args['approval_required'] == true;
 
   /// Plan/32 — one color drives the whole card so the outcome is unmistakable:
   /// running → blue, done → green, failed → red, denied/expired → grey.
@@ -67,7 +70,33 @@ class ToolRequestCard extends StatelessWidget {
             const SizedBox(height: 10),
             _buildCodeBlock(context),
             const SizedBox(height: 8),
-            _buildOutcome(color),
+            if (_needsApproval) ...[
+              Text(
+                'Codex is waiting for your approval.',
+                style: TextStyle(color: context.colors.muted2, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  OutlinedButton(
+                    onPressed: onDecide == null
+                        ? null
+                        : () =>
+                              onDecide!(tool.toolCallId, ApproveDecision.deny),
+                    child: const Text('Deny'),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton(
+                    onPressed: onDecide == null
+                        ? null
+                        : () =>
+                              onDecide!(tool.toolCallId, ApproveDecision.allow),
+                    child: const Text('Allow once'),
+                  ),
+                ],
+              ),
+            ] else
+              _buildOutcome(color),
           ],
         ),
       ),
@@ -76,7 +105,8 @@ class ToolRequestCard extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, Color color) {
     final statusLabel = switch (tool.status) {
-      ToolEventStatus.pending || ToolEventStatus.allowed => 'RUNNING',
+      ToolEventStatus.pending ||
+      ToolEventStatus.allowed => _needsApproval ? 'APPROVAL' : 'RUNNING',
       ToolEventStatus.completed => 'DONE',
       ToolEventStatus.failed => 'FAILED',
       ToolEventStatus.denied => 'DENIED',

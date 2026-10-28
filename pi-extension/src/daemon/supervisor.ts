@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { addDaemon, listDaemons, migrateRegistryNames, removeDaemon } from "./registry.js";
 import { daemonIdForCwd } from "./id.js";
+import { resolveDirectory } from "../workspace/directories.js";
 import { defaultAgentName, type LocalConfig } from "../session/local_config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
 import { EXIT_DAEMON_FRESH_SESSION, RpcChild, type RpcChildExitEvent, type RpcChildOptions } from "./rpc_child.js";
@@ -94,6 +95,8 @@ function _probeSupervisor(path: string): Promise<boolean> {
 }
 
 export interface SupervisorOptions {
+  /** On-demand launch must not unexpectedly start previously stopped folders. */
+  autoStartRegistered?: boolean;
   /** Absolute path to remote-pi's dist/index.js — passed as -e to each
    *  spawned `pi`. Defaults to the location relative to where this file
    *  is bundled (so the supervisor finds itself). */
@@ -140,7 +143,7 @@ export class Supervisor {
     // field) so every daemon has a stable name to inject via env.
     migrateRegistryNames();
     await this._bindUds();
-    this._spawnAllFromRegistry();
+    if (this.opts.autoStartRegistered !== false) this._spawnAllFromRegistry();
     // Cron (plan/39): schedule all enabled jobs, then run any missed catchup.
     this._reconcileCron();
     this._runCatchup();
@@ -231,6 +234,7 @@ export class Supervisor {
     catch (e) { return { ok: false, error: (e as Error).message }; }
 
     switch (req.op) {
+      case "open_workspace": return this._opOpenWorkspace(req.cwd, req.agent);
       case "list":         return { ok: true, data: { daemons: this._listInfo() } };
       case "status":       return { ok: true, data: { daemons: this._listInfo() } };
       case "start_all":    return this._opStartAll();
@@ -257,6 +261,20 @@ export class Supervisor {
 
   // ── Op handlers ──────────────────────────────────────────────────────────
 
+  private async _opOpenWorkspace(rawCwd: string, agent: unknown): Promise<ControlReply<unknown>> {
+    if (agent !== "pi" && agent !== "codex") return { ok: false, error: "Choose Pi or Codex." };
+    try {
+      const cwd = await resolveDirectory(rawCwd);
+      const entry = listDaemons().find((item) => item.cwd === cwd && (item.agent ?? "pi") === agent)
+        ?? addDaemon(cwd, undefined, agent);
+      const started = this._opStart(entry.id);
+      if (!started.ok) return started;
+      return { ok: true, data: { id: entry.id, cwd: entry.cwd, name: entry.name } };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not start this session." };
+    }
+  }
+
   private _listInfo(): DaemonInfo[] {
     const registry = listDaemons();
     return registry.map((entry) => {
@@ -267,6 +285,7 @@ export class Supervisor {
         cwd: entry.cwd,
         name,
         state: slot?.child.state ?? "stopped",
+        ...(entry.agent === "codex" ? { agent: entry.agent } : {}),
       };
       if (slot) {
         if (slot.child.pid !== undefined) info.pid = slot.child.pid;
@@ -579,6 +598,7 @@ export class Supervisor {
       extensionPath: this.opts.extensionPath,
       cwd,
       config,
+      agent: listDaemons().find((entry) => entry.id === id)?.agent ?? "pi",
     };
     if (this.opts.piBin !== undefined) childOpts.piBin = this.opts.piBin;
     const child = new RpcChild(childOpts);

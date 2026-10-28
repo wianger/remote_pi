@@ -1,6 +1,7 @@
 // Plan 29 — SpeechToTextService locale resolution + transcript / cancel /
 // level behavior, exercised through the SttPlugin seam (no device).
 
+import 'dart:io';
 import 'package:app/data/voice/speech_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -236,7 +237,7 @@ void main() {
       // The unit-test host is macOS, so the platform factory must resolve to
       // the dBFS scale — guarding the iOS waveform regression directly.
       expect(SoundLevelScale.forPlatform(), SoundLevelScale.darwin);
-    });
+    }, skip: !Platform.isMacOS);
 
     test('normalize clamps NaN and ±infinity to the endpoints', () {
       expect(SoundLevelScale.darwin.normalize(double.nan), 0.0);

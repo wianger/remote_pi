@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { DaemonState } from "./control_protocol.js";
 import { defaultAgentName, loadLocalConfig, type LocalConfig } from "../session/local_config.js";
+import type { WorkspaceAgent } from "../workspace/types.js";
 
 /**
  * Wrapper around a `pi --mode rpc -e <extension>` child process for the
@@ -24,6 +25,7 @@ import { defaultAgentName, loadLocalConfig, type LocalConfig } from "../session/
  */
 
 export interface RpcChildOptions {
+  agent?: WorkspaceAgent;
   /** Path to the `pi` binary. Defaults to "pi" (must be on PATH). */
   piBin?: string;
   /** Absolute path to the remote-pi `dist/index.js` to load as -e. */
@@ -255,7 +257,10 @@ export class RpcChild extends EventEmitter {
     this._busy = false;
     this._state = "starting";
 
-    const piTarget = resolvePiSpawn(this.opts.piBin ?? "pi");
+    const isCodex = this.opts.agent === "codex";
+    const piTarget = isCodex
+      ? { command: process.execPath, prefixArgs: [] }
+      : resolvePiSpawn(this.opts.piBin ?? "pi");
     // Name the (single) daemon session after the daemon's configured identity,
     // so it shows up stably instead of an auto-generated name on each restart.
     // Prefer the supervisor-injected config; fall back to the on-disk file.
@@ -265,7 +270,9 @@ export class RpcChild extends EventEmitter {
     this.forceFreshSessionOnNextSpawn = false;
     // On Windows `prefixArgs` carries pi's cli.js (we spawn node directly); on
     // POSIX it's empty and `command` is `pi` itself.
-    const args = [...piTarget.prefixArgs, ...rpcSpawnArgs(this.opts.extensionPath, sessionName, useContinue)];
+    const args = isCodex
+      ? [join(dirname(this.opts.extensionPath), "bin", "codex-session.js")]
+      : [...piTarget.prefixArgs, ...rpcSpawnArgs(this.opts.extensionPath, sessionName, useContinue)];
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       ...this.opts.env,

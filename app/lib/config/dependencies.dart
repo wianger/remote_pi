@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:app/config/utils/injector.dart';
 import 'package:app/data/actions/actions_repository.dart';
+import 'package:app/data/workspaces/workspace_repository.dart';
+import 'package:app/domain/workspaces/workspace_repository.dart';
+import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
 import 'package:app/data/mesh/mesh_client.dart';
 import 'package:app/data/mesh/mesh_sync_service.dart';
 import 'package:app/data/local/boxes.dart';
@@ -129,6 +131,16 @@ Future<void> setupDependencies() async {
   );
 
   // ViewModels
+  _injector.addRepository<IWorkspaceRepository>(
+    () => WorkspaceRepository(
+      _injector.get<ConnectionManager>(),
+      _injector.get<PairingStorage>(),
+      _injector.get<Preferences>(),
+    ),
+  );
+  _injector.addViewModel<NewSessionViewModel>(
+    () => NewSessionViewModel(_injector.get<IWorkspaceRepository>()),
+  );
   _injector.addViewModel<ChatViewModel>(
     () => ChatViewModel(
       _injector.get<SessionReadRepository>(),
@@ -204,7 +216,9 @@ Future<void> setupDependencies() async {
       _injector.get<DismissedUpdateStore>(),
       _injector.get<UrlOpener>(),
       currentVersion: appVersion,
-      enabled: Platform.isAndroid,
+      // Personal builds have a separate application id and signing identity.
+      // Upstream APK updates cannot update this app.
+      enabled: false,
     ),
   );
 

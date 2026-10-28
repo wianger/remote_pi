@@ -101,6 +101,54 @@ void main() {
     return out;
   }
 
+  test(
+    'history fragments are joined before replacing the cached conversation',
+    () async {
+      final s = await setup();
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: 'full',
+          sessionStartedAt: 0,
+          events: const [UserInputEvt(ts: 1, id: 'first', text: 'beginning')],
+          eos: false,
+        ),
+      );
+      await _settle();
+      expect(messages(s.epk), isEmpty);
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: 'full',
+          sessionStartedAt: 0,
+          events: const [
+            AgentMessageEvt(ts: 2, inReplyTo: 'first', text: 'ending'),
+          ],
+          eos: true,
+        ),
+      );
+      await _settle();
+      expect(messages(s.epk).map((message) => message.text), [
+        'beginning',
+        'ending',
+      ]);
+      s.sync.dispose();
+      s.conn.dispose();
+    },
+  );
+
+  test('temporary control room cannot write into the mounted chat', () async {
+    final s = await setup();
+    s.conn.switchRoom('directory-control');
+    s.ch.push(UserInput(id: 'other', text: 'another session'));
+    await _settle();
+    expect(messages(s.epk), isEmpty);
+    s.conn.switchRoom('main');
+    s.ch.push(UserInput(id: 'mine', text: 'this session'));
+    await _settle();
+    expect(messages(s.epk).single.text, 'this session');
+    s.sync.dispose();
+    s.conn.dispose();
+  });
+
   SessionIndexRecord? index(String epk) {
     final raw = LocalBoxes().sessionsIndexBox().get('$epk:main');
     return raw is Map

@@ -34,6 +34,7 @@ This binary takes NO arguments — it is normally launched by systemd/launchd
   remote-pi daemons
 
 Options:
+  --on-demand    Start the manager without starting all registered sessions
   -h, --help      Show this help and exit
   -v, --version   Print version and exit
 `;
@@ -52,7 +53,7 @@ async function main(): Promise<void> {
     process.stdout.write("pi-supervisord (remote-pi)\n");
     return;
   }
-  if (args.length > 0) {
+  if (args.some((arg) => arg !== "--on-demand")) {
     process.stderr.write(
       `pi-supervisord: unexpected argument(s): ${args.join(" ")}\n` +
       "This binary takes no arguments. Run `pi-supervisord --help`.\n",
@@ -67,7 +68,7 @@ async function main(): Promise<void> {
   const distRoot = dirname(dirname(here));  // dist/bin → dist
   const extensionPath = join(distRoot, "index.js");
 
-  const supervisor = new Supervisor({ extensionPath });
+  const supervisor = new Supervisor({ extensionPath, autoStartRegistered: !args.includes("--on-demand") });
   await supervisor.start();
   process.stderr.write(
     `[pi-supervisord] up — UDS: ~/.pi/remote/supervisor.sock, extension: ${extensionPath}\n`,

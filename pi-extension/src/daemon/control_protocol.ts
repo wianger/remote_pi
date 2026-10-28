@@ -14,11 +14,13 @@
 
 import type { CronJob } from "./cron_registry.js";
 import type { CronLogEntry } from "./cron_log.js";
+import type { WorkspaceAgent } from "../workspace/types.js";
 
 /** Per-daemon runtime state observable through the supervisor. */
 export type DaemonState = "running" | "stopped" | "starting" | "crashed";
 
 export interface DaemonInfo {
+  agent?: WorkspaceAgent;
   id: string;            // sha256(cwd)[0..8] — see daemon/id.ts
   cwd: string;           // absolute realpath
   name: string;          // from <cwd>/.pi/remote-pi/config.json agent_name
@@ -30,6 +32,7 @@ export interface DaemonInfo {
 
 /** Requests sent CLI → supervisor. */
 export type ControlRequest =
+  | { op: "open_workspace"; cwd: string; agent: WorkspaceAgent }
   | { op: "list" }
   | { op: "status" }
   | { op: "start_all" }
@@ -59,6 +62,7 @@ export type ControlReply<T = unknown> =
  * `daemon/supervisor.ts`. Used for typed client calls.
  */
 export interface ControlReplyShapes {
+  open_workspace: { id: string; cwd: string; name: string };
   list: { daemons: DaemonInfo[] };
   status: { daemons: DaemonInfo[] };
   start_all: { started: string[]; already_running: string[] };

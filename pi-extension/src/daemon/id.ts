@@ -33,3 +33,11 @@ export function daemonIdForCwd(cwd: string): string {
   }
   return createHash("sha256").update(target).digest("hex").slice(0, 8);
 }
+
+/** Keep existing Pi ids stable while allowing Codex in the same folder. */
+export function daemonIdForAgent(cwd: string, agent: "pi" | "codex" = "pi"): string {
+  if (agent === "pi") return daemonIdForCwd(cwd);
+  let target: string;
+  try { target = realpathSync(cwd); } catch { target = cwd; }
+  return createHash("sha256").update(`codex\0${target}`).digest("hex").slice(0, 8);
+}

@@ -1,4 +1,5 @@
 import 'package:app/domain/session_state.dart';
+import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/chat/widgets/tool_request_card.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,33 @@ const _editToolWithHunk = ToolEvent(
 );
 
 void main() {
+  testWidgets('Codex paused approval sends one explicit allow decision', (
+    tester,
+  ) async {
+    ApproveDecision? decision;
+    String? id;
+    await tester.pumpWidget(
+      _wrap(
+        ToolRequestCard(
+          tool: const ToolEvent(
+            id: 'approval',
+            toolCallId: 'approval',
+            tool: 'commandExecution',
+            args: {'command': 'git status', 'approval_required': true},
+          ),
+          onDecide: (value, choice) {
+            id = value;
+            decision = choice;
+          },
+        ),
+      ),
+    );
+    expect(find.text('APPROVAL'), findsOneWidget);
+    expect(find.text('Deny'), findsOneWidget);
+    await tester.tap(find.text('Allow once'));
+    expect(id, 'approval');
+    expect(decision, ApproveDecision.allow);
+  });
   group('ToolRequestCard (informational)', () {
     testWidgets('shows tool name and command', (tester) async {
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: _bashTool)));

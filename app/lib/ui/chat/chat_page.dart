@@ -3,6 +3,7 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
@@ -151,7 +152,13 @@ class ChatPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (showBack)
+          if (SessionShell.menuOf(context) != null)
+            IconButton(
+              icon: Icon(LucideIcons.panelLeft, size: 20, color: colors.text),
+              tooltip: 'Sessions',
+              onPressed: SessionShell.menuOf(context),
+            )
+          else if (showBack)
             IconButton(
               icon: Icon(LucideIcons.chevronLeft, size: 18, color: colors.text),
               tooltip: 'Back',
@@ -388,7 +395,15 @@ class ChatPage extends StatelessWidget {
       ),
       ChatReady(:final messages, :final streaming) => () {
         final visible = hideToolCalls
-            ? messages.where((m) => m is! ToolEvent).toList()
+            ? messages
+                  .where(
+                    (m) =>
+                        m is! ToolEvent ||
+                        m.status == ToolEventStatus.pending &&
+                            m.args is Map &&
+                            m.args['approval_required'] == true,
+                  )
+                  .toList()
             : messages;
         // Empty body → the default placeholder (Pi brand icon + "Nothing
         // here"), shown whenever there's nothing to render — including while

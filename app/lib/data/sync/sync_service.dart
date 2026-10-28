@@ -69,6 +69,8 @@ class SyncService extends Service {
       StreamController<List<QueuedMsg>>.broadcast();
 
   bool _pendingSyncRequest = false;
+  String? _historyRequestId;
+  final List<SessionHistoryEvent> _historyParts = [];
   Timer? _syncDebounce;
 
   // Whether the active session's agent is currently producing a reply. Spans
@@ -159,6 +161,8 @@ class SyncService extends Service {
   /// (emitting the cleared state so listeners update) WITHOUT touching the
   /// durable session index. Used on a session switch — see [activate].
   void _resetTurnState() {
+    _historyRequestId = null;
+    _historyParts.clear();
     _flushTimer?.cancel();
     _flushTimer = null;
     _chunkBuffer.clear();
@@ -455,6 +459,13 @@ class SyncService extends Service {
     if (originEpk != null && _activeEpk != null && originEpk != _activeEpk) {
       return;
     }
+    // Directory browsing can temporarily address another room while the old
+    // chat is still mounted underneath. Never write that room into this box.
+    if (originEpk != null &&
+        _activeEpk != null &&
+        _conn.activeRoomId != _activeRoomId) {
+      return;
+    }
     switch (msg) {
       case AgentChunk(:final inReplyTo, :final delta):
         _chunkBuffer.write(delta);
@@ -618,8 +629,23 @@ class SyncService extends Service {
         }
 
       case SessionHistory():
+        if (_historyRequestId != msg.inReplyTo) {
+          _historyRequestId = msg.inReplyTo;
+          _historyParts.clear();
+        }
+        _historyParts.addAll(msg.events);
+        if (!msg.eos) break;
+        final history = SessionHistory(
+          inReplyTo: msg.inReplyTo,
+          sessionStartedAt: msg.sessionStartedAt,
+          events: List.of(_historyParts),
+          eos: true,
+          truncated: msg.truncated,
+        );
+        _historyRequestId = null;
+        _historyParts.clear();
         // ignore: discarded_futures
-        _applyHistory(msg);
+        _applyHistory(history);
 
       case ErrorMessage(:final code, :final message):
         if (code.contains('unknown_peer')) {
@@ -658,6 +684,9 @@ class SyncService extends Service {
       case ActionOk():
       case ActionError():
       case ModelsList():
+      case WorkspaceListing():
+      case WorkspaceOpened():
+      case WorkspaceError():
         break;
     }
   }
