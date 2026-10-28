@@ -439,8 +439,10 @@ export class CodexSession {
     }
     for (const event of snapshot) {
       const size = Buffer.byteLength(JSON.stringify(event), "utf8");
-      if (size > 1024 * 1024) throw new Error("A history attachment is too large to synchronize.");
-      if (bytes + size > 1024 * 1024) { chunks.push([]); bytes = 0; }
+      // A single compressed phone image may exceed the usual 1 MiB batch.
+      // Keep its double-base64 envelope below the relay's 4 MiB ceiling.
+      if (size > 2.8 * 1024 * 1024) throw new Error("A history attachment is too large to synchronize.");
+      if (bytes + size > 1024 * 1024 && chunks[chunks.length - 1]!.length) { chunks.push([]); bytes = 0; }
       chunks[chunks.length - 1]!.push(event);
       bytes += size;
     }

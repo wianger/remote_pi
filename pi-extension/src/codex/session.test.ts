@@ -153,4 +153,16 @@ describe("Codex mobile session bridge", () => {
     expect(client.rejectRequest).toHaveBeenCalledWith(99, expect.stringContaining("Unsupported"));
     expect(client.respond).not.toHaveBeenCalled();
   });
+
+  test("large image-sized events are synchronized in separate relay-safe frames", async () => {
+    const events: SessionHistoryEvent[] = [0, 1].map((index) => ({ type: "user_input", id: String(index), ts: index,
+      text: "image", images: [{ mime: "image/jpeg", data: "A".repeat(1600 * 1024) }] }));
+    writeFileSync(join(root, "state.json"), JSON.stringify({ threadId: "thread-1", startedAt: 42, events }));
+    await session.start();
+    await session.handle(sender, { type: "session_sync", id: "large" });
+    const frames = replies.filter((message) => message.type === "session_history");
+    expect(frames).toHaveLength(2);
+    expect(frames.map((frame) => frame.eos)).toEqual([false, true]);
+    for (const frame of frames) expect(Buffer.byteLength(Buffer.from(JSON.stringify(frame)).toString("base64"))).toBeLessThan(4 * 1024 * 1024);
+  });
 });
