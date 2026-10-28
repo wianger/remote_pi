@@ -673,3 +673,19 @@ for palette and export sizes.
 ## License
 
 MIT
+
+
+## Session history (local customization)
+
+This checkout synchronizes the complete active session branch by default,
+including persisted messages from before a resume, reload, or compaction.
+It does not combine separate sessions or inactive fork branches. Set a positive
+`REMOTE_PI_SYNC_LIMIT` when launching Pi to impose a smaller event-count cap.
+The mobile app still replaces its cached transcript on synchronization; larger
+histories take more bandwidth and memory and remain subject to transport limits.
+
+
+Full-history mode also overrides small `limit` values sent by older mobile apps.
+An explicit numeric `REMOTE_PI_SYNC_LIMIT` retains bounded synchronization.
+Use `/remote-pi config` to inspect the loaded patch version and the most recent
+history request's requested, sent, and total event counts.

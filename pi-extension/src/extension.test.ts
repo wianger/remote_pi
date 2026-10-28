@@ -2328,6 +2328,106 @@ describe("multi-channel broadcast (W2D)", () => {
       expect.objectContaining({ type: "user_input", text: "oi" }),
     ]));
   });
+
+  async function syncFullHistory(id: string, limit?: number) {
+    const before = relayRef.current!.send.mock.calls.length;
+    relayRef.current!.emit("message", JSON.stringify({
+      peer: "ownerA__1234567890",
+      ct: Buffer.from(JSON.stringify({ type: "session_sync", id, ...(limit === undefined ? {} : { limit }) })).toString("base64"),
+    }));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const sent = relayRef.current!.send.mock.calls.slice(before)
+      .map((call) => decodeSentCt(call[0] as string));
+    return sent.find((message) => message.inner.type === "session_history")!.inner as unknown as {
+      events: Array<{ type: string; text?: string }>;
+      truncated: boolean;
+    };
+  }
+
+  test("full history restores a resumed branch and replays more than 30 events", async () => {
+    await _pairForTest("ownerA__1234567890");
+    _setSessionStartedAtForTest(1699999999000);
+    const entries = Array.from({ length: 80 }, (_, i) => ({
+      type: "message", message: { role: "user", content: `archived-${i}`, timestamp: 1700000000000 + i },
+    }));
+    const onStart = captureEventHandler("session_start");
+    onStart({ type: "session_start" }, {
+      sessionManager: { getBranch: () => entries },
+    } as unknown as ReturnType<typeof makeMockCtx>);
+    const history = await syncFullHistory("full-history-resume");
+    expect(history.events).toHaveLength(80);
+    expect(history.events[0]).toMatchObject({ type: "user_input", text: "archived-0" });
+    expect(history.events[79]).toMatchObject({ type: "user_input", text: "archived-79" });
+    expect(history.truncated).toBe(false);
+  });
+
+  test("full history overrides a legacy mobile limit and exposes actual sync counts", async () => {
+    await _pairForTest("ownerA__1234567890");
+    _setSessionStartedAtForTest(1699999999000);
+    _setMessageBufferForTest(Array.from({ length: 80 }, (_, i) => ({
+      role: "user", content: `archived-${i}`, timestamp: 1700000000000 + i,
+    })));
+    const history = await syncFullHistory("full-history-legacy-client", 30);
+    expect(history.events).toHaveLength(80);
+    expect(history.truncated).toBe(false);
+    const notify = vi.fn();
+    await captureHandler("remote-pi config")("", { ui: { notify } } as ReturnType<typeof makeMockCtx>);
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("History patch: full-history-v2"), "info");
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("requested=30, sent=80/80, truncated=false"), "info");
+  });
+
+  test("full history preserves pre-compaction messages and replaces history on a new branch", () => {
+    const onStart = captureEventHandler("session_start");
+    _setMessageBufferForTest([{ role: "user", content: "wrong-branch", timestamp: 1 }]);
+    const beforeCompact = { role: "user", content: "before compaction", timestamp: 1700000000000 };
+    const afterCompact = { role: "user", content: "after compaction", timestamp: 1700000000002 };
+    onStart({ type: "session_start" }, {
+      sessionManager: { getBranch: () => [
+        { type: "model_change", provider: "test", modelId: "test" },
+        { type: "message", message: beforeCompact },
+        { type: "compaction", summary: "summary", timestamp: "2023-11-14T22:13:20.001Z", tokensBefore: 1234 },
+        { type: "message", message: afterCompact },
+      ] },
+    } as unknown as ReturnType<typeof makeMockCtx>);
+    expect(_getMessageBufferForTest()).toEqual([
+      beforeCompact,
+      { role: "compaction", content: "summary", timestamp: 1700000000001, tokensBefore: 1234 },
+      afterCompact,
+    ]);
+    onStart({ type: "session_start" }, {
+      sessionManager: { getBranch: () => [] },
+    } as unknown as ReturnType<typeof makeMockCtx>);
+    expect(_getMessageBufferForTest()).toEqual([]);
+  });
+
+  test("full history keeps explicit server and client caps effective", async () => {
+    const previous = process.env["REMOTE_PI_SYNC_LIMIT"];
+    process.env["REMOTE_PI_SYNC_LIMIT"] = "20";
+    try {
+      await _pairForTest("ownerA__1234567890");
+      _setSessionStartedAtForTest(1699999999000);
+      _setMessageBufferForTest(Array.from({ length: 80 }, (_, i) => ({
+        role: "user", content: `archived-${i}`, timestamp: 1700000000000 + i,
+      })));
+      const capped = await syncFullHistory("full-history-server-cap");
+      expect(capped.events).toHaveLength(20);
+      expect(capped.truncated).toBe(true);
+      const clientCapped = await syncFullHistory("full-history-client-cap", 7);
+      expect(clientCapped.events).toHaveLength(7);
+      expect(clientCapped.truncated).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env["REMOTE_PI_SYNC_LIMIT"];
+      else process.env["REMOTE_PI_SYNC_LIMIT"] = previous;
+    }
+  });
+
+  test("full history leaves live messages intact when an older host omits the session manager", () => {
+    const live = [{ role: "user", content: "live", timestamp: 1700000000000 }];
+    _setMessageBufferForTest(live);
+    captureEventHandler("session_start")({ type: "session_start" }, {} as ReturnType<typeof makeMockCtx>);
+    expect(_getMessageBufferForTest()).toEqual(live);
+  });
+
 });
 
 describe("user_input mirroring", () => {
@@ -3417,7 +3517,7 @@ describe("session sync", () => {
   });
 
   test("client limit < env → server respects client limit + truncated true if overflow", async () => {
-    delete process.env["REMOTE_PI_SYNC_LIMIT"];  // default 30
+    process.env["REMOTE_PI_SYNC_LIMIT"] = "30";
     await _pairForTest("peer-ss-mirror-2");
 
     const ts = 1_700_000_000_000;
@@ -3505,7 +3605,7 @@ describe("session sync", () => {
   });
 
   test("buffer with 50 events + env=30 → returns 30, truncated:true", async () => {
-    delete process.env["REMOTE_PI_SYNC_LIMIT"];  // default 30
+    process.env["REMOTE_PI_SYNC_LIMIT"] = "30";
     await _pairForTest("peer-ss-mirror-5");
 
     const ts = 1_700_000_000_000;

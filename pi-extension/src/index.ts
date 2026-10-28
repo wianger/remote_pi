@@ -1131,13 +1131,39 @@ let _cwdLock: AcquiredLock | null = null;
 // a live race). Null until the lock is acquired.
 let _lockedName: string | null = null;
 
+/** Restore the active session branch on startup, resume, fork, and reload.
+ * getBranch() includes persisted messages before compaction, unlike the model
+ * context. Normal message_end events append subsequent messages to this seed.
+ */
+function _restoreSessionHistory(ctx: ExtensionContext): void {
+  if (!ctx.sessionManager || typeof ctx.sessionManager.getBranch !== "function") return;
+  const restored: typeof _messageBuffer = [];
+  for (const entry of ctx.sessionManager.getBranch()) {
+    if (entry.type === "message") {
+      const message = entry.message;
+      if (message.role === "user" || message.role === "assistant" || message.role === "toolResult") {
+        restored.push(message);
+      }
+    } else if (entry.type === "compaction") {
+      restored.push({
+        role: "compaction",
+        content: entry.summary,
+        timestamp: Date.parse(entry.timestamp) || 0,
+        tokensBefore: entry.tokensBefore,
+      });
+    }
+  }
+  _messageBuffer = restored;
+}
+
 // ── Session sync limit (mirror cache cap) ─────────────────────────────────────
 //
-// Configurable via REMOTE_PI_SYNC_LIMIT env var (positive int, default 30).
+// Full active-branch history by default; REMOTE_PI_SYNC_LIMIT can set a positive cap.
 // Read on every session_sync so QA can `export REMOTE_PI_SYNC_LIMIT=N` between
 // runs without restarting the extension. The value is also clamped against
 // the client-provided `limit` (server is authoritative).
-const SYNC_LIMIT_DEFAULT = 30;
+const SYNC_LIMIT_DEFAULT = Number.MAX_SAFE_INTEGER;
+let _lastHistorySync: { requested: number | undefined; sent: number; total: number; truncated: boolean } | null = null;
 function _getSyncLimit(): number {
   const raw = process.env["REMOTE_PI_SYNC_LIMIT"];
   const parsed = raw ? parseInt(raw, 10) : NaN;
@@ -2340,6 +2366,8 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   // bound to the current session.
   pi.on("session_start", (_event, ctx) => {
     _lastEventCtx = ctx;
+    _restoreSessionHistory(ctx);
+    _lastHistorySync = null;
     // session_shutdown disposes per-session pi-ask subscriptions. A host that
     // reuses this module instance does NOT re-run the factory, so rebind the
     // bridge here; fresh-module hosts already created theirs in the factory.
@@ -3389,7 +3417,13 @@ function _cmdConfig(ctx: Pick<ExtensionContext, "ui">): void {
   const live = _relayUrl && _relayUrl !== url
     ? `\n  ⚠ Live connection still on ${_relayUrl} — run /remote-pi relay stop then /remote-pi relay start to apply.`
     : "";
-  ctx.ui.notify(`[remote-pi]\n  Relay URL: ${url}\n  Source: ${source} — ${origin}${live}`, "info");
+  const historyLimit = _getSyncLimit();
+  const historyMode = historyLimit === SYNC_LIMIT_DEFAULT ? "all" : String(historyLimit);
+  const eventCount = _mapAgentMessagesToEvents(_messageBuffer).length;
+  const lastSync = _lastHistorySync
+    ? `requested=${_lastHistorySync.requested ?? "default"}, sent=${_lastHistorySync.sent}/${_lastHistorySync.total}, truncated=${_lastHistorySync.truncated}`
+    : "none since session start";
+  ctx.ui.notify(`[remote-pi]\n  Relay URL: ${url}\n  Source: ${source} — ${origin}${live}\n  History patch: full-history-v2\n  History mode: ${historyMode}; cached events: ${eventCount}\n  Last history sync: ${lastSync}`, "info");
 }
 
 /**
@@ -4653,11 +4687,16 @@ function _handleSessionSync(
   // local cache with this response — no delta/since_ts logic.
   const serverLimit = _getSyncLimit();
   const requested = msg.limit ?? serverLimit;
-  const effectiveLimit = Math.min(requested, serverLimit);  // server clamps
+  // Full-history mode overrides legacy clients that still request only 30.
+  // Explicit numeric server caps retain the normal client/server minimum.
+  const effectiveLimit = serverLimit === SYNC_LIMIT_DEFAULT
+    ? serverLimit
+    : Math.min(requested, serverLimit);
 
   const allEvents = _mapAgentMessagesToEvents(_messageBuffer);
   const slice = effectiveLimit > 0 ? allEvents.slice(-effectiveLimit) : [];
   const truncated = allEvents.length > effectiveLimit;
+  _lastHistorySync = { requested: msg.limit, sent: slice.length, total: allEvents.length, truncated };
 
   sender.send({
     type: "session_history",
