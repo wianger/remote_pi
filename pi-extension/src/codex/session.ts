@@ -96,10 +96,7 @@ export class CodexSession {
   }
 
   close(): void {
-    if (this.busy && this.text && this.userId) {
-      this.events.push({ ts: Date.now(), type: "agent_message", in_reply_to: this.userId, text: this.text });
-    }
-    this.text = "";
+    this.flushText();
     this.busy = false;
     this.persist();
     this.client.close();
@@ -292,7 +289,7 @@ export class CodexSession {
     } else if (method === "turn/completed") {
       const turn = object(params.turn);
       const userId = this.userId;
-      if (this.text && userId) this.events.push({ ts: Date.now(), type: "agent_message", in_reply_to: userId, text: this.text });
+      this.flushText();
       if (turn.status === "failed" && userId) {
         this.options.broadcast({ type: "error", in_reply_to: userId, code: "codex_error",
           message: String(object(turn.error).message ?? "Codex could not complete this response.") });
@@ -323,10 +320,26 @@ export class CodexSession {
   }
 
   private toolRequest(id: string, tool: string, args: JsonObject): void {
-    this.toolItems.set(id, { tool, args });
-    const event = { type: "tool_request" as const, tool_call_id: id, tool, args };
-    this.events.push({ ...event, ts: Date.now() });
+    const previous = this.toolItems.get(id);
+    if (!previous) this.flushText();
+    const merged = { ...previous?.args, ...args };
+    this.toolItems.set(id, { tool, args: merged });
+    const event = { type: "tool_request" as const, tool_call_id: id, tool, args: merged };
+    const index = this.events.findIndex((entry) => entry.type === "tool_request" && entry.tool_call_id === id);
+    if (index >= 0) this.events[index] = { ...event, ts: this.events[index]!.ts };
+    else this.events.push({ ...event, ts: Date.now() });
     this.options.broadcast(event);
+  }
+
+  private flushText(): void {
+    if (!this.text || !this.userId) return;
+    this.events.push({ ts: Date.now(), type: "agent_message", in_reply_to: this.historyTextId(), text: this.text });
+    this.text = "";
+  }
+
+  private historyTextId(): string {
+    const hasSegment = this.events.some((entry) => entry.type === "agent_message" && entry.in_reply_to === this.userId);
+    return hasSegment ? `${this.userId}:segment:${this.events.length}` : this.userId!;
   }
 
   private toolResult(id: string, result?: unknown, error?: string): void {
@@ -399,6 +412,9 @@ export class CodexSession {
     this.client.respond(request.id, { answers });
     this.questions.delete(message.id);
     this.questionPrompts.delete(message.id);
+    // Every connected phone must close the same answered question.
+    this.options.broadcast({ type: "extension_ui_request", id: message.id,
+      method: "notify", message: "Answered", notify_type: "info" });
   }
 
   private async models(sender: PeerChannel, id: string): Promise<void> {
@@ -419,7 +435,7 @@ export class CodexSession {
     let bytes = 0;
     const snapshot: SessionHistoryEvent[] = [...this.events];
     if (this.busy && this.text && this.userId) {
-      snapshot.push({ ts: Date.now(), type: "agent_message", in_reply_to: this.userId, text: this.text });
+      snapshot.push({ ts: Date.now(), type: "agent_message", in_reply_to: this.historyTextId(), text: this.text });
     }
     for (const event of snapshot) {
       const size = Buffer.byteLength(JSON.stringify(event), "utf8");

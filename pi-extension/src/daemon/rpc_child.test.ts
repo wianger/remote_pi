@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RpcChild, busyTransition, resolvePiBin, resolvePiSpawn, _npmShimTarget, rpcSpawnArgs, type RpcChildExitEvent } from "./rpc_child.js";
+import { RpcChild, busyTransition, resolvePiBin, resolvePiSpawn, _npmShimTarget, _managedPiTarget, rpcSpawnArgs, type RpcChildExitEvent } from "./rpc_child.js";
 
 /**
  * Regression for the orphaned-daemon bug: a deliberate `stop()` kills the
@@ -112,6 +112,24 @@ describe("_npmShimTarget (plan/40 — parse the .cmd shim)", () => {
 });
 
 describe("resolvePiSpawn (plan/40 — directly-spawnable target)", () => {
+  test("Windows managed Pi launcher resolves the actual installed CLI", () => {
+    const root = mkdtempSync(join(tmpdir(), "pi-managed-"));
+    try {
+      const bin = join(root, "bin");
+      const install = join(root, "install");
+      const pkg = join(install, "releases", "1.4.0", "node_modules", "@earendil-works", "pi-coding-agent");
+      mkdirSync(bin, { recursive: true });
+      mkdirSync(join(pkg, "dist"), { recursive: true });
+      writeFileSync(join(bin, "pi.cmd"), '"%node%" "%~dp0pi-launcher.js" %*');
+      writeFileSync(join(install, "current-version"), "1.4.0\n");
+      writeFileSync(join(pkg, "package.json"), JSON.stringify({ bin: { pi: "dist/cli.js" } }));
+      const cli = join(pkg, "dist", "cli.js");
+      writeFileSync(cli, "// fixture");
+      expect(resolvePiSpawn(join(bin, "pi.cmd"), "win32", "node-test")).toEqual({ command: "node-test", prefixArgs: [cli] });
+      writeFileSync(join(install, "current-version"), "../../outside");
+      expect(_managedPiTarget(join(bin, "pi.cmd"))).toBeNull();
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
   test("POSIX → command is pi, no prefix args", () => {
     expect(resolvePiSpawn("pi", "linux")).toEqual({ command: "pi", prefixArgs: [] });
     expect(resolvePiSpawn("/usr/bin/pi", "darwin")).toEqual({ command: "/usr/bin/pi", prefixArgs: [] });

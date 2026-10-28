@@ -233,11 +233,15 @@ void main() {
   });
 
   group('SoundLevelScale', () {
-    test('forPlatform picks the darwin scale on macOS test host', () {
-      // The unit-test host is macOS, so the platform factory must resolve to
-      // the dBFS scale — guarding the iOS waveform regression directly.
-      expect(SoundLevelScale.forPlatform(), SoundLevelScale.darwin);
-    }, skip: !Platform.isMacOS);
+    test(
+      'forPlatform picks the darwin scale on macOS test host',
+      () {
+        // The unit-test host is macOS, so the platform factory must resolve to
+        // the dBFS scale — guarding the iOS waveform regression directly.
+        expect(SoundLevelScale.forPlatform(), SoundLevelScale.darwin);
+      },
+      skip: !Platform.isMacOS,
+    );
 
     test('normalize clamps NaN and ±infinity to the endpoints', () {
       expect(SoundLevelScale.darwin.normalize(double.nan), 0.0);

@@ -37,7 +37,13 @@ class NewSessionViewModel extends ViewModel<NewSessionState> {
       await browse();
     } catch (error) {
       if (!_disposed && generation == _generation) {
-        emit(NewSessionUnavailable(error is WorkspaceFailure ? error.message : 'Could not load your computers. Try again.'));
+        emit(
+          NewSessionUnavailable(
+            error is WorkspaceFailure
+                ? error.message
+                : 'Could not load your computers. Try again.',
+          ),
+        );
       }
     }
   }
@@ -94,7 +100,14 @@ class NewSessionViewModel extends ViewModel<NewSessionState> {
       if (_disposed || generation != _generation) return;
       final latest = state;
       if (latest is NewSessionReady) {
-        emit(latest.copyWith(loading: false, error: error is WorkspaceFailure ? error.message : 'Could not read this folder. Try again.'));
+        emit(
+          latest.copyWith(
+            loading: false,
+            error: error is WorkspaceFailure
+                ? error.message
+                : 'Could not read this folder. Try again.',
+          ),
+        );
       }
     }
   }
@@ -138,7 +151,14 @@ class NewSessionViewModel extends ViewModel<NewSessionState> {
       return _disposed ? null : result;
     } catch (error) {
       if (!_disposed) {
-        emit(current.copyWith(opening: false, error: error is WorkspaceFailure ? error.message : 'Could not start the session. Try again.'));
+        emit(
+          current.copyWith(
+            opening: false,
+            error: error is WorkspaceFailure
+                ? error.message
+                : 'Could not start the session. Try again.',
+          ),
+        );
       }
       return null;
     }

@@ -149,6 +149,38 @@ void main() {
     s.conn.dispose();
   });
 
+  test('tool approval updates the existing card on both phones', () async {
+    final s = await setup();
+    s.ch.push(
+      ToolRequest(
+        toolCallId: 'approval',
+        tool: 'bash',
+        args: const {'command': 'git status'},
+      ),
+    );
+    await _settle();
+    s.ch.push(
+      ToolRequest(
+        toolCallId: 'approval',
+        tool: 'bash',
+        args: const {'command': 'git status', 'approval_required': true},
+      ),
+    );
+    await _settle();
+    expect(messages(s.epk).single.tool!.args['approval_required'], true);
+    s.ch.push(
+      ToolRequest(
+        toolCallId: 'approval',
+        tool: 'bash',
+        args: const {'command': 'git status', 'approval_required': false},
+      ),
+    );
+    await _settle();
+    expect(messages(s.epk).single.tool!.args['approval_required'], false);
+    s.sync.dispose();
+    s.conn.dispose();
+  });
+
   SessionIndexRecord? index(String epk) {
     final raw = LocalBoxes().sessionsIndexBox().get('$epk:main');
     return raw is Map

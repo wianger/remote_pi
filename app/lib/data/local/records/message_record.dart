@@ -153,12 +153,13 @@ class ToolEventData {
 
   ToolEventData copyWith({
     ToolEventStatus? status,
+    dynamic args,
     dynamic result,
     String? error,
   }) => ToolEventData(
     toolCallId: toolCallId,
     tool: tool,
-    args: args,
+    args: args ?? this.args,
     status: status ?? this.status,
     result: result ?? this.result,
     error: error ?? this.error,

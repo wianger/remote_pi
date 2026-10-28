@@ -105,6 +105,26 @@ describe("Codex mobile session bridge", () => {
       flow_id: "codex_question_11", kind: "answer", answers: { choice: { values: ["__other__"], customText: "/chosen/folder" } },
     } });
     expect(client.respond).toHaveBeenCalledWith(11, { answers: { choice: { answers: ["/chosen/folder"] } } });
+    expect(broadcasts).toContainEqual(expect.objectContaining({ type: "extension_ui_request", id: "codex_question_11", method: "notify" }));
+  });
+
+  test("history keeps narration before tools, updates approvals without duplicate cards, and assigns unique text ids", async () => {
+    await session.start();
+    await session.handle(sender, { type: "user_message", id: "ordered", text: "Check this" });
+    client.emit("notification", "item/agentMessage/delta", { threadId: "thread-1", itemId: "before", delta: "Checking" });
+    client.emit("notification", "item/started", { threadId: "thread-1", item: { id: "tool", type: "commandExecution", command: "git status" } });
+    client.emit("request", { id: 25, method: "item/commandExecution/requestApproval", params: { threadId: "thread-1", itemId: "tool", command: "git status" } });
+    await session.handle(sender, { type: "approve_tool", id: "allow", tool_call_id: "tool", decision: "allow" });
+    client.emit("notification", "item/completed", { threadId: "thread-1", item: { id: "tool", type: "commandExecution", status: "completed", exitCode: 0 } });
+    client.emit("notification", "item/agentMessage/delta", { threadId: "thread-1", itemId: "after", delta: "Finished" });
+    client.emit("notification", "turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } });
+    await session.handle(sender, { type: "session_sync", id: "ordered-sync" });
+    const history = replies.find((message) => message.type === "session_history");
+    if (history?.type !== "session_history") throw new Error("No history");
+    expect(history.events.map((event) => event.type)).toEqual(["user_input", "agent_message", "tool_request", "tool_result", "agent_message"]);
+    const texts = history.events.filter((event) => event.type === "agent_message");
+    expect(texts.map((event) => event.text)).toEqual(["Checking", "Finished"]);
+    expect(new Set(texts.map((event) => event.in_reply_to)).size).toBe(2);
   });
 
   test("a second phone can synchronize a partially streamed response", async () => {

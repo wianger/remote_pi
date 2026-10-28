@@ -1,7 +1,7 @@
 import { ChildProcess, execFileSync, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { DaemonState } from "./control_protocol.js";
 import { defaultAgentName, loadLocalConfig, type LocalConfig } from "../session/local_config.js";
 import type { WorkspaceAgent } from "../workspace/types.js";
@@ -116,10 +116,29 @@ export function resolvePiSpawn(
   const resolved = resolvePiBin(piBin, plat);
   if (plat !== "win32") return { command: resolved, prefixArgs: [] };
   if (/\.(cmd|bat)$/i.test(resolved)) {
-    const target = _npmShimTarget(resolved);
+    const target = _managedPiTarget(resolved) ?? _npmShimTarget(resolved);
     if (target) return { command: nodeExe, prefixArgs: [target] };
   }
   return { command: resolved, prefixArgs: [] };
+}
+
+/** Pi's standalone Windows installer uses a managed-release launcher rather
+ * than an npm shim. Resolve its current CLI directly so stop/restart controls
+ * the actual agent process instead of leaving a launcher child behind. */
+export function _managedPiTarget(cmdPath: string): string | null {
+  try {
+    if (!/"%~dp0pi-launcher\.js"/i.test(readFileSync(cmdPath, "utf8"))) return null;
+    const install = join(dirname(dirname(cmdPath)), "install");
+    const version = readFileSync(join(install, "current-version"), "utf8").trim();
+    if (!version || version === "." || version === ".." || !/^[0-9A-Za-z._+-]+$/.test(version)) return null;
+    const root = join(install, "releases", version, "node_modules", "@earendil-works", "pi-coding-agent");
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { bin?: string | { pi?: string } };
+    const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.pi;
+    if (typeof bin !== "string") return null;
+    const target = resolve(root, bin);
+    const rel = relative(root, target);
+    return !rel.startsWith("..") && !isAbsolute(rel) && existsSync(target) ? target : null;
+  } catch { return null; }
 }
 
 /**

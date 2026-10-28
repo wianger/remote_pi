@@ -566,19 +566,19 @@ class SyncService extends Service {
         _upsert(
           MsgRole.tool,
           toolCallId,
-          (seq, existing) =>
-              existing ??
-              MessageRecord(
-                id: toolCallId,
-                seq: seq,
-                role: MsgRole.tool,
-                ts: DateTime.now(),
-                tool: ToolEventData(
-                  toolCallId: toolCallId,
-                  tool: tool,
-                  args: args,
+          (seq, existing) => existing != null
+              ? existing.copyWith(tool: existing.tool?.copyWith(args: args))
+              : MessageRecord(
+                  id: toolCallId,
+                  seq: seq,
+                  role: MsgRole.tool,
+                  ts: DateTime.now(),
+                  tool: ToolEventData(
+                    toolCallId: toolCallId,
+                    tool: tool,
+                    args: args,
+                  ),
                 ),
-              ),
         );
 
       case ToolResult(:final toolCallId, :final result, :final error):
