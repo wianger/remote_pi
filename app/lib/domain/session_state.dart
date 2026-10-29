@@ -120,6 +120,23 @@ class AssistantMsg extends ChatMessage {
   int get hashCode => Object.hash(id, text);
 }
 
+/// An explicit thinking summary supplied by the agent, separate from a reply.
+class ThinkingMsg extends ChatMessage {
+  final String text;
+  final bool complete;
+  const ThinkingMsg({required super.id, this.text = '', this.complete = true});
+
+  @override
+  bool operator ==(Object other) =>
+      other is ThinkingMsg &&
+      other.id == id &&
+      other.text == text &&
+      other.complete == complete;
+
+  @override
+  int get hashCode => Object.hash(id, text, complete);
+}
+
 class ToolEvent extends ChatMessage {
   final String toolCallId;
   final String tool;

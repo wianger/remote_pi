@@ -80,6 +80,24 @@ describe("Codex mobile session bridge", () => {
     expect(client.respond).toHaveBeenCalledTimes(1);
   });
 
+  test("thinking stays a separate activity and replays only the explicit summary", async () => {
+    await session.start();
+    await session.handle(sender, { type: "user_message", id: "thinking-turn", text: "Inspect the folder" });
+    client.emit("notification", "item/started", { threadId: "thread-1", item: { id: "r1", type: "reasoning" } });
+    expect(broadcasts).toContainEqual(expect.objectContaining({ type: "agent_thinking", id: "thinking_r1", complete: false }));
+    client.emit("notification", "item/completed", { threadId: "thread-1", item: {
+      id: "r1", type: "reasoning", summary: ["Check the selected project."], content: ["Not a display summary"],
+    } });
+    client.emit("notification", "turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } });
+    await session.handle(sender, { type: "session_sync", id: "thinking-sync" });
+    const history = replies.find((message) => message.type === "session_history");
+    if (history?.type !== "session_history") throw new Error("No history");
+    const thinking = history.events.filter((event) => event.type === "agent_thinking");
+    expect(thinking).toHaveLength(1);
+    expect(thinking[0]).toMatchObject({ text: "Check the selected project.", complete: true });
+    expect(JSON.stringify(history)).not.toContain("Not a display summary");
+  });
+
   test("denial is sent to Codex, and permission grants are scoped to the current turn", async () => {
     await session.start();
     client.emit("request", { id: 8, method: "item/fileChange/requestApproval", params: { threadId: "thread-1", itemId: "patch" } });

@@ -76,7 +76,8 @@ For screenshots of the current Android UI with demonstration sessions, run
 `scripts/preview-mobile-windows.ps1` from Windows (optional
 `-ProxyUrl http://127.0.0.1:7897`). This uses the production Flutter widgets
 with fixture ViewModels, without pairing or contacting an agent. It writes
-`overview.png`, `home.png`, `chat.png`, `sessions.png` and `new-session.png` under
+`overview.png`, `home.png`, `chat.png`, `sessions.png`, `new-session.png` and
+`activity-details.png` under
 `~/Downloads/RemotePi-UI-Preview`. The script only downloads the checked Inter
 font if it is not already cached; the widget renderer itself runs offline.
 The manual preview test is skipped in ordinary test runs.
@@ -85,6 +86,11 @@ Use `-Theme light` for the warm light palette; `-Theme dark` is the default.
 Supply a separate `-OutputDirectory` to keep both sets of screenshots. The
 workspace grouping and conversation design are described in
 `plan/android-workspace-design.md`.
+
+Thinking activities need the matching development extension on the computer.
+The Android app still connects to an official extension for the features that
+extension publishes; an older extension does not publish thinking snapshots.
+Building or previewing the app does not activate the development extension.
 
 ```sh
 cd pi-extension

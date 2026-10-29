@@ -1099,6 +1099,8 @@ type ClientUserMessage = Extract<ClientMessage, { type: "user_message" }>;
 
 // Per-turn messaging state
 let _currentTurnId: string | null = null;
+let _currentThinkingId: string | null = null;
+let _thinkingCounter = 0;
 
 // Module-level pi reference
 let _pi: ExtensionAPI | null = null;
@@ -2212,6 +2214,15 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     const ae = event.assistantMessageEvent;
     if (ae.type === "text_delta") {
       _broadcastToActive({ type: "agent_chunk", in_reply_to: _currentTurnId, delta: ae.delta });
+    } else if (ae.type === "thinking_start") {
+      _currentThinkingId = `thinking_${_currentTurnId}_${++_thinkingCounter}`;
+      _broadcastToActive({ type: "agent_thinking", id: _currentThinkingId,
+        in_reply_to: _currentTurnId, text: "", complete: false });
+    } else if (ae.type === "thinking_end") {
+      const id = _currentThinkingId ?? `thinking_${_currentTurnId}_${++_thinkingCounter}`;
+      _broadcastToActive({ type: "agent_thinking", id,
+        in_reply_to: _currentTurnId, text: ae.content, complete: true });
+      _currentThinkingId = null;
     }
   });
 
@@ -2279,10 +2290,15 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     // Buffer is fed by `message_end`; here we only finalize the outbound
     // turn signal to every connected owner. No buffer mutation.
     if (_anyPeerActive() && _currentTurnId) {
+      if (_currentThinkingId) {
+        _broadcastToActive({ type: "agent_thinking", id: _currentThinkingId,
+          in_reply_to: _currentTurnId, text: "", complete: true });
+      }
       _broadcastToActive({ type: "agent_done", in_reply_to: _currentTurnId });
       _currentTurnId = null;
     }
     _flushPendingReceivedImagePreviews();
+    _currentThinkingId = null;
     _lastConsumedSteerText = null;
     _maybeDrainQueuedItem();
 
@@ -5006,7 +5022,7 @@ export function _mapAgentMessagesToEvents(
         : undefined;
       for (const raw of content) {
         if (!raw || typeof raw !== "object") continue;
-        const block = raw as { type?: string; text?: unknown; id?: unknown; name?: unknown; arguments?: unknown };
+        const block = raw as { type?: string; text?: unknown; thinking?: unknown; id?: unknown; name?: unknown; arguments?: unknown };
         if (block.type === "text") {
           const text = String(block.text ?? "");
           if (!text) continue;
@@ -5018,6 +5034,9 @@ export function _mapAgentMessagesToEvents(
             ...(usage ? { usage } : {}),
           };
           events.push(ev);
+        } else if (block.type === "thinking" && typeof block.thinking === "string" && block.thinking) {
+          events.push({ ts, type: "agent_thinking", id: `thinking_sync_${ts}_${events.length}`,
+            in_reply_to: lastUserId ?? `sync_${ts}`, text: block.thinking, complete: true });
         } else if (block.type === "toolCall") {
           events.push({
             ts,

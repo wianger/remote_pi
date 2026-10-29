@@ -104,6 +104,11 @@ class _Chat extends ViewModel<ChatState> implements ChatViewModel {
         const ChatReady(
           messages: [
             UserMsg(id: 'u1', text: 'Review the Android session flow.'),
+            ThinkingMsg(
+              id: 'thinking-preview',
+              text:
+                  'Check the selected project and available agents before opening a session.',
+            ),
             AssistantMsg(
               id: 'a1',
               text:
@@ -114,6 +119,7 @@ class _Chat extends ViewModel<ChatState> implements ChatViewModel {
               toolCallId: 'tool',
               tool: 'bash',
               args: {'command': 'pnpm typecheck'},
+              result: 'TypeScript checks passed. No errors found.',
               status: ToolEventStatus.completed,
             ),
             AssistantMsg(
@@ -475,6 +481,46 @@ void main() {
       await _save(tester, chatKey, '$output/chat.png');
       await _save(tester, drawerKey, '$output/sessions.png');
       await _save(tester, foldersKey, '$output/new-session.png');
+      chat.emit(
+        const ChatReady(
+          messages: [
+            UserMsg(id: 'activity-user', text: 'Check this project.'),
+            ThinkingMsg(
+              id: 'thinking-preview',
+              text:
+                  'Check the selected project and available agents before opening a session.',
+            ),
+            ToolEvent(
+              id: 'tool',
+              toolCallId: 'tool',
+              tool: 'bash',
+              args: {'command': 'pnpm typecheck'},
+              result: 'TypeScript checks passed. No errors found.',
+              status: ToolEventStatus.completed,
+            ),
+            AssistantMsg(
+              id: 'activity-answer',
+              text: 'The project is ready. Choose a folder to continue.',
+            ),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(chatKey),
+          matching: find.byKey(const ValueKey('thinking-disclosure')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(chatKey),
+          matching: find.byKey(const ValueKey('tool-details-tool')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _save(tester, chatKey, '$output/activity-details.png');
       await tester.tap(
         find.descendant(
           of: find.byKey(drawerKey),

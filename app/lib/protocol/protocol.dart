@@ -790,6 +790,7 @@ sealed class ServerMessage {
     final type = json['type'] as String?;
     return switch (type) {
       'agent_chunk' => AgentChunk.fromJson(json),
+      'agent_thinking' => AgentThinking.fromJson(json),
       'agent_done' => AgentDone.fromJson(json),
       'tool_request' => ToolRequest.fromJson(json),
       'tool_result' => ToolResult.fromJson(json),
@@ -863,6 +864,27 @@ class AgentChunk extends ServerMessage {
   factory AgentChunk.fromJson(Map<String, dynamic> j) => AgentChunk(
     inReplyTo: j['in_reply_to'] as String,
     delta: j['delta'] as String,
+  );
+}
+
+/// Snapshot of one explicit thinking block. Start and completion share [id].
+class AgentThinking extends ServerMessage {
+  final String id;
+  final String inReplyTo;
+  final String text;
+  final bool complete;
+  const AgentThinking({
+    required this.id,
+    required this.inReplyTo,
+    this.text = '',
+    this.complete = true,
+  });
+
+  factory AgentThinking.fromJson(Map<String, dynamic> j) => AgentThinking(
+    id: j['id'] as String,
+    inReplyTo: j['in_reply_to'] as String,
+    text: (j['text'] as String?) ?? '',
+    complete: (j['complete'] as bool?) ?? true,
   );
 }
 
@@ -1241,6 +1263,12 @@ sealed class SessionHistoryEvent {
         inReplyTo: j['in_reply_to'] as String,
         text: j['text'] as String,
       ),
+      'agent_thinking' => AgentThinkingEvt(
+        ts: ts,
+        id: j['id'] as String,
+        text: (j['text'] as String?) ?? '',
+        complete: (j['complete'] as bool?) ?? true,
+      ),
       // Plan/32 — compaction replayed from history so the system bubble
       // survives a re-sync.
       'compaction' => CompactionEvt(
@@ -1251,6 +1279,18 @@ sealed class SessionHistoryEvent {
       final t => throw UnsupportedTypeException(t ?? ''),
     };
   }
+}
+
+class AgentThinkingEvt extends SessionHistoryEvent {
+  final String id;
+  final String text;
+  final bool complete;
+  const AgentThinkingEvt({
+    required super.ts,
+    required this.id,
+    this.text = '',
+    this.complete = true,
+  });
 }
 
 class UserInputEvt extends SessionHistoryEvent {

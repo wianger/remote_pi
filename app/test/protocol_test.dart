@@ -6,6 +6,36 @@ import 'package:app/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'thinking snapshots and replay decode independently of assistant text',
+    () {
+      final live = ServerMessage.fromJson({
+        'type': 'agent_thinking',
+        'id': 't',
+        'in_reply_to': 'u',
+        'text': '',
+        'complete': false,
+      });
+      expect(
+        live,
+        isA<AgentThinking>().having((m) => m.complete, 'complete', false),
+      );
+      final replay = SessionHistoryEvent.fromJson({
+        'type': 'agent_thinking',
+        'ts': 1,
+        'id': 't',
+        'in_reply_to': 'u',
+        'text': 'A supplied summary.',
+      });
+      expect(
+        replay,
+        isA<AgentThinkingEvt>()
+            .having((m) => m.text, 'text', 'A supplied summary.')
+            .having((m) => m.complete, 'complete', true),
+      );
+    },
+  );
+
   group('decode fixtures', () {
     final fixtureDir = Directory('../.orchestration/contracts/fixtures');
 
@@ -73,26 +103,27 @@ void main() {
 
   group('Queued messages', () {
     test('parses steer consumed clear signal', () {
-      final msg = ServerMessage.fromJson({
-        'type': 'steer_consumed',
-        'id': 's1',
-      }) as SteerConsumed;
+      final msg =
+          ServerMessage.fromJson({'type': 'steer_consumed', 'id': 's1'})
+              as SteerConsumed;
 
       expect(msg.id, 's1');
     });
 
     test('parses plural items and legacy fallback', () {
-      final plural = ServerMessage.fromJson({
-        'type': 'queued_message_state',
-        'items': [
-          {
-            'id': 'q1',
-            'text': 'next',
-            'editable': true,
-            'created_at': 123,
-          },
-        ],
-      }) as QueuedMessageState;
+      final plural =
+          ServerMessage.fromJson({
+                'type': 'queued_message_state',
+                'items': [
+                  {
+                    'id': 'q1',
+                    'text': 'next',
+                    'editable': true,
+                    'created_at': 123,
+                  },
+                ],
+              })
+              as QueuedMessageState;
 
       expect(plural.items, hasLength(1));
       expect(plural.items.single.id, 'q1');
@@ -100,11 +131,13 @@ void main() {
       expect(plural.items.single.editable, isTrue);
       expect(plural.text, 'next');
 
-      final legacy = ServerMessage.fromJson({
-        'type': 'queued_message_state',
-        'id': 'old',
-        'text': 'legacy',
-      }) as QueuedMessageState;
+      final legacy =
+          ServerMessage.fromJson({
+                'type': 'queued_message_state',
+                'id': 'old',
+                'text': 'legacy',
+              })
+              as QueuedMessageState;
 
       expect(legacy.items, hasLength(1));
       expect(legacy.items.single.id, 'old');
@@ -113,14 +146,15 @@ void main() {
     });
 
     test('encodes targeted clear', () {
-      expect(
-        QueuedMessageClear(id: 'req1', targetId: 'q1').toJson(),
-        {'type': 'queued_message_clear', 'id': 'req1', 'target_id': 'q1'},
-      );
-      expect(
-        QueuedMessageClear(id: 'req2').toJson(),
-        {'type': 'queued_message_clear', 'id': 'req2'},
-      );
+      expect(QueuedMessageClear(id: 'req1', targetId: 'q1').toJson(), {
+        'type': 'queued_message_clear',
+        'id': 'req1',
+        'target_id': 'q1',
+      });
+      expect(QueuedMessageClear(id: 'req2').toJson(), {
+        'type': 'queued_message_clear',
+        'id': 'req2',
+      });
     });
   });
 

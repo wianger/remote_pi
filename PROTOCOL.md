@@ -3,6 +3,19 @@
 Documentação canônica do protocolo Remote Pi e do modelo de proteção.
 Atualizada em 2026-07-18.
 
+### Android development branch: thinking activities
+
+The development extension and Android app add an opaque inner frame
+`{type: "agent_thinking", id, in_reply_to, text, complete}`. A start snapshot
+(`complete: false`) and completion snapshot share a block id and replace one
+activity row. The same event, with `ts`, is included in session history.
+It is separate from assistant text and tool approval requests. Only explicit
+provider display content is sent: Pi thinking blocks or Codex public summaries;
+no encrypted/raw Codex reasoning is read. Receivers without this addition may
+ignore a live frame but cannot replay the new history event, so use matching
+development app/extension versions. Relay routing and authentication do not
+change. The owner's official installation is not switched by a preview build.
+
 ---
 
 ## Visão de 30 segundos

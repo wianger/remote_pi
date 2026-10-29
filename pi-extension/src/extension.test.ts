@@ -1258,6 +1258,21 @@ describe("multi-channel broadcast (W2D)", () => {
     expect(calls.every((m) => !m.includes("Already paired"))).toBe(true);
   });
 
+  test("thinking start and completion use one activity id for all owners", async () => {
+    await _pairForTest("ownerA__1234567890");
+    const onUpdate = captureEventHandler("message_update");
+    const onInput = captureEventHandler("input");
+    onInput({ source: "terminal", text: "inspect" } as unknown as Parameters<typeof onInput>[0]);
+    const before = relayRef.current!.send.mock.calls.length;
+    onUpdate({ assistantMessageEvent: { type: "thinking_start", contentIndex: 0 } } as unknown as Parameters<typeof onUpdate>[0]);
+    onUpdate({ assistantMessageEvent: { type: "thinking_end", contentIndex: 0, content: "Check the workspace." } } as unknown as Parameters<typeof onUpdate>[0]);
+    const activities = relayRef.current!.send.mock.calls.slice(before).map((c) => decodeSentCt(c[0] as string).inner)
+      .filter((message) => message.type === "agent_thinking");
+    expect(activities).toHaveLength(2);
+    expect(activities[0]).toMatchObject({ text: "", complete: false });
+    expect(activities[1]).toMatchObject({ id: activities[0]!.id, text: "Check the workspace.", complete: true });
+  });
+
   test("agent_chunk broadcasts to every attached owner", async () => {
     await _pairForTest("ownerA__1234567890");
     await _pairAdditionalForTest("ownerB__abcdefghij", "Android");
@@ -3661,6 +3676,14 @@ describe("session sync", () => {
     expect(h.inner["truncated"]).toBe(true);
 
     delete process.env["REMOTE_PI_SYNC_LIMIT"];
+  });
+
+  test("mapping keeps supplied thinking distinct and ordered before the answer", () => {
+    const events = _mapAgentMessagesToEvents([{ role: "assistant", timestamp: 1, content: [
+      { type: "thinking", thinking: "Inspect the folder." }, { type: "text", text: "Ready." },
+    ] }]);
+    expect(events.map((event) => event.type)).toEqual(["agent_thinking", "agent_message"]);
+    expect(events[0]).toMatchObject({ text: "Inspect the folder.", complete: true });
   });
 
   test("mapping: assistant with TextContent + ToolCall → 2 events", () => {

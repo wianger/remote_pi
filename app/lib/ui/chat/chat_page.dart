@@ -5,6 +5,7 @@ import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
+import 'package:app/ui/chat/widgets/thinking_block.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
@@ -584,6 +585,10 @@ class _MessageList extends StatelessWidget {
             child: switch (msg) {
               UserMsg() => UserBubble(msg),
               AssistantMsg() => AssistantBubble(msg),
+              ThinkingMsg() => ThinkingBlock(
+                text: msg.text,
+                complete: msg.complete,
+              ),
               ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
               CompactionMsg() => CompactionBubble(msg),
             },

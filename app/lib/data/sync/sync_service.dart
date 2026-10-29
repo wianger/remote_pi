@@ -475,10 +475,37 @@ class SyncService extends Service {
         _setWorking(true, replyTo: inReplyTo);
 
       case AgentDone(:final inReplyTo):
+        _finishThinking();
         // Finalize whatever text accumulated since the last tool boundary.
         final text = _finalizeSegment();
         _clearSteeringLabel(inReplyTo);
         _setWorking(false, preview: text.isEmpty ? null : text);
+
+      case AgentThinking(
+        :final id,
+        :final inReplyTo,
+        :final text,
+        :final complete,
+      ):
+        if (!complete) {
+          _finalizeSegment();
+          _setWorking(true, replyTo: inReplyTo);
+        }
+        // ignore: discarded_futures
+        _upsert(
+          MsgRole.thinking,
+          id,
+          (seq, existing) =>
+              existing?.copyWith(text: text, pending: !complete) ??
+              MessageRecord(
+                id: id,
+                seq: seq,
+                role: MsgRole.thinking,
+                text: text,
+                pending: !complete,
+                ts: DateTime.now(),
+              ),
+        );
 
       case AgentMessage(:final inReplyTo, :final text):
         // ignore: discarded_futures
@@ -606,6 +633,7 @@ class SyncService extends Service {
         });
 
       case Cancelled(:final targetId):
+        _finishThinking();
         _pendingSendTimers.remove(targetId)?.cancel();
         _discardStreamingState();
         // Cancel is stop-generation, not delete-history. Only drop a local
@@ -657,6 +685,7 @@ class SyncService extends Service {
         _discardStreamingState();
         _clearSteeringLabels();
         _setWorking(false);
+        _finishThinking();
         // ignore: discarded_futures
         _upsert(
           MsgRole.assistant,
@@ -816,6 +845,17 @@ class SyncService extends Service {
               ts: DateTime.fromMillisecondsSinceEpoch(e.ts),
             ),
           );
+        case AgentThinkingEvt(:final id, :final text, :final complete):
+          out.add(
+            MessageRecord(
+              id: id,
+              seq: seq++,
+              role: MsgRole.thinking,
+              text: text,
+              pending: !complete,
+              ts: DateTime.fromMillisecondsSinceEpoch(e.ts),
+            ),
+          );
         case ToolRequestEvt(:final toolCallId, :final tool, :final args):
           out.add(
             MessageRecord(
@@ -883,6 +923,27 @@ class SyncService extends Service {
   // ---------------------------------------------------------------------------
 
   String _key(MsgRole role, String id) => '${role.name}:$id';
+
+  void _finishThinking() {
+    final epk = _activeEpk;
+    final room = _activeRoomId;
+    if (epk == null) return;
+    // ignore: discarded_futures
+    _enqueue(() async {
+      if (_activeEpk != epk || _activeRoomId != room) return;
+      final box = await _boxes.msgsBox(epk, room);
+      final keys = _idToSeq.entries
+          .where((entry) => entry.key.startsWith('thinking:'))
+          .map((entry) => entry.value)
+          .toList();
+      for (final key in keys) {
+        final record = MessageRecord.fromJson(_coerce(box.get(key)));
+        if (record.role == MsgRole.thinking && record.pending) {
+          await box.put(key, record.copyWith(pending: false).toJson());
+        }
+      }
+    });
+  }
 
   Future<void> _loadIndex() {
     final epk = _activeEpk;
@@ -1040,6 +1101,7 @@ class SyncService extends Service {
     }
     if (_sawRemoteWorking && _working) {
       _discardStreamingState();
+      _finishThinking();
       _setWorking(false);
     }
     _sawRemoteWorking = false;

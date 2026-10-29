@@ -102,6 +102,71 @@ void main() {
   }
 
   test(
+    'thinking snapshots update one row and survive history replay',
+    () async {
+      final s = await setup();
+      s.ch.push(
+        const AgentThinking(
+          id: 'thought-1',
+          inReplyTo: 'user',
+          complete: false,
+        ),
+      );
+      await _settle();
+      expect(
+        messages(s.epk).single.toChatMessage(),
+        isA<ThinkingMsg>().having((m) => m.complete, 'complete', false),
+      );
+      s.ch.push(
+        const AgentThinking(
+          id: 'thought-1',
+          inReplyTo: 'user',
+          text: 'Check available folders.',
+        ),
+      );
+      await _settle();
+      expect(messages(s.epk).length, 1);
+      expect(
+        messages(s.epk).single.toChatMessage(),
+        const ThinkingMsg(id: 'thought-1', text: 'Check available folders.'),
+      );
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: 'reconnect',
+          sessionStartedAt: 0,
+          eos: true,
+          events: const [
+            AgentThinkingEvt(
+              ts: 1,
+              id: 'thought-1',
+              text: 'Check available folders.',
+            ),
+          ],
+        ),
+      );
+      await _settle();
+      expect(messages(s.epk).single.text, 'Check available folders.');
+      s.ch.push(
+        const AgentThinking(
+          id: 'interrupted',
+          inReplyTo: 'user',
+          complete: false,
+        ),
+      );
+      s.ch.push(AgentDone(inReplyTo: 'user'));
+      await _settle();
+      expect(
+        messages(
+          s.epk,
+        ).where((m) => m.role == MsgRole.thinking).every((m) => !m.pending),
+        true,
+      );
+      s.sync.dispose();
+      s.conn.dispose();
+    },
+  );
+
+  test(
     'history fragments are joined before replacing the cached conversation',
     () async {
       final s = await setup();
@@ -869,6 +934,11 @@ void main() {
       await _settle();
       expect(s.sync.isWorking, isTrue);
 
+      // Wait for the actual debounced metadata event. A fixed delay can let
+      // the true/false updates coalesce before the subscriber observes true.
+      final remoteStarted = s.conn.roomsStream.firstWhere(
+        (_) => s.conn.isRoomWorking(s.epk, 'main'),
+      );
       s.ch.pushControl(
         RoomAnnounced(peer: s.epk, roomId: 'main', startedAt: 1),
       );
@@ -881,9 +951,13 @@ void main() {
           hasThinking: false,
         ),
       );
+      await remoteStarted.timeout(const Duration(seconds: 2));
       await _settle();
       expect(s.sync.isWorking, isTrue);
 
+      final remoteStopped = s.conn.roomsStream.firstWhere(
+        (_) => !s.conn.isRoomWorking(s.epk, 'main'),
+      );
       s.ch.pushControl(
         RoomMetaUpdated(
           peer: s.epk,
@@ -893,6 +967,7 @@ void main() {
           hasThinking: false,
         ),
       );
+      await remoteStopped.timeout(const Duration(seconds: 2));
       await _settle();
       expect(s.conn.isRoomWorking(s.epk, 'main'), isFalse);
       expect(s.sync.isWorking, isFalse);

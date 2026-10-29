@@ -234,7 +234,19 @@ export type KnownErrorCode =
 // aberto para forward-compat — receivers toleram codes desconhecidos
 export type ErrorCode = KnownErrorCode | (string & {});
 
+/** Explicit provider-supplied thinking, distinct from replies and tool calls.
+ * Snapshots share an id; the content may arrive only when the block completes.
+ */
+export interface ThinkingActivity {
+  type: "agent_thinking";
+  id: string;
+  in_reply_to: string;
+  text: string;
+  complete: boolean;
+}
+
 export type SessionHistoryEvent =
+  | (ThinkingActivity & { ts: number })
   // Plan/30: `images` replayed in history so a re-sync rebuilds the image
   // bubble (the bytes live in `_messageBuffer`). Omitted on text-only inputs.
   | { ts: number; type: "user_input"; id: string; text: string; images?: WireImage[] }
@@ -264,6 +276,7 @@ export type SessionHistoryEvent =
   | { ts: number; type: "compaction"; summary: string; tokens_before: number };
 
 export type ServerMessage =
+  | ThinkingActivity
   | WorkspaceReply
   | {
       type: "pair_ok";

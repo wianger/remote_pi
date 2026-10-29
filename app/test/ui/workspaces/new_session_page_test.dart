@@ -45,6 +45,20 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Open Pi here'), findsOneWidget);
+      final path = find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.labelText == 'Folder path',
+      );
+      await tester.tap(find.text('project'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(path).controller!.text, '/project');
+      await tester.tap(find.byTooltip('Parent folder'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(path).controller!.text, '/');
+      await tester.tap(find.byTooltip('Home folder'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(path).controller!.text, '/home');
       await tester.tap(find.text('Codex'));
       await tester.pumpAndSettle();
       expect(find.text('Open Codex here'), findsOneWidget);

@@ -76,6 +76,7 @@ export class CodexSession {
           this.events = Array.isArray(saved.events) ? saved.events as SessionHistoryEvent[] : [];
           const unfinished = new Map<string, true>();
           this.events = this.events.map((event) => {
+            if (event.type === "agent_thinking") return { ...event, complete: true };
             if (event.type === "tool_result") unfinished.delete(event.tool_call_id);
             if (event.type !== "tool_request") return event;
             unfinished.set(event.tool_call_id, true);
@@ -96,6 +97,7 @@ export class CodexSession {
   }
 
   close(): void {
+    this.finishThinking();
     this.flushText();
     this.busy = false;
     this.persist();
@@ -267,12 +269,20 @@ export class CodexSession {
       this.options.broadcast({ type: "agent_chunk", in_reply_to: this.userId ?? "codex", delta: prefix + params.delta });
     } else if (method === "item/started") {
       const item = object(params.item);
+      if (item.type === "reasoning") this.thinkingActivity(String(item.id ?? ""), "", false);
       const tool = this.toolForItem(item);
       if (tool) this.toolRequest(String(item.id), tool.tool, tool.args);
     } else if (method === "item/completed") {
       const item = object(params.item);
       const id = String(item.id ?? "");
-      if (this.toolItems.has(id)) {
+      if (item.type === "reasoning") {
+        // Only the explicit summary is public display content. Do not read
+        // encrypted/raw reasoning, or manufacture a summary when absent.
+        const summary = Array.isArray(item.summary) ? item.summary
+          .map((entry) => typeof entry === "string" ? entry : String(object(entry).text ?? ""))
+          .filter(Boolean).join("\n\n") : "";
+        this.thinkingActivity(id, summary, true);
+      } else if (this.toolItems.has(id)) {
         const failed = item.status === "failed" || item.status === "declined" || item.exitCode !== null && typeof item.exitCode === "number" && item.exitCode !== 0;
         const result = item.aggregatedOutput ?? item.result ?? item.changes ?? item.contentItems ?? item.status;
         this.toolResult(id, failed ? undefined : result, failed ? String(object(item.error).message ?? item.aggregatedOutput ?? "Tool execution failed.") : undefined);
@@ -289,6 +299,7 @@ export class CodexSession {
     } else if (method === "turn/completed") {
       const turn = object(params.turn);
       const userId = this.userId;
+      this.finishThinking();
       this.flushText();
       if (turn.status === "failed" && userId) {
         this.options.broadcast({ type: "error", in_reply_to: userId, code: "codex_error",
@@ -316,6 +327,28 @@ export class CodexSession {
       case "dynamicToolCall": return { tool: String(item.tool ?? "tool"), args: object(item.arguments) };
       case "webSearch": return { tool: "web_search", args: { action: item.action, query: item.query } };
       default: return null;
+    }
+  }
+
+  private thinkingActivity(id: string, text: string, complete: boolean): void {
+    if (!id) return;
+    const key = `thinking_${id}`;
+    const index = this.events.findIndex((entry) => entry.type === "agent_thinking" && entry.id === key);
+    if (index < 0) this.flushText();
+    const event = { type: "agent_thinking" as const, id: key,
+      in_reply_to: this.userId ?? "codex", text, complete };
+    if (index < 0) this.events.push({ ...event, ts: Date.now() });
+    else this.events[index] = { ...event, ts: this.events[index]!.ts };
+    this.options.broadcast(event);
+  }
+
+  private finishThinking(): void {
+    for (const event of this.events) {
+      if (event.type === "agent_thinking" && !event.complete) {
+        event.complete = true;
+        const { ts: _ts, ...message } = event;
+        this.options.broadcast(message);
+      }
     }
   }
 

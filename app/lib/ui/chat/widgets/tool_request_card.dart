@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:app/domain/session_state.dart';
 import 'package:app/protocol/protocol.dart';
+import 'package:app/ui/chat/widgets/thinking_block.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -35,13 +37,13 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
       tool.args is Map &&
       tool.args['approval_required'] == true;
 
-  /// Plan/32 — one color drives the whole card so the outcome is unmistakable:
-  /// running → blue, done → green, failed → red, denied/expired → grey.
+  /// Errors and real approvals retain emphasis; ordinary activity is quiet.
   Color _statusColor(BuildContext context) {
     final colors = context.colors;
     return switch (tool.status) {
-      ToolEventStatus.pending || ToolEventStatus.allowed => colors.accent,
-      ToolEventStatus.completed => colors.success,
+      ToolEventStatus.pending ||
+      ToolEventStatus.allowed => _needsApproval ? colors.accent : colors.muted2,
+      ToolEventStatus.completed => colors.muted2,
       ToolEventStatus.failed => colors.error,
       ToolEventStatus.denied || ToolEventStatus.expired => colors.muted,
     };
@@ -52,57 +54,98 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     final colors = context.colors;
     final color = _statusColor(context);
     final details = _expanded || _needsApproval;
-    final summary = tool.error ?? _formatArgs(tool.tool, tool.args);
+    final name = tool.tool.toLowerCase();
+    if (!_needsApproval &&
+        const {'think', 'thinking', 'reasoning'}.contains(name)) {
+      final args = tool.args;
+      return ThinkingBlock(
+        text:
+            _formatResult(tool.result) ??
+            (args is Map
+                ? _stringArg(args, const ['thought', 'thinking', 'text'])
+                : ''),
+        complete: !_running,
+      );
+    }
+    final output = details ? _formatResult(tool.result) : null;
     return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
+      color: colors.bg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            key: ValueKey('tool-details-${tool.toolCallId}'),
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Expanded(child: _buildHeader(context, color)),
-                  const SizedBox(width: 10),
-                  Icon(
-                    details
-                        ? LucideIcons.chevronDown
-                        : LucideIcons.chevronRight,
-                    size: 15,
-                    color: colors.muted,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (summary.isNotEmpty && !details)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-              child: Text(
-                summary,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.typo.mono.copyWith(
-                  color: colors.muted2,
-                  fontSize: 12,
+          Semantics(
+            button: !_needsApproval,
+            expanded: details,
+            child: InkWell(
+              key: ValueKey('tool-details-${tool.toolCallId}'),
+              borderRadius: BorderRadius.circular(8),
+              onTap: _needsApproval
+                  ? null
+                  : () => setState(() => _expanded = !_expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 2,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildHeader(context, color)),
+                    const SizedBox(width: 10),
+                    if (!_needsApproval)
+                      Icon(
+                        details
+                            ? LucideIcons.chevronDown
+                            : LucideIcons.chevronRight,
+                        size: 15,
+                        color: colors.muted,
+                      ),
+                  ],
                 ),
               ),
             ),
+          ),
           if (details)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            Container(
+              margin: const EdgeInsets.only(left: 9, top: 4, bottom: 8),
+              padding: const EdgeInsets.only(left: 17),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(color: colors.border, width: 2),
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildCodeBlock(context),
+                  if (output != null && output.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Output',
+                      style: context.typo.sansBody.copyWith(
+                        fontSize: 12,
+                        color: colors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      constraints: const BoxConstraints(maxHeight: 280),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colors.codeBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          output,
+                          style: context.typo.mono.copyWith(
+                            fontSize: 12,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   if (_needsApproval) ...[
                     Text(
@@ -134,7 +177,7 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
                       ],
                     ),
                   ] else
-                    _buildOutcome(color),
+                    _buildOutcome(context, color),
                 ],
               ),
             ),
@@ -143,42 +186,74 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     );
   }
 
+  bool get _running =>
+      tool.status == ToolEventStatus.pending ||
+      tool.status == ToolEventStatus.allowed;
+
+  String get _activityLabel {
+    if (_needsApproval) return 'Waiting for approval';
+    final description = tool.args is Map ? tool.args['description'] : null;
+    if (description is String && description.trim().isNotEmpty) {
+      return description;
+    }
+    return switch (tool.tool.toLowerCase()) {
+      'bash' ||
+      'commandexecution' => _running ? 'Running command' : 'Ran command',
+      'read' => _running ? 'Reading file' : 'Read file',
+      'edit' ||
+      'write' ||
+      'apply_patch' ||
+      'filechange' => _running ? 'Editing files' : 'Edited files',
+      'web_search' ||
+      'websearch' => _running ? 'Searching the web' : 'Searched the web',
+      _ => '${_running ? 'Using' : 'Used'} ${tool.tool}',
+    };
+  }
+
   Widget _buildHeader(BuildContext context, Color color) {
     final statusLabel = switch (tool.status) {
       ToolEventStatus.pending ||
-      ToolEventStatus.allowed => _needsApproval ? 'APPROVAL' : 'RUNNING',
-      ToolEventStatus.completed => 'DONE',
-      ToolEventStatus.failed => 'FAILED',
-      ToolEventStatus.denied => 'DENIED',
-      ToolEventStatus.expired => 'EXPIRED',
+      ToolEventStatus.allowed => _needsApproval ? 'Approval' : 'Running',
+      ToolEventStatus.completed => 'Done',
+      ToolEventStatus.failed => 'Failed',
+      ToolEventStatus.denied => 'Denied',
+      ToolEventStatus.expired => 'Expired',
     };
 
     return Row(
       children: [
-        CustomPaint(
-          size: const Size(14, 14),
-          painter: _TerminalIconPainter(color: color),
+        Icon(
+          switch (tool.tool.toLowerCase()) {
+            'bash' || 'commandexecution' => LucideIcons.terminal,
+            'web_search' || 'websearch' => LucideIcons.search,
+            _ => LucideIcons.fileText,
+          },
+          size: 16,
+          color: color,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            _activityLabel,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: context.typo.sansBody.copyWith(fontSize: 14, color: color),
+          ),
         ),
         const SizedBox(width: 8),
-        Text(
-          tool.tool.toUpperCase(),
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 11.5,
-            color: color,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          statusLabel,
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 10,
-            color: color,
-            letterSpacing: 0.4,
-          ),
-        ),
+        if (_running && !_needsApproval)
+          SizedBox(
+            width: 13,
+            height: 13,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
+          )
+        else if (tool.status != ToolEventStatus.completed)
+          Text(
+            statusLabel,
+            style: context.typo.sansBody.copyWith(fontSize: 11, color: color),
+          )
+        else
+          Icon(LucideIcons.check, size: 14, color: context.colors.muted),
       ],
     );
   }
@@ -197,7 +272,11 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(r'$ ', style: typo.mono.copyWith(color: colors.muted)),
+          if (const {
+            'bash',
+            'commandexecution',
+          }.contains(tool.tool.toLowerCase()))
+            Text(r'$ ', style: typo.mono.copyWith(color: colors.muted)),
           Expanded(child: content),
         ],
       ),
@@ -209,7 +288,10 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     final typo = context.typo;
     final display = _formatToolDisplay(tool.tool, tool.args);
     if (display == null) {
-      return Text(_formatArgs(tool.tool, tool.args), style: typo.mono);
+      return SelectableText(
+        _formatArgs(tool.tool, tool.args),
+        style: typo.mono,
+      );
     }
 
     return Text.rich(
@@ -229,18 +311,52 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     );
   }
 
-  Widget _buildOutcome(Color color) {
+  Widget _buildOutcome(BuildContext context, Color color) {
     final text = switch (tool.status) {
-      ToolEventStatus.pending || ToolEventStatus.allowed => '⏳ Running…',
-      ToolEventStatus.completed => '✓ Done',
-      ToolEventStatus.failed => '✗ ${tool.error ?? "Failed"}',
-      ToolEventStatus.denied => '✗ ${tool.error ?? "Denied"}',
-      ToolEventStatus.expired => '✗ Expired',
+      ToolEventStatus.pending || ToolEventStatus.allowed => 'Running…',
+      ToolEventStatus.completed => 'Done',
+      ToolEventStatus.failed => tool.error ?? 'Tool failed',
+      ToolEventStatus.denied => tool.error ?? 'Request denied',
+      ToolEventStatus.expired => 'Request expired',
     };
-    return Text(
-      text,
-      style: TextStyle(fontFamily: kMonoFamily, fontSize: 12, color: color),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          tool.status == ToolEventStatus.completed
+              ? LucideIcons.check
+              : _running
+              ? LucideIcons.ellipsis
+              : LucideIcons.circleAlert,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            text,
+            style: context.typo.sansBody.copyWith(fontSize: 12, color: color),
+          ),
+        ),
+      ],
     );
+  }
+
+  static String? _formatResult(dynamic result) {
+    if (result == null) return null;
+    if (result is String) return result;
+    if (result is Map && result['content'] is List) {
+      return (result['content'] as List)
+          .whereType<Map>()
+          .where((entry) => entry['text'] is String)
+          .map((entry) => entry['text'] as String)
+          .join('\n');
+    }
+    try {
+      return const JsonEncoder.withIndent('  ').convert(result);
+    } catch (_) {
+      return result.toString();
+    }
   }
 
   static String _formatArgs(String tool, dynamic args) {
@@ -335,40 +451,4 @@ class _DiffLine {
 
   factory _DiffLine.context(String text) =>
       _DiffLine._(text, (colors) => colors.text);
-}
-
-// Minimal terminal icon (rectangle + > and —)
-class _TerminalIconPainter extends CustomPainter {
-  final Color color;
-  const _TerminalIconPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0.5, 1, size.width - 1, size.height - 2),
-        const Radius.circular(1.6),
-      ),
-      paint,
-    );
-    final path = Path()
-      ..moveTo(3, 4.5)
-      ..lineTo(5.5, 7)
-      ..lineTo(3, 9.5);
-    canvas.drawPath(path, paint);
-    canvas.drawLine(
-      Offset(6.5, size.height / 2),
-      Offset(size.width - 2, size.height / 2),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_TerminalIconPainter old) => old.color != color;
 }
