@@ -17,6 +17,10 @@ Read the relevant layer's `CLAUDE.md` before changing application code. Use
 pnpm for the TypeScript extension and Flutter for the mobile app. Build details
 and validation commands are in `docs/mobile-dev.md`.
 
-Keep personal Android signing keys, Apple credentials, pairing state, VPN
-scripts and auth keys outside the repository. Personal Android and iOS builds
-use `dev.wianger.remotepi` so they can coexist with the upstream app.
+The supported custom mobile target is Android only. Keep the inherited iOS
+project unchanged; do not add custom iOS settings or build workflows unless
+the owner explicitly restores that scope.
+
+Keep personal Android signing keys, pairing state, VPN scripts and auth keys
+outside the repository. Personal Android builds use `dev.wianger.remotepi`
+so they can coexist with the upstream app.

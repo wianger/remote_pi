@@ -1,7 +1,9 @@
-# Personal mobile development build
+# Personal Android development build
 
 Development branch: `codex/mobile-sessions-ui-20261029`. Do not merge or push
 these personal build settings to `main`.
+
+The supported custom mobile target is Android only.
 
 This build adds a chat workspace with a session sidebar and a **New session**
 screen. Choose a paired computer, browse its directories, and open Pi or Codex.
@@ -33,7 +35,7 @@ sign-in. It inherits the configured sandbox and approval policy. Paused command,
 file, and permission requests require an explicit phone decision; permissions
 are granted for one turn only. No new API key is embedded in the app. Launch Pi
 from a terminal with the proxy environment it needs if direct Internet access
-is unavailable. Both phones may view the same session.
+is unavailable. Multiple paired Android clients may view the same session.
 
 Codex history is stored under `~/.pi/remote/codex-sessions/` on the computer.
 New app-created threads and previously saved managed threads are supported;
@@ -67,16 +69,6 @@ is encrypted with Windows DPAPI for the current Windows user. Keep this key and
 metadata for future updates; switching signing keys requires reinstalling the
 app. The generated plaintext Gradle signing properties are removed after each
 build. Never commit signing material, pairing state, VPN scripts or auth keys.
-
-## iPhone without a Mac
-
-The `mobile-dev-ios` GitHub Actions workflow runs only on this development
-branch. It builds Flutter on macOS and uploads `RemotePi-Dev-unsigned-iOS` as a
-workflow artifact. The IPA is **unsigned** and cannot be installed directly.
-It must be signed on Windows with the phone owner's Apple account using an
-iOS sideloading tool. Personal account restrictions and renewal requirements
-are controlled by Apple. No Apple password or signing certificate is needed
-in GitHub Actions. The bundle id is `dev.wianger.remotepi`.
 
 ## Validation
 
