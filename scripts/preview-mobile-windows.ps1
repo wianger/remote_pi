@@ -2,7 +2,8 @@ param(
     [string]$SourceApp = (Join-Path (Split-Path $PSScriptRoot -Parent) 'app'),
     [string]$BuildRoot = (Join-Path $env:LOCALAPPDATA 'RemotePiMobileBuild'),
     [string]$OutputDirectory = (Join-Path $env:USERPROFILE 'Downloads\RemotePi-UI-Preview'),
-    [string]$ProxyUrl = $env:HTTPS_PROXY
+    [string]$ProxyUrl = $env:HTTPS_PROXY,
+    [ValidateSet('dark', 'light')][string]$Theme = 'dark'
 )
 $ErrorActionPreference = 'Stop'
 $flutterRoot = 'C:\Scoop\apps\flutter\current'
@@ -34,13 +35,14 @@ if ((Get-FileHash -LiteralPath $inter -Algorithm SHA256).Hash -ne $fontHash) {
     throw 'Preview font checksum mismatch.'
 }
 $savedEnvironment = @{}
-foreach ($name in @('REMOTE_PI_PREVIEW_DIR', 'REMOTE_PI_FONT_DIR', 'REMOTE_PI_INTER_FONT')) {
+foreach ($name in @('REMOTE_PI_PREVIEW_DIR', 'REMOTE_PI_FONT_DIR', 'REMOTE_PI_INTER_FONT', 'REMOTE_PI_PREVIEW_THEME')) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 try {
     $env:REMOTE_PI_PREVIEW_DIR = [IO.Path]::GetFullPath($OutputDirectory)
     $env:REMOTE_PI_FONT_DIR = Join-Path $flutterRoot 'bin\cache\artifacts\material_fonts'
     $env:REMOTE_PI_INTER_FONT = [IO.Path]::GetFullPath($inter)
+    $env:REMOTE_PI_PREVIEW_THEME = $Theme
     Push-Location $buildApp
     try {
         & $flutter pub get

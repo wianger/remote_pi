@@ -10,8 +10,8 @@ import 'package:flutter/material.dart';
 /// `buildLightTheme()` so `Theme.of(context).extension<AppColors>()` resolves
 /// the right palette for the active brightness.
 ///
-/// Design tokens originate from `app/wareframe/screens.jsx` (dark). The light
-/// palette is a first-pass derivation — tune the hexes here, in one place.
+/// Warm neutral palettes for the workspace shell and reading-focused chat.
+/// Keep both brightness variants here so features share the same semantics.
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({
@@ -98,25 +98,25 @@ class AppColors extends ThemeExtension<AppColors> {
 
   /// Dark palette (default). Mirrors the original `app_theme.dart` constants.
   static const AppColors dark = AppColors(
-    bg: Color(0xFF000000),
-    surface: Color(0xFF0A0A0A),
-    border: Color(0xFF1A1A1A),
-    text: Color(0xFFFFFFFF),
-    muted: Color(0xFF6B6B6B),
-    muted2: Color(0xFF8A8A8A),
-    accent: Color(0xFF00D4FF),
-    onAccent: Color(0xFF000000),
-    highlight: Color(0xFF9FE6FF),
-    success: Color(0xFF6CD28A),
-    error: Color(0xFFE5484D),
-    warning: Color(0xFFFFB300),
-    working: Color(0xFF3FA9F5),
-    codeBg: Color(0xFF050505),
-    userBubble: Color(0xFF1A1A1A),
-    modelBadgeBg: Color(0xFF161616),
-    modelBadgeBorder: Color(0xFF1F1F1F),
-    denyBorder: Color(0xFF2A2A2A),
-    inputFill: Color(0xFF0E0E0E),
+    bg: Color(0xFF252523),
+    surface: Color(0xFF2D2D2A),
+    border: Color(0xFF42423D),
+    text: Color(0xFFECEAE3),
+    muted: Color(0xFF96968D),
+    muted2: Color(0xFFBAB9AF),
+    accent: Color(0xFFDDA78E),
+    onAccent: Color(0xFF28211D),
+    highlight: Color(0xFFE4BDA7),
+    success: Color(0xFF9CBDA5),
+    error: Color(0xFFE69C94),
+    warning: Color(0xFFDABD85),
+    working: Color(0xFFA1B7CD),
+    codeBg: Color(0xFF20201E),
+    userBubble: Color(0xFF363632),
+    modelBadgeBg: Color(0xFF383833),
+    modelBadgeBorder: Color(0xFF48483F),
+    denyBorder: Color(0xFF49423D),
+    inputFill: Color(0xFF30302C),
   );
 
   /// Light palette — derived from [dark]. Foreground tints are tuned for
@@ -125,25 +125,25 @@ class AppColors extends ThemeExtension<AppColors> {
   /// washed out on white), and `accent`/`highlight` are deepened cyans so
   /// accent-colored *text* (links, "Use default" buttons) stays legible.
   static const AppColors light = AppColors(
-    bg: Color(0xFFFFFFFF),
-    surface: Color(0xFFF4F4F5),
-    border: Color(0xFFDADADD),
-    text: Color(0xFF0A0A0A),
-    muted: Color(0xFF565656), // ~7:1 on white (was 0xFF6B6B6B, ~4:1)
-    muted2: Color(0xFF424242), // ~9:1 on white
-    accent: Color(0xFF0077A3), // ~4.6:1 on white — legible as text AND fill
+    bg: Color(0xFFFAF9F5),
+    surface: Color(0xFFF1F0E9),
+    border: Color(0xFFE0DDD3),
+    text: Color(0xFF292824),
+    muted: Color(0xFF737168),
+    muted2: Color(0xFF5F5D56),
+    accent: Color(0xFF9F5C43),
     onAccent: Color(0xFFFFFFFF),
-    highlight: Color(0xFF005F82), // code/paths — deeper for body contrast
-    success: Color(0xFF1E7A41),
-    error: Color(0xFFC42026),
-    warning: Color(0xFF9A6300),
-    working: Color(0xFF1A6CB0),
-    codeBg: Color(0xFFF0F0F0),
-    userBubble: Color(0xFFEAEAEC),
-    modelBadgeBg: Color(0xFFEDEDEF),
-    modelBadgeBorder: Color(0xFFD7D7DA),
-    denyBorder: Color(0xFFC9C9CD),
-    inputFill: Color(0xFFF0F0F2),
+    highlight: Color(0xFF865B45),
+    success: Color(0xFF417454),
+    error: Color(0xFFAF453E),
+    warning: Color(0xFF916B30),
+    working: Color(0xFF4E6B86),
+    codeBg: Color(0xFFF0EEE7),
+    userBubble: Color(0xFFEFEDE5),
+    modelBadgeBg: Color(0xFFEAE7DE),
+    modelBadgeBorder: Color(0xFFDCD7CA),
+    denyBorder: Color(0xFFDCD1C7),
+    inputFill: Color(0xFFFFFFFF),
   );
 
   @override
@@ -211,7 +211,11 @@ class AppColors extends ThemeExtension<AppColors> {
       codeBg: Color.lerp(codeBg, other.codeBg, t)!,
       userBubble: Color.lerp(userBubble, other.userBubble, t)!,
       modelBadgeBg: Color.lerp(modelBadgeBg, other.modelBadgeBg, t)!,
-      modelBadgeBorder: Color.lerp(modelBadgeBorder, other.modelBadgeBorder, t)!,
+      modelBadgeBorder: Color.lerp(
+        modelBadgeBorder,
+        other.modelBadgeBorder,
+        t,
+      )!,
       denyBorder: Color.lerp(denyBorder, other.denyBorder, t)!,
       inputFill: Color.lerp(inputFill, other.inputFill, t)!,
     );

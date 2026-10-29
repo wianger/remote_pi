@@ -3,6 +3,7 @@ import 'package:app/ui/chat/widgets/agent_markdown.dart';
 import 'package:app/ui/chat/widgets/image_bubble.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // ---------------------------------------------------------------------------
@@ -45,14 +46,14 @@ class UserBubble extends StatelessWidget {
                   : Container(
                       decoration: BoxDecoration(
                         color: colors.userBubble,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(20),
                         border: isFailed
                             ? Border.all(color: colors.error, width: 1)
                             : null,
                       ),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 13,
-                        vertical: 10,
+                        horizontal: 16,
+                        vertical: 13,
                       ),
                       // Selectable so the user can copy their own message (the
                       // agent reply is already selectable via AgentMarkdown).
@@ -201,7 +202,33 @@ class AssistantBubble extends StatelessWidget {
     // capped. Selectable so prose/code can be copied.
     return SizedBox(
       width: double.infinity,
-      child: AgentMarkdown(message.text, selectable: true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AgentMarkdown(message.text, selectable: true),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 30,
+            child: IconButton(
+              tooltip: 'Copy response',
+              padding: EdgeInsets.zero,
+              alignment: Alignment.centerLeft,
+              icon: Icon(
+                LucideIcons.copy,
+                size: 15,
+                color: context.colors.muted,
+              ),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: message.text));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Response copied')),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -24,8 +24,14 @@ ThemeData _buildTheme({
       onSurface: colors.text,
       primary: colors.accent,
       onPrimary: colors.onAccent,
+      primaryContainer: colors.userBubble,
+      onPrimaryContainer: colors.text,
       secondary: colors.muted,
       onSecondary: colors.text,
+      secondaryContainer: colors.userBubble,
+      onSecondaryContainer: colors.text,
+      surfaceContainer: colors.surface,
+      surfaceContainerHighest: colors.userBubble,
       error: colors.error,
       onError: colors.onAccent,
       outline: colors.border,
@@ -44,10 +50,7 @@ ThemeData _buildTheme({
         letterSpacing: -0.2,
       ),
     ),
-    textTheme: TextTheme(
-      bodyMedium: typo.sansBody,
-      bodySmall: typo.monoSmall,
-    ),
+    textTheme: TextTheme(bodyMedium: typo.sansBody, bodySmall: typo.monoSmall),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colors.inputFill,
@@ -63,11 +66,7 @@ ThemeData _buildTheme({
         borderRadius: BorderRadius.circular(19),
         borderSide: BorderSide(color: colors.accent, width: 1.2),
       ),
-      hintStyle: TextStyle(
-        color: colors.muted,
-        fontFamily: kMonoFamily,
-        fontSize: 13,
-      ),
+      hintStyle: typo.sansBody.copyWith(color: colors.muted, fontSize: 14),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     ),
   );
@@ -75,14 +74,14 @@ ThemeData _buildTheme({
 
 /// Dark theme — the app's original look.
 ThemeData buildDarkTheme() => _buildTheme(
-      brightness: Brightness.dark,
-      colors: AppColors.dark,
-      typo: AppTypography.dark,
-    );
+  brightness: Brightness.dark,
+  colors: AppColors.dark,
+  typo: AppTypography.dark,
+);
 
 /// Light theme — derived palette (tune hexes in `app_colors.dart`).
 ThemeData buildLightTheme() => _buildTheme(
-      brightness: Brightness.light,
-      colors: AppColors.light,
-      typo: AppTypography.light,
-    );
+  brightness: Brightness.light,
+  colors: AppColors.light,
+  typo: AppTypography.light,
+);

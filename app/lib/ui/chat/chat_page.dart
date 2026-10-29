@@ -4,6 +4,7 @@ import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
+import 'package:app/ui/workspaces/workspace_navigation.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
@@ -110,151 +111,106 @@ class ChatPage extends StatelessWidget {
   }
 
   Widget _buildTopBar(BuildContext context, ChatState state) {
-    // Plan-17 follow-up — two-line AppBar:
-    //   Line 1: ROOM name (cwd basename / room.name / fallback).
-    //   Line 2: peer (Mac nickname or sessionName) + presence dot.
-    // The dot reads from the ChatReady.peerPresence flag (which the
-    // ViewModel sources from `isRoomLive`).
     final colors = context.colors;
     final vm = context.watch<ChatViewModel>();
     final peer = vm.activePeer;
     final room = vm.activeRoom;
-    // Plan/32g — until the VM has read a real runtime, trust the `initialOnline`
-    // hint Home passed (the tile's live dot) so the status dot doesn't flash
-    // "reconnecting" on the default runtime. The live signal takes over once
-    // resolved.
     final resolved = vm.connectionResolved;
-    final isOnline = resolved ? vm.isRoomLive : initialOnline;
-    // Plan-18 follow-up — when the chat is "offline" (WS to relay
-    // down or retrying), prefer a "reconectando" amber pill so the
-    // user knows it's the relay, not the Pi cwd, that's gone.
-    final isReconnecting = resolved && state is ChatReady && (state).isOffline;
-    // Plan-18 follow-up — when the agent is currently producing a
-    // response, show "working…" instead of online/offline.
-    final isWorking = vm.isWorking;
-
-    // Plan/24-fix-title: pass the navigation hint into the helpers so
-    // either line of the AppBar (room or peer) shows it instead of
-    // the generic placeholders when the ViewModel hasn't finished
-    // bootstrapping yet.
+    final online = resolved ? vm.isRoomLive : initialOnline;
+    final reconnecting = resolved && state is ChatReady && state.isOffline;
+    final working = vm.isWorking;
     final roomName = _roomDisplayName(room, state, initialTitle);
-    // Plan/32g — line 2 (device) falls back to `initialDevice` (the Mac name
-    // Home passed), NOT `initialTitle` (the room name) — so it shows the right
-    // device from frame 1 and doesn't flip when the PeerRecord loads.
-    final peerLabel = _peerDisplayName(peer, initialDevice);
-
+    final title = roomName.replaceFirst('Codex · ', '');
+    final device = _peerDisplayName(peer, initialDevice);
+    final statusColor = working
+        ? colors.working
+        : reconnecting
+        ? colors.warning
+        : online
+        ? colors.success
+        : colors.muted;
+    final status = working
+        ? 'Working'
+        : reconnecting
+        ? 'Reconnecting'
+        : online
+        ? 'Ready'
+        : 'Offline';
     return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: colors.bg,
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
+      height: 72,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: colors.bg,
       child: Row(
         children: [
           if (SessionShell.menuOf(context) != null)
             IconButton(
-              icon: Icon(LucideIcons.panelLeft, size: 20, color: colors.text),
               tooltip: 'Sessions',
               onPressed: SessionShell.menuOf(context),
+              icon: Icon(LucideIcons.panelLeft, size: 21, color: colors.text),
             )
           else if (showBack)
             IconButton(
-              icon: Icon(LucideIcons.chevronLeft, size: 18, color: colors.text),
               tooltip: 'Back',
+              icon: const Icon(LucideIcons.chevronLeft, size: 21),
               onPressed: () =>
                   context.canPop() ? context.pop() : context.go('/home'),
             )
           else
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
+          const SizedBox(width: 4),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _truncate(roomName, 28),
-                  style: TextStyle(
-                    fontFamily: kMonoFamily,
-                    fontSize: 13,
-                    color: colors.text,
-                    letterSpacing: -0.2,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  title,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  style: context.typo.sansBody.copyWith(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.3,
+                  ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     Flexible(
                       child: Text(
-                        _truncate(peerLabel, 24),
+                        device,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: kMonoFamily,
-                          fontSize: 10,
-                          color: colors.muted,
-                        ),
+                        style: TextStyle(fontSize: 11, color: colors.muted),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Builder(
-                      builder: (_) {
-                        // Plan-18 follow-up — 4-state pill:
-                        // working / reconnecting / online / offline.
-                        // Priority: working > reconnecting > online > offline.
-                        final color = isWorking
-                            ? colors.working
-                            : isReconnecting
-                            ? colors.warning
-                            : isOnline
-                            ? colors.success
-                            : colors.muted;
-                        final label = isWorking
-                            ? 'working…'
-                            : isReconnecting
-                            ? 'reconnecting…'
-                            : isOnline
-                            ? 'online'
-                            : 'offline';
-                        return Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: color,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              label,
-                              style: TextStyle(
-                                fontFamily: kMonoFamily,
-                                fontSize: 10,
-                                color: color,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: statusColor,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      status,
+                      style: TextStyle(fontSize: 11, color: statusColor),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          // Plan/32g follow-up: ALWAYS render the info button. Gating it on the
-          // async PeerRecord made it pop in on load → an AppBar layout shift
-          // (the flicker the user saw). Title + device already render from the
-          // nav hints, so the bar is stable from frame 1. The dialog needs the
-          // loaded PeerRecord; we read it at tap time (loaded within ms of
-          // mount for the connection) and no-op in the unlikely pre-load tap.
           IconButton(
-            icon: Icon(LucideIcons.info, size: 18, color: colors.muted2),
+            tooltip: 'New session',
+            onPressed: () => openNewSession(context),
+            icon: Icon(LucideIcons.squarePen, size: 20, color: colors.muted2),
+          ),
+          IconButton(
             tooltip: 'Session info',
+            icon: Icon(LucideIcons.ellipsis, size: 21, color: colors.muted2),
             onPressed: () {
               final p = vm.activePeer;
               if (p != null) {
@@ -369,9 +325,6 @@ class ChatPage extends StatelessWidget {
     return peer.remoteEpk.substring(0, 8);
   }
 
-  static String _truncate(String s, int max) =>
-      s.length <= max ? s : '${s.substring(0, max - 1)}…';
-
   Widget _buildBody(BuildContext context, ChatState state, ChatViewModel vm) {
     final hideToolCalls = context.watch<Preferences>().hideToolCalls;
     return switch (state) {
@@ -448,6 +401,11 @@ class ChatPage extends StatelessWidget {
         !isPresenceOffline;
 
     return InputBar(
+      agentLabel:
+          (vm.activeRoom?.name ?? initialTitle ?? '').startsWith('Codex · ')
+          ? 'Codex'
+          : 'Pi',
+      modelLabel: vm.activeRoom?.model ?? 'Model',
       disabled:
           !isReady ||
           isOffline ||
@@ -597,36 +555,41 @@ class _MessageList extends StatelessWidget {
     // and keeps it there as content arrives — no manual scroll-to-bottom is
     // needed. The previous animateTo-on-every-rebuild fought this and caused
     // overlapping animations (flicker / runaway scroll) during streaming.
-    return ListView.separated(
-      reverse: true,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-      itemCount: itemCount,
-      separatorBuilder: (context, idx) => const SizedBox(height: 14),
-      itemBuilder: (_, i) {
-        // Index 0 = bottom = newest. Stable keys are REQUIRED here: when the
-        // streaming bubble appears/disappears at index 0 every other item's
-        // index shifts by 1, and without keys Flutter re-matches elements by
-        // position — briefly painting the wrong message at a slot (the
-        // momentary C/B/A → B/C/A reorder). Keying by message id makes it
-        // match by identity instead.
-        if (streaming != null && i == 0) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ListView.separated(
+        shrinkWrap: true,
+        reverse: true,
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+        itemCount: itemCount,
+        separatorBuilder: (context, idx) => const SizedBox(height: 24),
+        itemBuilder: (_, i) {
+          // Index 0 = bottom = newest. Stable keys are REQUIRED here: when the
+          // streaming bubble appears/disappears at index 0 every other item's
+          // index shifts by 1, and without keys Flutter re-matches elements by
+          // position — briefly painting the wrong message at a slot (the
+          // momentary C/B/A → B/C/A reorder). Keying by message id makes it
+          // match by identity instead.
+          if (streaming != null && i == 0) {
+            return KeyedSubtree(
+              key: const ValueKey('streaming'),
+              child: StreamingBubble(streaming!),
+            );
+          }
+          final msgIdx =
+              messages.length - 1 - (i - (streaming != null ? 1 : 0));
+          final msg = messages[msgIdx];
           return KeyedSubtree(
-            key: const ValueKey('streaming'),
-            child: StreamingBubble(streaming!),
+            key: ValueKey(msg.id),
+            child: switch (msg) {
+              UserMsg() => UserBubble(msg),
+              AssistantMsg() => AssistantBubble(msg),
+              ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
+              CompactionMsg() => CompactionBubble(msg),
+            },
           );
-        }
-        final msgIdx = messages.length - 1 - (i - (streaming != null ? 1 : 0));
-        final msg = messages[msgIdx];
-        return KeyedSubtree(
-          key: ValueKey(msg.id),
-          child: switch (msg) {
-            UserMsg() => UserBubble(msg),
-            AssistantMsg() => AssistantBubble(msg),
-            ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
-            CompactionMsg() => CompactionBubble(msg),
-          },
-        );
-      },
+        },
+      ),
     );
   }
 }

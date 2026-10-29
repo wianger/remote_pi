@@ -26,7 +26,7 @@ class AgentMarkdown extends StatelessWidget {
     final typo = context.typo;
     final markdown = GptMarkdown(
       data,
-      style: typo.mono,
+      style: typo.reading,
       onLinkTap: (url, _) => _openLink(context, url),
       // Inline `code` — subtle highlight, keeps the baseline.
       highlightBuilder: (context, text, style) => Text(

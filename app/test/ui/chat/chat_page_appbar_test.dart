@@ -26,7 +26,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 class _FakeChannel implements IChannel {
@@ -130,11 +129,11 @@ void main() {
 
       // The info button renders immediately — even with no PeerRecord loaded
       // (activePeer == null here) — so it never pops in and shifts the AppBar.
-      expect(find.byIcon(LucideIcons.info), findsOneWidget);
+      expect(find.byTooltip('Session info'), findsOneWidget);
 
       // Status dot uses initialOnline before the runtime resolves → shows
-      // "online" immediately instead of flashing offline/reconnecting.
-      expect(find.text('online'), findsOneWidget);
+      // "Ready" immediately instead of flashing offline/reconnecting.
+      expect(find.text('Ready'), findsOneWidget);
 
       // Unmount + dispose in-body (the framework's pending-timer check runs
       // before addTearDown; conn's watchdog must be cancelled here).

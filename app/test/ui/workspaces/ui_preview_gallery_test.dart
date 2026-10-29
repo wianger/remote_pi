@@ -16,6 +16,7 @@ import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/chat_page.dart';
 import 'package:app/ui/chat/states/chat_state.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
+import 'package:app/ui/chat/widgets/message_bubble.dart';
 import 'package:app/ui/chat/voice/states/voice_input_state.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -246,6 +247,10 @@ Future<void> _fonts(WidgetTester tester) async {
     ];
     await load('Ahem', sans);
     await load('Roboto', sans);
+    await load(kReadingFamily, [
+      File(r'C:\Windows\Fonts\georgia.ttf'),
+      File(r'C:\Windows\Fonts\georgiab.ttf'),
+    ]);
     final courier = File(r'C:\Windows\Fonts\cour.ttf');
     await load(
       kMonoFamily,
@@ -332,11 +337,12 @@ void main() {
       final chatKey = GlobalKey();
       final drawerKey = GlobalKey();
       final foldersKey = GlobalKey();
-      final theme = buildDarkTheme();
+      final light = Platform.environment['REMOTE_PI_PREVIEW_THEME'] == 'light';
+      final theme = light ? buildLightTheme() : buildDarkTheme();
       // Resolve Android's default sans font explicitly in the test engine,
       // whose fallback family is Ahem instead of the device's Roboto.
       final previewTheme = theme.copyWith(
-      platform: TargetPlatform.android,
+        platform: TargetPlatform.android,
         appBarTheme: theme.appBarTheme.copyWith(
           titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
             fontFamily: 'Roboto',
@@ -455,10 +461,100 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      final firstMessage = find.descendant(
+        of: find.byKey(chatKey),
+        matching: find.text('Review the Android session flow.'),
+      );
+      expect(
+        tester.getTopLeft(firstMessage).dy -
+            tester.getTopLeft(find.byKey(chatKey)).dy,
+        lessThan(140),
+        reason: 'Short conversations start near the header.',
+      );
       await _save(tester, galleryKey, '$output/overview.png');
       await _save(tester, chatKey, '$output/chat.png');
       await _save(tester, drawerKey, '$output/sessions.png');
       await _save(tester, foldersKey, '$output/new-session.png');
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(drawerKey),
+          matching: find.text('Working 1'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(drawerKey),
+          matching: find.text('backend'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.descendant(
+            of: find.byKey(drawerKey),
+            matching: find.byType(SessionSidebar),
+          ),
+          matching: find.text('remote_pi'),
+        ),
+        findsNothing,
+      );
+      tester.view.physicalSize = const Size(412, 892);
+      final homeKey = GlobalKey();
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<HomeViewModel>.value(value: home),
+            ChangeNotifierProvider<SessionSelection>.value(value: selection),
+          ],
+          child: RepaintBoundary(
+            key: homeKey,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: previewTheme,
+              home: const SessionShell(child: SessionWelcome()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Your workspaces'), findsOneWidget);
+      await _save(tester, homeKey, '$output/home.png');
+      chat.emit(
+        ChatReady(
+          messages: List.generate(
+            4000,
+            (index) => AssistantMsg(
+              id: 'long-$index',
+              text: 'Message $index in a long conversation.',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ChatViewModel>.value(value: chat),
+            ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
+            ChangeNotifierProvider<AttachmentViewModel>.value(
+              value: attachment,
+            ),
+            ChangeNotifierProvider<Preferences>.value(value: prefs),
+          ],
+          child: MaterialApp(
+            theme: previewTheme,
+            home: const ChatPage(showBack: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byType(AssistantBubble).evaluate().length,
+        lessThan(80),
+        reason: 'Long history must remain virtualized.',
+      );
+      expect(find.text('Message 3999 in a long conversation.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
       for (final notifier in <ChangeNotifier>[
         home,

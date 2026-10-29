@@ -41,6 +41,8 @@ class InputBar extends StatefulWidget {
   final VoidCallback? onCancel;
   final VoidCallback? onOpenQuickActions;
   final VoidCallback? onStartAudio;
+  final String agentLabel;
+  final String modelLabel;
 
   /// Pi-side queued follow-ups. Empty means no queued messages.
   final List<QueuedMsg> queuedMessages;
@@ -69,6 +71,8 @@ class InputBar extends StatefulWidget {
     this.onCancel,
     this.onOpenQuickActions,
     this.onStartAudio,
+    this.agentLabel = 'your agent',
+    this.modelLabel = 'Session',
     this.queuedMessages = const [],
     this.onSetQueued,
     this.onClearQueued,
@@ -328,158 +332,130 @@ class _InputBarState extends State<InputBar> {
         !showStrip &&
         widget.onCancel != null;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 22),
-      decoration: BoxDecoration(
-        color: colors.bg,
-        border: Border(top: BorderSide(color: colors.border)),
-      ),
-      child: Stack(
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (hasImage)
-                _AttachmentPreview(
-                  image: attachState.image,
-                  onRemove: widget.attachment!.removeImage,
-                ),
-              for (final item in widget.queuedMessages)
-                _QueuedMessagePreview(
-                  text: item.text,
-                  editable: item.editable,
-                  onTap: item.editable ? () => _editQueued(item) : null,
-                  onClear: item.editable
-                      ? () => widget.onClearQueued?.call(item.id)
-                      : null,
-                ),
-              Row(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.inputFill,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: colors.border.withValues(alpha: 0.8)),
+        ),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 10, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _QuickActionsButton(
-                    show: showQuickActions,
-                    onPressed: widget.onOpenQuickActions,
-                  ),
-                  _AttachButton(
-                    enabled: attachEnabled,
-                    onTap: widget.onOpenAttach,
-                  ),
-                  const SizedBox(width: 10),
-                  // Text field (doubles as the image caption when one is set).
-                  Expanded(
-                    child: TextField(
-                      // Intercept hardware Enter on the field's OWN focus
-                      // node (the primary/leaf): plain Enter sends,
-                      // Shift+Enter newlines — see _onComposerKey. Must be
-                      // the leaf, not an ancestor Focus, or the multiline
-                      // newline handling consumes Enter first.
-                      focusNode: _focusNode,
-                      controller: _controller,
-                      enabled: canInteract,
-                      // Grow with the content: starts at one line, expands up
-                      // to 6 then scrolls internally. On a touch soft-keyboard
-                      // Enter inserts a newline; sending is via the composer
-                      // button (hardware Enter sends — see _onComposerKey).
-                      minLines: 1,
-                      maxLines: 6,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      style: TextStyle(
-                        fontFamily: kMonoFamily,
-                        fontSize: 13,
-                        color: colors.text,
+                  if (hasImage)
+                    _AttachmentPreview(
+                      image: attachState.image,
+                      onRemove: widget.attachment!.removeImage,
+                    ),
+                  for (final item in widget.queuedMessages)
+                    _QueuedMessagePreview(
+                      text: item.text,
+                      editable: item.editable,
+                      onTap: item.editable ? () => _editQueued(item) : null,
+                      onClear: item.editable
+                          ? () => widget.onClearQueued?.call(item.id)
+                          : null,
+                    ),
+                  TextField(
+                    focusNode: _focusNode,
+                    controller: _controller,
+                    enabled: canInteract,
+                    minLines: 1,
+                    maxLines: 6,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    style: context.typo.sansBody.copyWith(fontSize: 16),
+                    cursorColor: colors.accent,
+                    decoration: InputDecoration(
+                      hintText: widget.streaming
+                          ? 'Steer current response…'
+                          : 'Reply to ${widget.agentLabel}…',
+                      hintStyle: context.typo.sansBody.copyWith(
+                        color: colors.muted,
                       ),
-                      cursorColor: colors.accent,
-                      decoration: InputDecoration(
-                        hintText: widget.disabled
-                            ? 'Offline…'
-                            : widget.streaming
-                            ? 'Steer current response…'
-                            : hasImage
-                            ? 'Add a caption…'
-                            : 'Send a message…',
-                        hintStyle: TextStyle(
-                          color: colors.muted,
-                          fontFamily: kMonoFamily,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        filled: true,
-                        fillColor: colors.inputFill,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(19),
-                          borderSide: BorderSide(color: colors.border),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(19),
-                          borderSide: BorderSide(color: colors.border),
-                        ),
-                        disabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(19),
-                          borderSide: BorderSide(
-                            color: colors.border.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(19),
-                          borderSide: BorderSide(
-                            color: colors.accent,
-                            width: 1.2,
-                          ),
-                        ),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 3,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  _ComposerActionButton(
-                    streaming: widget.streaming,
-                    hasContent: hasContent,
-                    disabled: widget.disabled,
-                    onSendText: _submit,
-                    onCancel: widget.onCancel,
-                    onStartAudio: widget.onStartAudio,
-                    voiceEnabled: widget.voice != null,
-                    voiceUnsupported: voiceUnsupported,
-                    onVoiceLongPressStart: _onVoiceStart,
-                    onVoiceLongPressMoveUpdate: _onVoiceMove,
-                    onVoiceLongPressEnd: _onVoiceEnd,
-                    onVoiceTap: _onVoiceTap,
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _AttachButton(
+                        enabled: attachEnabled,
+                        onTap: widget.onOpenAttach,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _QuickActionsButton(
+                            show: showQuickActions,
+                            onPressed: widget.onOpenQuickActions,
+                            label: widget.modelLabel,
+                          ),
+                        ),
+                      ),
+                      _ComposerActionButton(
+                        streaming: widget.streaming,
+                        hasContent: hasContent,
+                        disabled: widget.disabled,
+                        onSendText: _submit,
+                        onCancel: widget.onCancel,
+                        onStartAudio: widget.onStartAudio,
+                        voiceEnabled: widget.voice != null,
+                        voiceUnsupported: voiceUnsupported,
+                        onVoiceLongPressStart: _onVoiceStart,
+                        onVoiceLongPressMoveUpdate: _onVoiceMove,
+                        onVoiceLongPressEnd: _onVoiceEnd,
+                        onVoiceTap: _onVoiceTap,
+                      ),
+                      if (showInlineStop) ...[
+                        const SizedBox(width: 8),
+                        _InlineStopButton(onTap: widget.onCancel!),
+                      ],
+                    ],
                   ),
-                  if (showInlineStop) ...[
-                    const SizedBox(width: 8),
-                    _InlineStopButton(onTap: widget.onCancel!),
-                  ],
                 ],
               ),
-            ],
-          ),
-          // Recording strip — overlays the row (decision #11) while the mic's
-          // GestureDetector stays mounted underneath so the same long-press
-          // keeps feeding move/end events across the swap. IgnorePointer so
-          // the overlay never steals the in-flight gesture.
-          if (showStrip)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ColoredBox(
-                  color: colors.bg,
-                  child: Center(
-                    child: recording
-                        ? RecordingStrip(
-                            level: voiceState.level,
-                            elapsed: voiceState.elapsed,
-                            maxDuration:
-                                widget.voice?.maxDuration ??
-                                const Duration(seconds: 60),
-                            cancelArmed: _cancelArmed,
-                          )
-                        : const _TranscribingStrip(),
+            ),
+            if (showStrip)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(26),
+                    child: ColoredBox(
+                      color: colors.inputFill,
+                      child: Center(
+                        child: recording
+                            ? RecordingStrip(
+                                level: voiceState.level,
+                                elapsed: voiceState.elapsed,
+                                maxDuration:
+                                    widget.voice?.maxDuration ??
+                                    const Duration(seconds: 60),
+                                cancelArmed: _cancelArmed,
+                              )
+                            : const _TranscribingStrip(),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -633,7 +609,7 @@ class _AttachButton extends StatelessWidget {
         splashRadius: 18,
         tooltip: 'Attach image',
         icon: Icon(
-          LucideIcons.paperclip,
+          LucideIcons.plus,
           color: enabled
               ? context.colors.muted2
               : context.colors.muted.withValues(alpha: 0.35),
@@ -734,10 +710,15 @@ class _TranscribingStrip extends StatelessWidget {
 }
 
 class _QuickActionsButton extends StatefulWidget {
-  const _QuickActionsButton({required this.show, required this.onPressed});
+  const _QuickActionsButton({
+    required this.show,
+    required this.onPressed,
+    required this.label,
+  });
 
   final bool show;
   final VoidCallback? onPressed;
+  final String label;
 
   @override
   State<_QuickActionsButton> createState() => _QuickActionsButtonState();
@@ -798,27 +779,25 @@ class _QuickActionsButtonState extends State<_QuickActionsButton>
       axisAlignment: -1.0,
       child: FadeTransition(
         opacity: _fade,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: IconButton(
-                key: const Key('input-bar-quick-actions'),
-                padding: EdgeInsets.zero,
-                iconSize: 18,
-                splashRadius: 18,
-                tooltip: 'Quick actions',
-                icon: Icon(
-                  LucideIcons.slidersHorizontal,
-                  color: context.colors.muted,
-                ),
-                onPressed: widget.onPressed,
-              ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 180),
+          child: TextButton.icon(
+            key: const Key('input-bar-quick-actions'),
+            style: TextButton.styleFrom(
+              foregroundColor: context.colors.muted2,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 36),
             ),
-            const SizedBox(width: 6),
-          ],
+            onPressed: widget.onPressed,
+            iconAlignment: IconAlignment.end,
+            icon: const Icon(LucideIcons.chevronDown, size: 13),
+            label: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
         ),
       ),
     );
@@ -871,7 +850,7 @@ class _ComposerActionButton extends StatelessWidget {
       case _ComposerMode.cancel:
         return LucideIcons.square600;
       case _ComposerMode.sendText:
-        return LucideIcons.send600;
+        return LucideIcons.arrowUp600;
       case _ComposerMode.sendAudio:
         return LucideIcons.mic600;
     }
@@ -924,17 +903,9 @@ class _ComposerActionButton extends StatelessWidget {
       height: 38,
       decoration: BoxDecoration(
         color: visualEnabled
-            ? colors.accent
+            ? (_mode == _ComposerMode.sendAudio ? colors.text : colors.accent)
             : colors.muted.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(19),
-        boxShadow: visualEnabled
-            ? [
-                BoxShadow(
-                  color: colors.accent.withValues(alpha: 0.33),
-                  blurRadius: 16,
-                ),
-              ]
-            : null,
       ),
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 180),
@@ -945,7 +916,9 @@ class _ComposerActionButton extends StatelessWidget {
         child: Icon(
           _icon,
           key: ValueKey(_mode),
-          color: visualEnabled ? colors.onAccent : colors.muted,
+          color: visualEnabled
+              ? (_mode == _ComposerMode.sendAudio ? colors.bg : colors.onAccent)
+              : colors.muted,
           size: 20,
         ),
       ),

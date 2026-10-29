@@ -2,6 +2,7 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 // Inline tool execution card that appears in the chat flow.
 //
@@ -14,11 +15,20 @@ import 'package:flutter/material.dart';
 // gating. Pi cards stay informational. Codex explicitly marks requests
 // that are paused for a real decision with `approval_required`.
 
-class ToolRequestCard extends StatelessWidget {
+class ToolRequestCard extends StatefulWidget {
   final ToolEvent tool;
   final void Function(String toolCallId, ApproveDecision decision)? onDecide;
 
   const ToolRequestCard({super.key, required this.tool, this.onDecide});
+
+  @override
+  State<ToolRequestCard> createState() => _ToolRequestCardState();
+}
+
+class _ToolRequestCardState extends State<ToolRequestCard> {
+  bool _expanded = false;
+  ToolEvent get tool => widget.tool;
+  void Function(String, ApproveDecision)? get onDecide => widget.onDecide;
 
   bool get _needsApproval =>
       tool.status == ToolEventStatus.pending &&
@@ -39,66 +49,96 @@ class ToolRequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final color = _statusColor(context);
-    // Dim only the inert states (denied/expired); keep done/failed at full
-    // opacity so their green/red read clearly.
-    final dimmed =
-        tool.status == ToolEventStatus.denied ||
-        tool.status == ToolEventStatus.expired;
-
-    return Opacity(
-      opacity: dimmed ? 0.65 : 1.0,
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          border: Border.all(color: color, width: 1),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: color.withValues(alpha: 0.13),
-              blurRadius: 20,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(context, color),
-            const SizedBox(height: 10),
-            _buildCodeBlock(context),
-            const SizedBox(height: 8),
-            if (_needsApproval) ...[
-              Text(
-                'Codex is waiting for your approval.',
-                style: TextStyle(color: context.colors.muted2, fontSize: 12),
-              ),
-              const SizedBox(height: 12),
-              Row(
+    final details = _expanded || _needsApproval;
+    final summary = tool.error ?? _formatArgs(tool.tool, tool.args);
+    return Material(
+      color: colors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: colors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: ValueKey('tool-details-${tool.toolCallId}'),
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
                 children: [
-                  OutlinedButton(
-                    onPressed: onDecide == null
-                        ? null
-                        : () =>
-                              onDecide!(tool.toolCallId, ApproveDecision.deny),
-                    child: const Text('Deny'),
-                  ),
+                  Expanded(child: _buildHeader(context, color)),
                   const SizedBox(width: 10),
-                  FilledButton(
-                    onPressed: onDecide == null
-                        ? null
-                        : () =>
-                              onDecide!(tool.toolCallId, ApproveDecision.allow),
-                    child: const Text('Allow once'),
+                  Icon(
+                    details
+                        ? LucideIcons.chevronDown
+                        : LucideIcons.chevronRight,
+                    size: 15,
+                    color: colors.muted,
                   ),
                 ],
               ),
-            ] else
-              _buildOutcome(color),
-          ],
-        ),
+            ),
+          ),
+          if (summary.isNotEmpty && !details)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              child: Text(
+                summary,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.typo.mono.copyWith(
+                  color: colors.muted2,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          if (details)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildCodeBlock(context),
+                  const SizedBox(height: 12),
+                  if (_needsApproval) ...[
+                    Text(
+                      'Codex is waiting for your approval.',
+                      style: TextStyle(color: colors.text, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        OutlinedButton(
+                          onPressed: onDecide == null
+                              ? null
+                              : () => onDecide!(
+                                  tool.toolCallId,
+                                  ApproveDecision.deny,
+                                ),
+                          child: const Text('Deny'),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton(
+                          onPressed: onDecide == null
+                              ? null
+                              : () => onDecide!(
+                                  tool.toolCallId,
+                                  ApproveDecision.allow,
+                                ),
+                          child: const Text('Allow once'),
+                        ),
+                      ],
+                    ),
+                  ] else
+                    _buildOutcome(color),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -34,6 +34,26 @@ const _editToolWithHunk = ToolEvent(
 );
 
 void main() {
+  testWidgets('completed tool details start collapsed and can be expanded', (
+    tester,
+  ) async {
+    const tool = ToolEvent(
+      id: 'compact',
+      toolCallId: 'compact',
+      tool: 'bash',
+      args: {'command': 'git status'},
+      status: ToolEventStatus.completed,
+    );
+    await tester.pumpWidget(_wrap(const ToolRequestCard(tool: tool)));
+    expect(find.text('DONE'), findsOneWidget);
+    expect(find.text('✓ Done'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('tool-details-compact')));
+    await tester.pumpAndSettle();
+    expect(find.text('✓ Done'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tool-details-compact')));
+    await tester.pumpAndSettle();
+    expect(find.text('✓ Done'), findsNothing);
+  });
   testWidgets('Codex paused approval sends one explicit allow decision', (
     tester,
   ) async {
@@ -72,6 +92,8 @@ void main() {
       await tester.pumpWidget(
         _wrap(const ToolRequestCard(tool: _editToolWithHunk)),
       );
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc4')));
+      await tester.pumpAndSettle();
 
       expect(
         find.textContaining('   16 args: {', findRichText: true),
@@ -111,6 +133,8 @@ void main() {
         status: ToolEventStatus.completed,
       );
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: done)));
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pumpAndSettle();
       expect(find.text('DONE'), findsOneWidget);
       expect(find.textContaining('Done'), findsAny);
     });
@@ -143,7 +167,7 @@ void main() {
       expect(find.text('Allow'), findsNothing);
     });
 
-    // Plan/32 — the card is colored by status: running blue, done green,
+    // Plan/32 — the card is colored by status: running accent, done green,
     // failed red. We assert the outcome line's color (the same _statusColor
     // drives the border / icon / tool name).
     Color? outcomeColor(WidgetTester tester, String text) =>
@@ -158,6 +182,8 @@ void main() {
         status: ToolEventStatus.completed,
       );
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: done)));
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pumpAndSettle();
       expect(outcomeColor(tester, '✓ Done'), AppColors.dark.success);
     });
 
@@ -171,6 +197,8 @@ void main() {
         error: 'command failed: exit 1',
       );
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: failed)));
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pumpAndSettle();
       expect(find.text('FAILED'), findsOneWidget);
       expect(
         outcomeColor(tester, '✗ command failed: exit 1'),
@@ -178,9 +206,13 @@ void main() {
       );
     });
 
-    testWidgets('running → blue "⏳ Running…"', (tester) async {
+    testWidgets('running uses the progress accent "⏳ Running…"', (
+      tester,
+    ) async {
       // pending defaults
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: _bashTool)));
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pumpAndSettle();
       expect(outcomeColor(tester, '⏳ Running…'), AppColors.dark.accent);
     });
   });

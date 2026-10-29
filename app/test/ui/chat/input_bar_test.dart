@@ -139,7 +139,7 @@ void main() {
     // The composer action button uses the heavier `600` weight variants
     // (see _ComposerActionButton._icon) — match those, not the plain glyphs.
     expect(find.byIcon(LucideIcons.square600), findsOneWidget); // stop
-    expect(find.byIcon(LucideIcons.send600), findsNothing);
+    expect(find.byIcon(LucideIcons.arrowUp600), findsNothing);
     expect(find.byIcon(LucideIcons.mic600), findsNothing);
   });
 
@@ -262,7 +262,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField), 'quick follow-up');
     await tester.pump();
-    expect(find.byIcon(LucideIcons.send600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.arrowUp600), findsOneWidget);
     expect(
       find.byKey(const Key('input-bar-inline-stop')),
       findsOneWidget,

@@ -3,8 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:app/ui/core/themes/app_colors.dart';
 
-/// Monospace font family — used for code, terminal-style chrome, and most of
-/// the app's UI text (the product's "coding agent" identity).
+/// Monospace family for code, commands and file paths. Navigation uses sans,
+/// while assistant prose uses the reading family below.
 ///
 /// **To swap the app font, change this one line.** Bundle a real font in
 /// `pubspec.yaml` under this family name (e.g. JetBrains Mono) and it flows
@@ -14,6 +14,9 @@ const String kMonoFamily = 'Courier';
 /// Sans family for body/system text. `null` → the platform default sans.
 /// Set to a bundled family name to override globally.
 const String? kSansFamily = null;
+
+/// Android resolves the generic serif family to its installed reading font.
+const String kReadingFamily = 'serif';
 
 /// Brand wordmark style — the "Remote Pi" marca. **Always Inter** (the
 /// wireframe's `RP_SANS`: `screens.jsx` renders the title in `RP_SANS` bold),
@@ -68,6 +71,21 @@ class AppTypography extends ThemeExtension<AppTypography> {
   /// Sans body text. Was `kSansBody`.
   final TextStyle sansBody;
 
+  /// Long responses use a reading face; terminal text stays monospace.
+  TextStyle get reading => sansBody.copyWith(
+    fontFamily: kReadingFamily,
+    fontSize: 17,
+    height: 1.65,
+    letterSpacing: 0,
+  );
+
+  TextStyle get title => sansBody.copyWith(
+    fontSize: 20,
+    height: 1.25,
+    fontWeight: FontWeight.w600,
+    letterSpacing: -0.4,
+  );
+
   /// Build the style set for a given color palette so text colors track the
   /// active theme. [monoColor] is the resting mono text color (was the
   /// hardcoded `0xFFE6E6E6` in dark).
@@ -82,27 +100,31 @@ class AppTypography extends ThemeExtension<AppTypography> {
       ),
       monoSmall: TextStyle(
         fontFamily: kMonoFamily,
-        fontSize: 11.0,
+        fontSize: 12.0,
         color: c.muted2,
         height: 1.4,
       ),
       sansBody: TextStyle(
         fontFamily: kSansFamily,
-        fontSize: 14.0,
+        fontSize: 16.0,
         color: c.text,
-        height: 1.35,
+        height: 1.5,
         letterSpacing: -0.1,
       ),
     );
   }
 
   /// Dark typography — mono text matches the original `0xFFE6E6E6`.
-  static final AppTypography dark =
-      AppTypography.fromColors(AppColors.dark, monoColor: const Color(0xFFE6E6E6));
+  static final AppTypography dark = AppTypography.fromColors(
+    AppColors.dark,
+    monoColor: const Color(0xFFE6E6E6),
+  );
 
   /// Light typography — mono text is a near-black for contrast on white.
-  static final AppTypography light =
-      AppTypography.fromColors(AppColors.light, monoColor: const Color(0xFF1A1A1A));
+  static final AppTypography light = AppTypography.fromColors(
+    AppColors.light,
+    monoColor: const Color(0xFF1A1A1A),
+  );
 
   @override
   AppTypography copyWith({
