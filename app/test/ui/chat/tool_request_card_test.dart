@@ -34,6 +34,29 @@ const _editToolWithHunk = ToolEvent(
 );
 
 void main() {
+  testWidgets('a failed thinking tool keeps its error visible in details', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ToolRequestCard(
+          tool: ToolEvent(
+            id: 'failed-think',
+            toolCallId: 'failed-think',
+            tool: 'think',
+            args: {'thought': 'Check the project.'},
+            status: ToolEventStatus.failed,
+            error: 'The tool could not continue.',
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Failed'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tool-details-failed-think')));
+    await tester.pump();
+    expect(find.text('The tool could not continue.'), findsOneWidget);
+  });
+
   testWidgets('command output is revealed on demand and can be collapsed', (
     tester,
   ) async {
@@ -103,6 +126,8 @@ void main() {
       ),
     );
     expect(find.text('Waiting for approval'), findsOneWidget);
+    expect(find.text('git status'), findsOneWidget);
+    expect(find.textContaining('approval_required'), findsNothing);
     expect(find.text('Deny'), findsOneWidget);
     await tester.tap(find.text('Allow once'));
     expect(id, 'approval');

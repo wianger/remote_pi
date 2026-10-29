@@ -56,6 +56,7 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     final details = _expanded || _needsApproval;
     final name = tool.tool.toLowerCase();
     if (!_needsApproval &&
+        (_running || tool.status == ToolEventStatus.completed) &&
         const {'think', 'thinking', 'reasoning'}.contains(name)) {
       final args = tool.args;
       return ThinkingBlock(
@@ -364,7 +365,7 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     final normalizedTool = tool.toLowerCase();
     if (args is Map) {
       return switch (normalizedTool) {
-        'bash' => (args['command'] as String?) ?? '',
+        'bash' || 'commandexecution' => (args['command'] as String?) ?? '',
         'edit' || 'write' =>
           '$normalizedTool ${_stringArg(args, const ['file_path', 'path'])}',
         _ => args.entries.map((e) => '${e.key}=${e.value}').join(' '),
