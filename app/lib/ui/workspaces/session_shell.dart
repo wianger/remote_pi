@@ -108,7 +108,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
               )
               .toList()
         : <HomeItem>[];
-    return ColoredBox(
+    return Material(
       color: colors.surface,
       child: SafeArea(
         child: Column(

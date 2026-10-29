@@ -72,6 +72,15 @@ build. Never commit signing material, pairing state, VPN scripts or auth keys.
 
 ## Validation
 
+For screenshots of the current Android UI with demonstration sessions, run
+`scripts/preview-mobile-windows.ps1` from Windows (optional
+`-ProxyUrl http://127.0.0.1:7897`). This uses the production Flutter widgets
+with fixture ViewModels, without pairing or contacting an agent. It writes
+`overview.png`, `chat.png`, `sessions.png` and `new-session.png` under
+`~/Downloads/RemotePi-UI-Preview`. The script only downloads the checked Inter
+font if it is not already cached; the widget renderer itself runs offline.
+The manual preview test is skipped in ordinary test runs.
+
 ```sh
 cd pi-extension
 pnpm typecheck && pnpm test && pnpm build
