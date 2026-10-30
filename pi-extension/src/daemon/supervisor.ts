@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { addDaemon, listDaemons, migrateRegistryNames, removeDaemon } from "./registry.js";
 import { daemonIdForCwd } from "./id.js";
 import { resolveDirectory } from "../workspace/directories.js";
+import { workspaceAgentDefinition } from "../workspace/agents.js";
 import { defaultAgentName, type LocalConfig } from "../session/local_config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
 import { EXIT_DAEMON_FRESH_SESSION, RpcChild, type RpcChildExitEvent, type RpcChildOptions } from "./rpc_child.js";
@@ -261,8 +262,10 @@ export class Supervisor {
 
   // ── Op handlers ──────────────────────────────────────────────────────────
 
-  private async _opOpenWorkspace(rawCwd: string, agent: unknown): Promise<ControlReply<unknown>> {
-    if (agent !== "pi" && agent !== "codex") return { ok: false, error: "Choose Pi or Codex." };
+  private async _opOpenWorkspace(rawCwd: string, rawAgent: unknown): Promise<ControlReply<unknown>> {
+    const definition = workspaceAgentDefinition(rawAgent);
+    if (!definition) return { ok: false, error: "Choose an agent supported by this computer." };
+    const agent = definition.id;
     try {
       const cwd = await resolveDirectory(rawCwd);
       const entry = listDaemons().find((item) => item.cwd === cwd && (item.agent ?? "pi") === agent)

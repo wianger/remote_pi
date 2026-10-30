@@ -3,6 +3,15 @@
 Documentação canônica do protocolo Remote Pi e do modelo de proteção.
 Atualizada em 2026-07-18.
 
+### Development agent catalog
+
+`workspace_listing.directory.agents` keeps its existing `id`, `name` and
+`available` fields and may also include `description` and `reason` (why an
+entry is unavailable). Mobile clients retain stable string ids, including
+future ids, and send the selected id unchanged in `workspace_open`. Only the
+computer decides which registered adapters can execute. The current computer
+adapters are Pi and Codex; a catalog label alone does not add a runtime.
+
 ### Android development branch: thinking activities
 
 The development extension and Android app add an opaque inner frame

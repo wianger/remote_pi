@@ -36,6 +36,7 @@ class NewSessionReady extends NewSessionState {
   final String? error;
 
   bool get canOpen =>
+      host.online &&
       !loading &&
       !opening &&
       directory?.availableAgents.contains(agent) == true;

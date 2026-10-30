@@ -1,7 +1,7 @@
-import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/workspaces/states/new_session_state.dart';
 import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
+import 'package:app/ui/workspaces/widgets/agent_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -152,28 +152,12 @@ class _NewSessionPageState extends State<NewSessionPage> {
                   },
           ),
           const SizedBox(height: 16),
-          SegmentedButton<WorkspaceAgent>(
-            segments: WorkspaceAgent.values
-                .map(
-                  (agent) => ButtonSegment(
-                    value: agent,
-                    icon: Icon(
-                      agent == WorkspaceAgent.pi
-                          ? LucideIcons.terminal
-                          : LucideIcons.sparkles,
-                      size: 17,
-                    ),
-                    label: Text(agent.label),
-                    enabled:
-                        !locked &&
-                        directory?.availableAgents.contains(agent) == true,
-                  ),
-                )
-                .toList(),
-            selected: {state.agent},
-            onSelectionChanged: locked
-                ? null
-                : (agents) => vm.setAgent(agents.first),
+          AgentPickerField(
+            agents: directory?.agents ?? const [],
+            selected: directory?.agents.isNotEmpty == true ? state.agent : null,
+            computerLabel: state.host.label,
+            enabled: !locked && state.host.online,
+            onChanged: vm.setAgent,
           ),
           const SizedBox(height: 8),
           Text(

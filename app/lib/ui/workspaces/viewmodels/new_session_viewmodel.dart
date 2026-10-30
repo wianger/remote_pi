@@ -80,11 +80,15 @@ class NewSessionViewModel extends ViewModel<NewSessionState> {
         showHidden: current.showHidden,
       );
       if (_disposed || generation != _generation) return;
-      final agent = directory.availableAgents.contains(current.agent)
-          ? current.agent
-          : directory.availableAgents.isEmpty
-          ? current.agent
-          : directory.availableAgents.first;
+      final available = directory.availableAgents;
+      final selected = available.where((agent) => agent.id == current.agent.id);
+      final agent = selected.isNotEmpty
+          ? selected.first
+          : available.isNotEmpty
+          ? available.first
+          : directory.agents.isNotEmpty
+          ? directory.agents.first
+          : current.agent;
       final latest = state;
       if (latest is NewSessionReady) {
         emit(
@@ -120,7 +124,10 @@ class NewSessionViewModel extends ViewModel<NewSessionState> {
         current.directory?.availableAgents.contains(agent) != true) {
       return;
     }
-    emit(current.copyWith(agent: agent));
+    final choice = current.directory!.availableAgents.firstWhere(
+      (entry) => entry.id == agent.id,
+    );
+    emit(current.copyWith(agent: choice));
   }
 
   void setQuery(String query) {

@@ -8,6 +8,7 @@ import type { PeerChannel } from "../transport/peer_channel.js";
 import { roomIdFor } from "../rooms.js";
 import { availableAgents, browseDirectory, resolveDirectory } from "./directories.js";
 import type { OpenedWorkspace, WorkspaceRequest } from "./types.js";
+import { workspaceAgentDefinition } from "./agents.js";
 
 let supervisorStartup: Promise<void> | null = null;
 
@@ -46,16 +47,17 @@ export async function ensureWorkspaceSupervisor(): Promise<void> {
 }
 
 export async function openWorkspace(path: string, agent: unknown): Promise<OpenedWorkspace> {
-  if (agent !== "pi" && agent !== "codex") throw new Error("Choose Pi or Codex.");
+  const definition = workspaceAgentDefinition(agent);
+  if (!definition) throw new Error("Choose an agent supported by this computer.");
   if (typeof path !== "string" || !path.trim()) throw new Error("Choose a folder first.");
   const cwd = await resolveDirectory(path);
   const agents = await availableAgents();
-  if (!agents.find((entry) => entry.id === agent)?.available) {
-    throw new Error(`${agent === "codex" ? "Codex" : "Pi"} is not installed on this computer.`);
+  if (!agents.find((entry) => entry.id === definition.id)?.available) {
+    throw new Error(`${definition.name} is not installed on this computer.`);
   }
   await ensureWorkspaceSupervisor();
-  const result = await callSupervisor({ op: "open_workspace", cwd, agent });
-  return { ...result, agent, room_id: roomIdFor(result.cwd, result.name) };
+  const result = await callSupervisor({ op: "open_workspace", cwd, agent: definition.id });
+  return { ...result, agent: definition.id, room_id: roomIdFor(result.cwd, result.name) };
 }
 
 /** Called only after the transport has authenticated a paired mobile owner. */

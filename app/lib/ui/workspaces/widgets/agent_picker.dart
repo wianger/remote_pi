@@ -1,0 +1,240 @@
+import 'dart:math' as math;
+import 'package:app/domain/workspaces/workspace_repository.dart';
+import 'package:app/ui/core/themes/themes.dart';
+import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+
+class AgentPickerField extends StatelessWidget {
+  const AgentPickerField({
+    super.key,
+    required this.agents,
+    required this.selected,
+    required this.computerLabel,
+    required this.enabled,
+    required this.onChanged,
+  });
+  final List<WorkspaceAgent> agents;
+  final WorkspaceAgent? selected;
+  final String computerLabel;
+  final bool enabled;
+  final ValueChanged<WorkspaceAgent> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = enabled && agents.isNotEmpty;
+    return InkWell(
+      key: const ValueKey('workspace-agent-picker'),
+      borderRadius: BorderRadius.circular(16),
+      onTap: !active
+          ? null
+          : () async {
+              final choice = await showModalBottomSheet<WorkspaceAgent>(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                backgroundColor: context.colors.surface,
+                builder: (_) => _AgentPickerSheet(
+                  agents: agents,
+                  selected: selected,
+                  computerLabel: computerLabel,
+                ),
+              );
+              if (!context.mounted || choice == null) return;
+              onChanged(choice);
+            },
+      child: InputDecorator(
+        decoration: InputDecoration(labelText: 'Agent', enabled: active),
+        child: Row(
+          children: [
+            Icon(LucideIcons.terminal, size: 20, color: context.colors.muted2),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                selected?.label ?? 'Choose an agent',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.typo.sansBody.copyWith(
+                  color: active ? context.colors.text : context.colors.muted,
+                ),
+              ),
+            ),
+            Icon(
+              LucideIcons.chevronDown,
+              size: 18,
+              color: context.colors.muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentPickerSheet extends StatefulWidget {
+  const _AgentPickerSheet({
+    required this.agents,
+    required this.selected,
+    required this.computerLabel,
+  });
+  final List<WorkspaceAgent> agents;
+  final WorkspaceAgent? selected;
+  final String computerLabel;
+  @override
+  State<_AgentPickerSheet> createState() => _AgentPickerSheetState();
+}
+
+class _AgentPickerSheetState extends State<_AgentPickerSheet> {
+  String _query = '';
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final query = _query.trim().toLowerCase();
+    final agents = widget.agents
+        .where(
+          (agent) => '${agent.label} ${agent.id} ${agent.description}'
+              .toLowerCase()
+              .contains(query),
+        )
+        .toList();
+    final media = MediaQuery.of(context);
+    final height = math.min(
+      560.0,
+      math.max(
+        180.0,
+        (media.size.height - media.viewInsets.bottom - media.padding.top) * .8,
+      ),
+    );
+    return Padding(
+      key: const ValueKey('agent-picker-sheet'),
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: SizedBox(
+        height: height,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Choose Agent', style: context.typo.title),
+                        const SizedBox(height: 4),
+                        Text(
+                          'On ${widget.computerLabel}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.typo.sansBody.copyWith(
+                            fontSize: 12,
+                            color: colors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close agent picker',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(LucideIcons.x, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: TextField(
+                key: const ValueKey('agent-picker-search'),
+                decoration: const InputDecoration(
+                  hintText: 'Search agents',
+                  prefixIcon: Icon(LucideIcons.search, size: 18),
+                  isDense: true,
+                ),
+                onChanged: (query) => setState(() => _query = query),
+              ),
+            ),
+            Expanded(
+              child: agents.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No matching agents',
+                        style: context.typo.sansBody.copyWith(
+                          color: colors.muted,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+                      itemCount: agents.length,
+                      itemBuilder: (context, index) {
+                        final agent = agents[index];
+                        final selected = widget.selected?.id == agent.id;
+                        final subtitle = agent.available
+                            ? agent.description
+                            : agent.unavailableReason ??
+                                  'Not available on this computer';
+                        return ListTile(
+                          key: ValueKey('agent-option-${agent.id}'),
+                          enabled: agent.available,
+                          selected: selected,
+                          selectedTileColor: colors.userBubble,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          leading: Icon(
+                            LucideIcons.terminal,
+                            size: 20,
+                            color: agent.available
+                                ? colors.muted2
+                                : colors.muted,
+                          ),
+                          title: Text(
+                            agent.label,
+                            style: context.typo.sansBody.copyWith(
+                              color: agent.available
+                                  ? colors.text
+                                  : colors.muted,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                          subtitle: subtitle.isEmpty
+                              ? null
+                              : Text(
+                                  subtitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: context.typo.sansBody.copyWith(
+                                    fontSize: 12,
+                                    color: colors.muted,
+                                  ),
+                                ),
+                          trailing: selected
+                              ? Icon(
+                                  LucideIcons.check,
+                                  size: 18,
+                                  color: colors.accent,
+                                )
+                              : !agent.available
+                              ? Text(
+                                  'Unavailable',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: colors.muted,
+                                  ),
+                                )
+                              : null,
+                          onTap: !agent.available
+                              ? null
+                              : () => Navigator.of(context).pop(agent),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

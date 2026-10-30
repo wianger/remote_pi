@@ -5,6 +5,8 @@ export interface WorkspaceAgentInfo {
   id: WorkspaceAgent;
   name: string;
   available: boolean;
+  description?: string;
+  reason?: string;
 }
 
 export interface WorkspaceDirectory {

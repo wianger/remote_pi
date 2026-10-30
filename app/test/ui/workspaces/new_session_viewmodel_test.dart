@@ -5,13 +5,16 @@ import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const host = WorkspaceHost(id: 'computer', label: 'Computer', online: true);
-WorkspaceDirectory directory(String path) => WorkspaceDirectory(
+WorkspaceDirectory directory(
+  String path, {
+  List<WorkspaceAgent> agents = const [WorkspaceAgent.pi, WorkspaceAgent.codex],
+}) => WorkspaceDirectory(
   path: path,
   home: '/home',
   parent: '/',
   roots: const ['/'],
   folders: const [WorkspaceFolder(name: 'project', path: '/project')],
-  availableAgents: {WorkspaceAgent.pi, WorkspaceAgent.codex},
+  agents: agents,
 );
 
 class FakeWorkspaces extends IWorkspaceRepository {
@@ -57,6 +60,52 @@ class FakeWorkspaces extends IWorkspaceRepository {
 Future<void> tick() => Future<void>.delayed(Duration.zero);
 
 void main() {
+  test(
+    'future agent ids are selected and opened without a mobile whitelist',
+    () async {
+      const future = WorkspaceAgent(id: 'future-agent', label: 'New Agent');
+      const unavailable = WorkspaceAgent(
+        id: 'offline-agent',
+        label: 'Unavailable',
+        available: false,
+      );
+      final repo = FakeWorkspaces()
+        ..onBrowse = (path) async =>
+            directory(path, agents: [future, unavailable]);
+      final vm = NewSessionViewModel(repo);
+      await tick();
+      expect((vm.state as NewSessionReady).agent.id, 'future-agent');
+      vm.setAgent(
+        const WorkspaceAgent(
+          id: 'offline-agent',
+          label: 'Spoofed availability',
+        ),
+      );
+      expect((vm.state as NewSessionReady).agent.id, 'future-agent');
+      final opened = await vm.open();
+      expect(opened!.agent.id, 'future-agent');
+      expect(repo.opened.single.id, 'future-agent');
+      vm.dispose();
+    },
+  );
+
+  test(
+    'catalog refresh keeps the selected id and refreshes its label',
+    () async {
+      final repo = FakeWorkspaces();
+      final vm = NewSessionViewModel(repo);
+      await tick();
+      vm.setAgent(WorkspaceAgent.codex);
+      repo.onBrowse = (path) async => directory(
+        path,
+        agents: const [WorkspaceAgent(id: 'codex', label: 'Computer Codex')],
+      );
+      await vm.browse(path: '/project');
+      expect((vm.state as NewSessionReady).agent.label, 'Computer Codex');
+      vm.dispose();
+    },
+  );
+
   test(
     'loads folders, selects Codex and opens the chosen computer directory',
     () async {

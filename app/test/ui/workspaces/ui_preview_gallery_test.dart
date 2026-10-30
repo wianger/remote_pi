@@ -210,7 +210,7 @@ class _Workspaces extends IWorkspaceRepository {
           ),
         )
         .toList(),
-    availableAgents: {WorkspaceAgent.pi, WorkspaceAgent.codex},
+    agents: const [WorkspaceAgent.pi, WorkspaceAgent.codex],
   );
   @override
   Future<OpenedWorkspace> open(
@@ -566,6 +566,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Your workspaces'), findsOneWidget);
       await _save(tester, homeKey, '$output/home.png');
+      final agentPickerKey = GlobalKey();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<NewSessionViewModel>.value(
+          value: newSession,
+          child: RepaintBoundary(
+            key: agentPickerKey,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: previewTheme,
+              home: const NewSessionPage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('workspace-agent-picker')));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose Agent'), findsOneWidget);
+      await _save(tester, agentPickerKey, '$output/agent-picker.png');
+      await tester.tap(find.byTooltip('Close agent picker'));
+      await tester.pumpAndSettle();
       chat.emit(
         ChatReady(
           messages: List.generate(

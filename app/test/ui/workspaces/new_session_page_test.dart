@@ -59,7 +59,9 @@ void main() {
       await tester.tap(find.byTooltip('Home folder'));
       await tester.pumpAndSettle();
       expect(tester.widget<TextField>(path).controller!.text, '/home');
-      await tester.tap(find.text('Codex'));
+      await tester.tap(find.byKey(const ValueKey('workspace-agent-picker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('agent-option-codex')));
       await tester.pumpAndSettle();
       expect(find.text('Open Codex here'), findsOneWidget);
       expect(tester.takeException(), isNull);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'agent_catalog.dart';
 
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/channel.dart';
@@ -167,7 +168,6 @@ class WorkspaceRepository extends IWorkspaceRepository {
         (id) => WorkspaceBrowse(id: id, path: path, showHidden: showHidden),
       );
       final directories = (data['directories'] as List).cast<Map>();
-      final agents = (data['agents'] as List).cast<Map>();
       return WorkspaceDirectory(
         path: data['path'] as String,
         home: data['home'] as String,
@@ -181,14 +181,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
               ),
             )
             .toList(),
-        availableAgents: WorkspaceAgent.values
-            .where(
-              (agent) => agents.any(
-                (entry) =>
-                    entry['id'] == agent.id && entry['available'] == true,
-              ),
-            )
-            .toSet(),
+        agents: decodeWorkspaceAgents(data['agents']),
         truncated: data['truncated'] == true,
       );
     } on WorkspaceFailure {
@@ -209,9 +202,8 @@ class WorkspaceRepository extends IWorkspaceRepository {
     final peer = await _peer(hostId);
     RoomInfo? existing;
     for (final room in _connection.roomsFor(hostId)) {
-      final codex = room.name?.startsWith('Codex · ') == true;
       if (room.cwd == path &&
-          codex == (agent == WorkspaceAgent.codex) &&
+          matchesLegacyWorkspaceAgent(room.name, agent) &&
           _connection.isRoomLive(hostId, room.roomId)) {
         existing = room;
         break;

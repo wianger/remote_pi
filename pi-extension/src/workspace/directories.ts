@@ -3,6 +3,7 @@ import { access, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, parse } from "node:path";
 import type { WorkspaceAgentInfo, WorkspaceDirectory } from "./types.js";
+import { workspaceAgents } from "./agents.js";
 
 const MAX_DIRECTORIES = 300;
 
@@ -21,12 +22,14 @@ export async function findExecutable(name: string): Promise<string | null> {
   return null;
 }
 
-export async function availableAgents(): Promise<WorkspaceAgentInfo[]> {
-  const [pi, codex] = await Promise.all([findExecutable("pi"), findExecutable("codex")]);
-  return [
-    { id: "pi", name: "Pi", available: pi !== null },
-    { id: "codex", name: "Codex", available: codex !== null },
-  ];
+export async function availableAgents(
+  resolveExecutable: (command: string) => Promise<string | null> = findExecutable,
+): Promise<WorkspaceAgentInfo[]> {
+  return Promise.all(workspaceAgents.map(async ({ id, name, command, description }) => {
+    const available = await resolveExecutable(command) !== null;
+    return { id, name, description, available,
+      ...(!available ? { reason: `${name} is not installed on this computer.` } : {}) };
+  }));
 }
 
 /** Only directories are returned; browsing never reads a file's contents. */

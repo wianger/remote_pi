@@ -16,7 +16,7 @@ plugins {
 val keystoreProperties = Properties().apply {
     val f = rootProject.file("key.properties")
     if (f.exists()) {
-        load(FileInputStream(f))
+        FileInputStream(f).use { load(it) }
     }
 }
 val hasReleaseKeystore = keystoreProperties.getProperty("storeFile") != null

@@ -1,12 +1,35 @@
 import 'package:app/domain/contracts/repository.dart';
 
-enum WorkspaceAgent {
-  pi('pi', 'Pi'),
-  codex('codex', 'Codex');
-
-  const WorkspaceAgent(this.id, this.label);
+/// Agent metadata supplied by the selected computer, identified by a stable id.
+class WorkspaceAgent {
+  const WorkspaceAgent({
+    required this.id,
+    required this.label,
+    this.description = '',
+    this.available = true,
+    this.unavailableReason,
+  });
+  // Convenient legacy identities, not a whitelist of supported catalog entries.
+  static const pi = WorkspaceAgent(
+    id: 'pi',
+    label: 'Pi',
+    description: 'Pi coding agent',
+  );
+  static const codex = WorkspaceAgent(
+    id: 'codex',
+    label: 'Codex',
+    description: 'Codex coding agent',
+  );
   final String id;
   final String label;
+  final String description;
+  final bool available;
+  final String? unavailableReason;
+
+  @override
+  bool operator ==(Object other) => other is WorkspaceAgent && other.id == id;
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class WorkspaceHost {
@@ -33,7 +56,7 @@ class WorkspaceDirectory {
     required this.parent,
     required this.roots,
     required this.folders,
-    required this.availableAgents,
+    required this.agents,
     this.truncated = false,
   });
   final String path;
@@ -41,7 +64,9 @@ class WorkspaceDirectory {
   final String? parent;
   final List<String> roots;
   final List<WorkspaceFolder> folders;
-  final Set<WorkspaceAgent> availableAgents;
+  final List<WorkspaceAgent> agents;
+  List<WorkspaceAgent> get availableAgents =>
+      agents.where((agent) => agent.available).toList(growable: false);
   final bool truncated;
 }
 
