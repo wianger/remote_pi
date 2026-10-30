@@ -1,15 +1,39 @@
-<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Keep the bird and thread within adaptive icons' central safe circle. -->
-    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.78" android:scaleY="0.78">
-        <path android:fillType="evenOdd" android:fillColor="#F6F0E4"
-            android:pathData="M28,65C28,54 37,46 48,46C48,32 57,24 68,26C79,27 83,38 79,48C79,65 65,79 48,79L28,86L32,74C29,71 28,68 28,65ZM37,59C45,67 55,69 66,60C61,73 46,77 37,65ZM73.6,40a2.6,2.6 0,1 0,-5.2,0a2.6,2.6 0,1 0,5.2,0Z"/>
-        <path android:fillColor="#E6AD72"
-            android:pathData="M49,39C51,29 58,25 67,26C73,26 78,30 80,36L64,36C58,36 54,39 49,43ZM79,42L90,48L78,51Z"/>
-        <path android:pathData="M88,51C88,76 77,88 58,88" android:fillColor="@android:color/transparent"
-            android:strokeColor="#E6AD72" android:strokeWidth="3.4"
-            android:strokeLineCap="round"/>
+<?xml version='1.0' encoding='utf-8'?>
+<vector xmlns:aapt="http://schemas.android.com/aapt" xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+  <group android:pivotX="54" android:pivotY="54" android:scaleX=".78" android:scaleY=".78">
+    <group android:translateX="0" android:translateY="1.8">
+      <path android:pathData="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65ZM37 59C45 67 55 69 66 60C61 73 46 77 37 65ZM73.6 40a2.6 2.6 0 1 0-5.2 0a2.6 2.6 0 1 0 5.2 0Z" android:fillColor="#FF082326" android:fillType="evenOdd" android:fillAlpha=".38" />
     </group>
+    <path android:pathData="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65ZM37 59C45 67 55 69 66 60C61 73 46 77 37 65ZM73.6 40a2.6 2.6 0 1 0-5.2 0a2.6 2.6 0 1 0 5.2 0Z" android:strokeColor="#FFFFFFFF" android:fillType="evenOdd" android:strokeWidth=".65" android:strokeAlpha=".35">
+      <aapt:attr name="android:fillColor">
+        <gradient android:type="linear" android:startX="34" android:startY="26" android:endX="79" android:endY="86">
+          <item android:offset="0" android:color="#FFFFFDF7" />
+          <item android:offset=".45" android:color="#FFF6F0E4" />
+          <item android:offset="1" android:color="#FFD4E4DE" />
+        </gradient>
+      </aapt:attr>
+    </path>
+    <group android:translateX="0" android:translateY=".9">
+      <path android:pathData="M49 39C51 29 58 25 67 26C73 26 78 30 80 36L64 36C58 36 54 39 49 43Z" android:fillColor="#FF082326" android:fillAlpha=".2" />
+    </group>
+    <path android:pathData="M49 39C51 29 58 25 67 26C73 26 78 30 80 36L64 36C58 36 54 39 49 43ZM79 42L90 48L78 51Z">
+      <aapt:attr name="android:fillColor">
+        <gradient android:type="linear" android:startX="49" android:startY="25" android:endX="90" android:endY="52">
+          <item android:offset="0" android:color="#FFFFE5B1" />
+          <item android:offset=".6" android:color="#FFE6AD72" />
+          <item android:offset="1" android:color="#FFC48A4C" />
+        </gradient>
+      </aapt:attr>
+    </path>
+    <path android:pathData="M53 34C58 29 64 28 70 30" android:fillColor="@android:color/transparent" android:strokeColor="#FFFFFFFF" android:strokeWidth="1" android:strokeLineCap="round" android:strokeAlpha=".55" />
+    <path android:pathData="M88 51C88 76 77 88 58 88" android:fillColor="@android:color/transparent" android:strokeWidth="3.4" android:strokeLineCap="round">
+      <aapt:attr name="android:strokeColor">
+        <gradient android:type="linear" android:startX="88" android:startY="51" android:endX="58" android:endY="88">
+          <item android:offset="0" android:color="#FFFFE5B1" />
+          <item android:offset=".65" android:color="#FFE6AD72" />
+          <item android:offset="1" android:color="#FFC48A4C" />
+        </gradient>
+      </aapt:attr>
+    </path>
+  </group>
 </vector>

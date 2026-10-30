@@ -239,3 +239,17 @@ The bundled Geist / Source Serif 4 / Geist Mono fonts are retained.
 References:
 - https://developer.apple.com/design/human-interface-guidelines/materials
 - https://developer.apple.com/videos/play/wwdc2026/102/
+
+## Layered Baya artwork (1.2.7 / build 15)
+
+The existing weaverbird now uses a directional teal tile, a pale raised bird,
+gold gradients and restrained edge highlights. Welcome and sidebar marks share
+the Flutter painter. Untiled glyphs and high contrast keep the flat treatment.
+
+The SVG master and `app/branding/sync_android_icons.py` export the matching
+Android background, foreground and pure monochrome vectors. The background
+fills the system mask; the bird, thread and their small shadows remain inside
+the launcher mask. Color and monochrome PNG fallbacks cover five densities.
+There are no animation, runtime image downloads or new package dependencies.
+
+Reference: https://developer.apple.com/design/human-interface-guidelines/app-icons

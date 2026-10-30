@@ -20,6 +20,8 @@ class AppMark extends StatelessWidget {
           foreground: tile ? AppBrandColors.foreground : context.colors.accent,
           highlight: AppBrandColors.highlight,
           background: tile ? AppBrandColors.background : null,
+          dimensional:
+              tile && !(MediaQuery.maybeOf(context)?.highContrast ?? false),
         ),
       ),
     ),
@@ -31,21 +33,54 @@ class AppMarkPainter extends CustomPainter {
     required this.foreground,
     required this.highlight,
     this.background,
+    this.dimensional = false,
   });
   final Color foreground, highlight;
   final Color? background;
+  final bool dimensional;
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.width / 108, size.height / 108);
+    const bounds = Rect.fromLTWH(0, 0, 108, 108);
     if (background != null) {
+      final tile = RRect.fromRectAndRadius(bounds, const Radius.circular(24));
       canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(0, 0, 108, 108),
-          const Radius.circular(24),
-        ),
-        Paint()..color = background!,
+        tile,
+        dimensional
+            ? (Paint()
+                ..shader = LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppBrandColors.backgroundLight,
+                    background!,
+                    AppBrandColors.backgroundDeep,
+                  ],
+                  stops: const [0, 0.55, 1],
+                ).createShader(bounds))
+            : (Paint()..color = background!),
       );
+      if (dimensional) {
+        canvas.save();
+        canvas.clipRRect(tile);
+        canvas.drawRRect(
+          tile.deflate(0.6),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 0.8
+            ..shader = LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppBrandColors.reflection.withValues(alpha: 0.48),
+                AppBrandColors.reflection.withValues(alpha: 0.04),
+                AppBrandColors.reflection.withValues(alpha: 0.16),
+              ],
+            ).createShader(bounds),
+        );
+        canvas.restore();
+      }
     }
     final body = Path()
       ..fillType = PathFillType.evenOdd
@@ -64,7 +99,37 @@ class AppMarkPainter extends CustomPainter {
       ..cubicTo(61, 73, 46, 77, 37, 65)
       ..close()
       ..addOval(Rect.fromCircle(center: const Offset(71, 40), radius: 2.6));
-    canvas.drawPath(body, Paint()..color = foreground);
+    if (dimensional) {
+      canvas.drawPath(
+        body.shift(const Offset(0, 1.8)),
+        Paint()..color = AppBrandColors.shadow.withValues(alpha: 0.38),
+      );
+    }
+    canvas.drawPath(
+      body,
+      dimensional
+          ? (Paint()
+              ..shader = const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppBrandColors.foregroundLight,
+                  AppBrandColors.foreground,
+                  AppBrandColors.foregroundShade,
+                ],
+                stops: [0, 0.45, 1],
+              ).createShader(const Rect.fromLTRB(34, 26, 79, 86)))
+          : (Paint()..color = foreground),
+    );
+    if (dimensional) {
+      canvas.drawPath(
+        body,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.65
+          ..color = AppBrandColors.reflection.withValues(alpha: 0.35),
+      );
+    }
     final crown = Path()
       ..moveTo(49, 39)
       ..cubicTo(51, 29, 58, 25, 67, 26)
@@ -72,20 +137,63 @@ class AppMarkPainter extends CustomPainter {
       ..lineTo(64, 36)
       ..cubicTo(58, 36, 54, 39, 49, 43)
       ..close();
-    canvas.drawPath(crown, Paint()..color = highlight);
+    final gold = dimensional
+        ? (Paint()
+            ..shader = const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppBrandColors.highlightLight,
+                AppBrandColors.highlight,
+                AppBrandColors.highlightDeep,
+              ],
+              stops: [0, 0.6, 1],
+            ).createShader(const Rect.fromLTRB(49, 25, 90, 52)))
+        : (Paint()..color = highlight);
+    if (dimensional) {
+      canvas.drawPath(
+        crown.shift(const Offset(0, 0.9)),
+        Paint()..color = AppBrandColors.shadow.withValues(alpha: 0.2),
+      );
+    }
+    canvas.drawPath(crown, gold);
     final beak = Path()
       ..moveTo(79, 42)
       ..lineTo(90, 48)
       ..lineTo(78, 51)
       ..close();
-    canvas.drawPath(beak, Paint()..color = highlight);
+    canvas.drawPath(beak, gold);
+    if (dimensional && size.shortestSide >= 48) {
+      final glint = Path()
+        ..moveTo(53, 34)
+        ..cubicTo(58, 29, 64, 28, 70, 30);
+      canvas.drawPath(
+        glint,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..strokeCap = StrokeCap.round
+          ..color = AppBrandColors.reflection.withValues(alpha: 0.55),
+      );
+    }
     final thread = Path()
       ..moveTo(88, 51)
       ..cubicTo(88, 76, 77, 88, 58, 88);
     canvas.drawPath(
       thread,
-      Paint()
-        ..color = highlight
+      (dimensional
+            ? (Paint()
+                ..shader = const LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [
+                    AppBrandColors.highlightLight,
+                    AppBrandColors.highlight,
+                    AppBrandColors.highlightDeep,
+                  ],
+                  stops: [0, 0.65, 1],
+                ).createShader(const Rect.fromLTRB(58, 51, 88, 88)))
+            : (Paint()..color = highlight))
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3.4
         ..strokeCap = StrokeCap.round
@@ -98,5 +206,6 @@ class AppMarkPainter extends CustomPainter {
   bool shouldRepaint(AppMarkPainter old) =>
       old.foreground != foreground ||
       old.highlight != highlight ||
-      old.background != background;
+      old.background != background ||
+      old.dimensional != dimensional;
 }
