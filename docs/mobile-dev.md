@@ -205,17 +205,19 @@ Unknown tokens are displayed as Not reported. The matching computer extension
 must be reloaded to answer this read-only query. No prompts are transferred.
 
 
-## Device-first navigation and Pico (1.2.4 / build 12)
+## Device-first navigation and Baya (1.2.5 / build 13)
 
-The custom Android app is named Pico. Select Device, then Workspace,
+The custom Android app is named Baya. Select Device, then Workspace,
 then a session in the sidebar. Paired devices without rooms remain selectable;
 workspaces never include another device's paths. Each device remembers its
 workspace, and changing selectors clears search without redirecting the active
 chat. The prior combined workspace preference migrates on first load.
 
-The original folded-thread mark is defined in app/branding/pico-mark.svg,
-Flutter AppMarkPainter and Android vector drawables. The adaptive launcher has
-a monochrome variant for themed icons. The Android id dev.wianger.remotepi,
+The weaverbird mark is defined in app/branding/baya-mark.svg, Flutter
+AppMarkPainter and Android vector drawables. Its golden crown and weaving
+thread represent gathering work into one place. The adaptive launcher keeps
+the whole mark within its safe circle and has a monochrome variant for themed
+icons. The Android id dev.wianger.remotepi,
 private signing key and RemotePi-Dev-Android.apk release asset stay stable for
 in-place updates. The GitHub repository, Pi commands and protocol names remain
 Remote Pi for compatibility. No custom iOS changes are included.

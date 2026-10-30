@@ -388,7 +388,7 @@ void main() {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'PICO  /  ANDROID PREVIEW',
+                        'BAYA  /  ANDROID PREVIEW',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,

@@ -226,5 +226,5 @@ class AppColors extends ThemeExtension<AppColors> {
 abstract final class AppBrandColors {
   static const background = Color(0xFF163D3C);
   static const foreground = Color(0xFFF6F0E4);
-  static const terminal = Color(0xFFE6AD72);
+  static const highlight = Color(0xFFE6AD72);
 }

@@ -1,4 +1,4 @@
-# Device-first navigation and Pico branding
+# Device-first navigation and Baya branding
 
 The owner wants to choose a device first, then a workspace on that device,
 then a session. The previous global directory/computer dropdown flattened
@@ -11,7 +11,8 @@ these two levels. Keep browsing selection separate from the active chat.
   last explicit workspace. Migrate the earlier combined workspace selection.
 - Switching either selector clears local search without changing the active
   transport or sending agent commands. Open a session explicitly to connect.
-- Use Pico as the Android display name and a folded-thread geometric mark.
+- Use Baya as the Android display name and a weaverbird mark with a golden
+  crown and weaving thread. The owner selected this animal-based direction.
   Keep the installed package id, signing key, pairing data and update asset
   filename stable so the existing APK can be updated in place.
 - Custom scope remains Android. No changes to the inherited iOS project.

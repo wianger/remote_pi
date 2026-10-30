@@ -2,8 +2,11 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:pathData="M74,32H46C38,32 32,37 32,43C32,49 38,54 46,54H62C70,54 76,59 76,65C76,71 70,76 62,76H34" android:fillColor="@android:color/transparent"
-        android:strokeColor="#FFFFFF" android:strokeWidth="8"
-        android:strokeLineCap="round" android:strokeLineJoin="round"/>
-    <path android:pathData="M79,32a5,5 0,1 0,-10,0a5,5 0,1 0,10,0" android:fillColor="#FFFFFF"/>
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.78" android:scaleY="0.78">
+        <path android:fillType="evenOdd" android:fillColor="#FFFFFF"
+            android:pathData="M28,65C28,54 37,46 48,46C48,32 57,24 68,26C79,27 83,38 79,48C79,65 65,79 48,79L28,86L32,74C29,71 28,68 28,65ZM37,59C45,67 55,69 66,60C61,73 46,77 37,65ZM73.6,40a2.6,2.6 0,1 0,-5.2,0a2.6,2.6 0,1 0,5.2,0Z"/>
+        <path android:fillColor="#FFFFFF" android:pathData="M79,42L90,48L78,51Z"/>
+        <path android:pathData="M88,51C88,76 77,88 58,88" android:fillColor="@android:color/transparent"
+            android:strokeColor="#FFFFFF" android:strokeWidth="3.4" android:strokeLineCap="round"/>
+    </group>
 </vector>
