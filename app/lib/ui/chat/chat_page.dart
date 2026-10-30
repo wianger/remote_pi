@@ -6,6 +6,7 @@ import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
 import 'package:app/ui/chat/widgets/thinking_block.dart';
+import 'package:app/ui/chat/context/widgets/context_usage_sheet.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
@@ -208,6 +209,11 @@ class ChatPage extends StatelessWidget {
             tooltip: 'New session',
             onPressed: () => openNewSession(context),
             icon: Icon(LucideIcons.squarePen, size: 20, color: colors.muted2),
+          ),
+          IconButton(
+            tooltip: 'Context usage',
+            onPressed: online ? () => showContextUsage(context) : null,
+            icon: Icon(LucideIcons.gauge, size: 20, color: colors.muted2),
           ),
           IconButton(
             tooltip: 'Session info',

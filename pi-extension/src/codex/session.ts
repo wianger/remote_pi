@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { daemonIdForAgent } from "../daemon/id.js";
+import { contextUsageSnapshot } from "../context_usage.js";
 import { historyFrames } from "../protocol/history.js";
 import type {
   ClientMessage, ExtensionUiRequestWire, ServerMessage, SessionHistoryEvent,
@@ -30,6 +31,7 @@ export class CodexSession {
   private readonly client: Client;
   private readonly statePath: string;
   private threadId = "";
+  private contextUsage = contextUsageSnapshot(null, null);
   private startedAt = Date.now();
   private events: SessionHistoryEvent[] = [];
   private turnId: string | null = null;
@@ -120,6 +122,9 @@ export class CodexSession {
           return;
         case "approve_tool": this.approve(message.tool_call_id, message.decision); return;
         case "extension_ui_response": this.answer(message); return;
+        case "context_usage_get":
+          sender.send({ type: "context_usage", in_reply_to: message.id, source: "codex", ...this.contextUsage });
+          return;
         case "list_models": await this.models(sender, message.id); return;
         case "model_set":
           if (this.busy) throw new Error("Wait for the current response before changing models.");
@@ -203,6 +208,7 @@ export class CodexSession {
     if (typeof thread.id !== "string" || !thread.id) throw new Error("Codex did not return a thread id.");
     this.finishInteractions("The previous conversation ended.");
     this.threadId = thread.id;
+    this.contextUsage = contextUsageSnapshot(null, null);
     this.model = typeof result.model === "string" ? result.model : this.model;
     this.startedAt = Date.now();
     this.events = [];
@@ -260,6 +266,12 @@ export class CodexSession {
   private notification(method: string, params: JsonObject): void {
     if (params.threadId && params.threadId !== this.threadId) return;
     if (this.startingTurn) { this.earlyNotifications.push([method, params]); return; }
+    if (method === "thread/tokenUsage/updated") {
+      if (params.threadId !== this.threadId) return;
+      const usage = object(params.tokenUsage);
+      this.contextUsage = contextUsageSnapshot(object(usage.last).totalTokens, usage.modelContextWindow);
+      return;
+    }
     if (method === "turn/started") {
       const turn = object(params.turn);
       if (typeof turn.id === "string") this.turnId = turn.id;

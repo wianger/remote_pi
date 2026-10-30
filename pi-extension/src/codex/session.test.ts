@@ -43,6 +43,20 @@ describe("Codex mobile session bridge", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  test("context usage uses the last report, ignores other threads and resets on new session", async () => {
+    await session.start();
+    client.emit("notification", "thread/tokenUsage/updated", { threadId: "thread-1", turnId: "turn-1",
+      tokenUsage: { total: { totalTokens: 900_000 }, last: { totalTokens: 25_000 }, modelContextWindow: 100_000 } });
+    client.emit("notification", "thread/tokenUsage/updated", { threadId: "another-thread",
+      tokenUsage: { last: { totalTokens: 99_000 }, modelContextWindow: 100_000 } });
+    await session.handle(sender, { type: "context_usage_get", id: "context" });
+    expect(replies.at(-1)).toMatchObject({ type: "context_usage", in_reply_to: "context", source: "codex",
+      tokens: 25_000, context_window: 100_000, percent: 25 });
+    await session.handle(sender, { type: "session_new", id: "new" });
+    await session.handle(sender, { type: "context_usage_get", id: "context-new" });
+    expect(replies.at(-1)).toMatchObject({ tokens: null, context_window: null, percent: null });
+  });
+
   test("uses the selected folder and preserves configured sandbox/approval policy", async () => {
     await session.start();
     const params = client.request.mock.calls.find(([method]) => method === "thread/start")?.[1];

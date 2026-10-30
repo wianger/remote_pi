@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:app/data/sync/sync_service.dart';
 
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/connection_manager.dart';
@@ -21,6 +22,7 @@ import 'package:app/ui/home/states/home_state.dart';
 ///     `/chat` knows which (peer, room) to address
 class HomeViewModel extends ViewModel<HomeState> {
   final PairingStorage _storage;
+  final SyncService? _sync;
   final Preferences _prefs;
   final ConnectionManager _conn;
   StreamSubscription<Map<String, PresenceState>>? _presenceSub;
@@ -29,7 +31,7 @@ class HomeViewModel extends ViewModel<HomeState> {
   bool _relayConnected = false;
   bool _disposed = false;
 
-  HomeViewModel(this._storage, this._prefs, this._conn)
+  HomeViewModel(this._storage, this._prefs, this._conn, [this._sync])
     : super(const HomeLoading()) {
     _relayConnected = _conn.status is StatusOnline;
     _load();
@@ -40,6 +42,73 @@ class HomeViewModel extends ViewModel<HomeState> {
     // PairingStorage; listening here keeps Home in sync without manual
     // notifications between screens.
     _storage.addListener(_onStorageChanged);
+    _prefs.addListener(_onPreferencesChanged);
+  }
+
+  void _onPreferencesChanged() {
+    if (!_disposed) _onRooms(_conn.roomsSnapshot);
+  }
+
+  Map<String, List<RoomInfo>> _visibleRooms(
+    Map<String, List<RoomInfo>> rooms,
+  ) => rooms.map(
+    (epk, entries) => MapEntry(
+      epk,
+      entries.where((r) => !_prefs.isSessionHidden(epk, r.roomId)).toList(),
+    ),
+  );
+
+  static String workspaceKey(String epk, String? path) =>
+      '${toStandardB64(epk)}:${path ?? ''}';
+
+  List<HomeItem> get allItems => state is HomeList
+      ? (state as HomeList).items(normalizeEpk: normalizeEpkForLookup)
+      : const [];
+
+  Map<String, HomeItem> get workspaces => {
+    for (final item in allItems)
+      workspaceKey(item.peer.remoteEpk, item.room.cwd): item,
+  };
+
+  String? get selectedWorkspace {
+    final choices = workspaces;
+    if (choices.containsKey(_prefs.selectedWorkspace)) {
+      return _prefs.selectedWorkspace;
+    }
+    for (final item in allItems) {
+      if (item.peer.remoteEpk == _prefs.selectedPeerEpk &&
+          item.room.roomId == _prefs.selectedRoomId) {
+        return workspaceKey(item.peer.remoteEpk, item.room.cwd);
+      }
+    }
+    return choices.keys.firstOrNull;
+  }
+
+  List<HomeItem> get workspaceItems {
+    final selected = selectedWorkspace;
+    return allItems
+        .where(
+          (item) =>
+              workspaceKey(item.peer.remoteEpk, item.room.cwd) == selected,
+        )
+        .toList();
+  }
+
+  Future<void> selectWorkspace(String key) => _prefs.setSelectedWorkspace(key);
+
+  Future<void> deleteSession(HomeItem item) async {
+    final epk = item.peer.remoteEpk, room = item.room.roomId;
+    await _prefs.hideSession(epk, room);
+    try {
+      await _sync?.removeCachedSession(epk, room);
+    } catch (_) {
+      await _prefs.restoreSession(epk, room);
+      rethrow;
+    }
+    if (_prefs.selectedPeerEpk == epk &&
+        _prefs.isSessionHidden(epk, _prefs.selectedRoomId ?? 'main')) {
+      await _prefs.setSelectedRoom();
+    }
   }
 
   void _onStorageChanged() {
@@ -84,7 +153,7 @@ class HomeViewModel extends ViewModel<HomeState> {
       HomeList(
         peers: peers,
         statusByEpk: _conn.presenceSnapshot,
-        roomsByPeer: _conn.roomsSnapshot,
+        roomsByPeer: _visibleRooms(_conn.roomsSnapshot),
       ),
     );
   }
@@ -98,7 +167,7 @@ class HomeViewModel extends ViewModel<HomeState> {
   void _onRooms(Map<String, List<RoomInfo>> snapshot) {
     final s = state;
     if (s is! HomeList) return;
-    emit(s.copyWith(roomsByPeer: snapshot));
+    emit(s.copyWith(roomsByPeer: _visibleRooms(snapshot)));
   }
 
   void _onStatus(ConnectionStatus status) {
@@ -187,6 +256,14 @@ class HomeViewModel extends ViewModel<HomeState> {
     if (match.isEmpty) return;
     final peer = match.first!;
     final effectiveRoom = (roomId == null || roomId.isEmpty) ? 'main' : roomId;
+    final metadata = _conn
+        .roomsFor(epk)
+        .where((r) => r.roomId == effectiveRoom)
+        .firstOrNull;
+    if (metadata != null) {
+      await _prefs.setSelectedWorkspace(workspaceKey(epk, metadata.cwd));
+    }
+    await _prefs.restoreSession(epk, effectiveRoom);
     await _prefs.setSelectedRoom(epk: epk, roomId: effectiveRoom);
     if (peer.roomId != effectiveRoom) {
       // ignore: unawaited_futures
@@ -223,6 +300,7 @@ class HomeViewModel extends ViewModel<HomeState> {
     _roomsSub?.cancel();
     _statusSub?.cancel();
     _storage.removeListener(_onStorageChanged);
+    _prefs.removeListener(_onPreferencesChanged);
     super.dispose();
   }
 }

@@ -504,3 +504,14 @@ instanceHash is the existing 12-character cwd/name room hash. Relays route this
 whole string unchanged. Clients may group/cache by the `pi_<sessionHash>` prefix
 within a single computer identity, but must send to exactly one full room id.
 Legacy and Codex room ids retain their existing interpretation.
+
+
+### Read-only context usage
+
+A paired client may send `{ "type": "context_usage_get", "id": "..." }`.
+The active agent replies with `context_usage`, correlated by `in_reply_to`, and
+`tokens`, `context_window`, `percent`, `source` (`pi` or `codex`). Numeric fields
+may be null when not reported. The percentage is tokens / context window * 100;
+Codex tokens come from tokenUsage.last.totalTokens, not tokenUsage.total.
+This query transfers no system instructions or message contents and needs no
+new relay behavior. Phone-local deletion does not send a computer delete action.

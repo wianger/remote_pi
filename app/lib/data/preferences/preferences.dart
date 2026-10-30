@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:app/data/transport/epk_encoding.dart';
+import 'package:app/domain/value_objects/session_room.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -13,6 +16,8 @@ import 'package:app/ui/core/themes/app_font_scale.dart';
 class Preferences extends ChangeNotifier {
   final FlutterSecureStorage _store;
   bool _hideToolCalls = false;
+  Set<String> _hiddenSessions = {};
+  String? _selectedWorkspace;
   String? _selectedPeerEpk;
   String? _relayUrl;
   bool _onboardingCompleted = false;
@@ -20,7 +25,10 @@ class Preferences extends ChangeNotifier {
   AppFontScale _fontScale = AppFontScale.standard;
 
   Preferences([FlutterSecureStorage? store])
-      : _store = store ?? const FlutterSecureStorage();
+    : _store = store ?? const FlutterSecureStorage();
+
+  static const _kHiddenSessionsKey = 'prefs.hidden_sessions';
+  static const _kSelectedWorkspaceKey = 'prefs.selected_workspace';
 
   static const _kHideToolCallsKey = 'prefs.hide_tool_calls';
   static const _kSelectedPeerEpkKey = 'prefs.selected_peer_epk';
@@ -129,16 +137,74 @@ class Preferences extends ChangeNotifier {
       changed = true;
     }
 
+    final hiddenRaw = await _store.read(key: _kHiddenSessionsKey);
+    Set<String> hidden = {};
+    try {
+      final decoded = hiddenRaw == null ? null : jsonDecode(hiddenRaw);
+      if (decoded is List) hidden = decoded.whereType<String>().toSet();
+    } on FormatException {
+      /* Invalid preference, not a lost conversation. */
+    }
+    if (!setEquals(hidden, _hiddenSessions)) {
+      _hiddenSessions = hidden;
+      changed = true;
+    }
+    final workspace = await _store.read(key: _kSelectedWorkspaceKey);
+    if (workspace != _selectedWorkspace) {
+      _selectedWorkspace = workspace;
+      changed = true;
+    }
     if (changed) notifyListeners();
+  }
+
+  static String _conversationKey(String epk, String room) =>
+      '${toStandardB64(epk)}:${conversationRoomId(room)}';
+
+  bool isSessionHidden(String epk, String room) =>
+      _hiddenSessions.contains(_conversationKey(epk, room));
+  String? get selectedWorkspace => _selectedWorkspace;
+
+  Future<void> hideSession(String epk, String room) async {
+    final key = _conversationKey(epk, room);
+    if (!_hiddenSessions.add(key)) return;
+    try {
+      await _store.write(
+        key: _kHiddenSessionsKey,
+        value: jsonEncode(_hiddenSessions.toList()),
+      );
+    } catch (_) {
+      _hiddenSessions.remove(key);
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  Future<void> restoreSession(String epk, String room) async {
+    final key = _conversationKey(epk, room);
+    if (!_hiddenSessions.remove(key)) return;
+    try {
+      await _store.write(
+        key: _kHiddenSessionsKey,
+        value: jsonEncode(_hiddenSessions.toList()),
+      );
+    } catch (_) {
+      _hiddenSessions.add(key);
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  Future<void> setSelectedWorkspace(String value) async {
+    if (_selectedWorkspace == value) return;
+    _selectedWorkspace = value;
+    await _store.write(key: _kSelectedWorkspaceKey, value: value);
+    notifyListeners();
   }
 
   Future<void> setHideToolCalls(bool value) async {
     if (_hideToolCalls == value) return;
     _hideToolCalls = value;
-    await _store.write(
-      key: _kHideToolCallsKey,
-      value: value.toString(),
-    );
+    await _store.write(key: _kHideToolCallsKey, value: value.toString());
     notifyListeners();
   }
 
@@ -161,9 +227,7 @@ class Preferences extends ChangeNotifier {
     if (epk == null || epk.isEmpty) {
       return setSelectedPeerEpk(null);
     }
-    final composite = (roomId == null || roomId.isEmpty)
-        ? epk
-        : '$epk:$roomId';
+    final composite = (roomId == null || roomId.isEmpty) ? epk : '$epk:$roomId';
     return setSelectedPeerEpk(composite);
   }
 
@@ -185,10 +249,7 @@ class Preferences extends ChangeNotifier {
   Future<void> setOnboardingCompleted(bool value) async {
     if (_onboardingCompleted == value) return;
     _onboardingCompleted = value;
-    await _store.write(
-      key: _kOnboardingCompletedKey,
-      value: value.toString(),
-    );
+    await _store.write(key: _kOnboardingCompletedKey, value: value.toString());
     notifyListeners();
   }
 

@@ -74,6 +74,7 @@ import {
   createExtensionUiBridge,
   type ExtensionUiBridge,
 } from "./extension_ui_bridge.js";
+import { handleContextUsage, type ContextUsageReader } from "./context_usage.js";
 import { roomIdForPiSession } from "./rooms.js";
 import { registerAgentTools } from "./session/tools.js";
 import { formatPeerInventory } from "./session/peer_inventory.js";
@@ -4660,6 +4661,9 @@ export function _routeClientMessageFrom(
       break;
     case "thinking_set":
       handleThinkingSet(_pi, sender, msg);
+      break;
+    case "context_usage_get":
+      handleContextUsage((_lastEventCtx ?? _lastCtx) as ContextUsageReader | null, sender, msg.id);
       break;
     case "list_models":
       handleListModels(

@@ -9,6 +9,7 @@
 // the finalized message lands in the box on `agent_done`.
 
 import 'dart:async';
+import 'package:app/domain/value_objects/session_room.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -93,12 +94,14 @@ class SyncService extends Service {
   // timers are armed only when a send is actually attempted online, and
   // cancelled on echo, user-cancel, session switch, and dispose.
   final Duration pendingSendTimeout;
+  final bool Function(String epk, String room)? isSessionHidden;
   final Map<String, Timer> _pendingSendTimers = {};
 
   SyncService(
     this._conn,
     this._boxes, {
     this.pendingSendTimeout = const Duration(seconds: 20),
+    this.isSessionHidden,
   }) {
     _connSub = _conn.statusStream.listen(_onStatus);
     _roomsSub = _conn.roomsStream.listen((_) {
@@ -142,6 +145,7 @@ class SyncService extends Service {
   /// rooms; also adopted automatically on the first StatusOnline.
   Future<void> activate(String epk, String roomId) async {
     final room = roomId.isEmpty ? 'main' : roomId;
+    if (isSessionHidden?.call(epk, room) == true) return;
     if (_activeEpk == epk && _activeRoomId == room && _indexLoaded) return;
     // Genuine session switch: drop the in-memory turn state so the
     // PREVIOUS session's streaming buffer + whole-turn working flag can't
@@ -375,6 +379,27 @@ class SyncService extends Service {
     });
   }
 
+  /// Only phone-local data is removed. The relay and computer are untouched.
+  Future<void> removeCachedSession(String epk, String room) async {
+    if (_activeEpk == epk &&
+        conversationRoomId(_activeRoomId) == conversationRoomId(room)) {
+      _syncDebounce?.cancel();
+      _resetTurnState();
+      _activeEpk = null;
+      _activeRoomId = 'main';
+      _idToSeq.clear();
+      _nextSeq = 0;
+      _indexLoaded = false;
+    }
+    await _enqueue(() async {
+      final box = await _boxes.msgsBox(epk, room);
+      await box.clear();
+      await box.compact();
+      await _boxes.sessionsIndexBox().delete(LocalBoxes.sessionKey(epk, room));
+      await _boxes.runtimeBox().delete(LocalBoxes.sessionKey(epk, room));
+    });
+  }
+
   void requestSync() {
     final ch = _conn.channel;
     if (ch == null || _activeEpk == null) {
@@ -466,7 +491,13 @@ class SyncService extends Service {
         _conn.activeRoomId != _activeRoomId) {
       return;
     }
+    if (originEpk != null &&
+        isSessionHidden?.call(originEpk, _conn.activeRoomId) == true) {
+      return;
+    }
     switch (msg) {
+      case ContextUsageReply():
+        break;
       case AgentChunk(:final inReplyTo, :final delta):
         _chunkBuffer.write(delta);
         _chunkReplyTo = inReplyTo;

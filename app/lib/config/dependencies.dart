@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:app/domain/contracts/context_usage_repository.dart';
+import 'package:app/data/context/context_usage_repository.dart';
+import 'package:app/ui/chat/context/viewmodels/context_usage_viewmodel.dart';
 import 'dart:io' show Platform;
 
 import 'package:app/config/utils/injector.dart';
@@ -117,6 +120,7 @@ Future<void> setupDependencies() async {
     () => SyncService(
       _injector.get<ConnectionManager>(),
       _injector.get<LocalBoxes>(),
+      isSessionHidden: _injector.get<Preferences>().isSessionHidden,
     ),
   );
   _injector.addRepository<SessionReadRepository>(
@@ -129,6 +133,13 @@ Future<void> setupDependencies() async {
   // Repositories
   _injector.addRepository<IActionsRepository>(
     () => ActionsRepository(_injector.get<ConnectionManager>()),
+  );
+
+  _injector.addOther<IContextUsageRepository>(
+    () => ContextUsageRepository(_injector.get<ConnectionManager>()),
+  );
+  _injector.addViewModel<ContextUsageViewModel>(
+    () => ContextUsageViewModel(_injector.get<IContextUsageRepository>()),
   );
 
   // ViewModels
@@ -156,6 +167,7 @@ Future<void> setupDependencies() async {
       _injector.get<PairingStorage>(),
       _injector.get<Preferences>(),
       _injector.get<ConnectionManager>(),
+      _injector.get<SyncService>(),
     ),
   );
   _injector.addViewModel<SettingsViewModel>(

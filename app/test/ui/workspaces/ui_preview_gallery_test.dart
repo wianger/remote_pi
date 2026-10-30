@@ -7,6 +7,9 @@ import 'dart:ui' as ui;
 
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
+import 'package:app/domain/contracts/context_usage_repository.dart';
+import 'package:app/domain/entities/context_usage.dart';
+import 'package:app/ui/chat/context/viewmodels/context_usage_viewmodel.dart';
 import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
@@ -84,6 +87,26 @@ class _Home extends ViewModel<HomeState> implements HomeViewModel {
           },
         ),
       );
+  @override
+  List<HomeItem> get allItems => (state as HomeList).items(
+    normalizeEpk: HomeViewModel.normalizeEpkForLookup,
+  );
+  @override
+  Map<String, HomeItem> get workspaces => {
+    for (final item in allItems)
+      HomeViewModel.workspaceKey(item.peer.remoteEpk, item.room.cwd): item,
+  };
+  @override
+  String get selectedWorkspace =>
+      HomeViewModel.workspaceKey(_computer.remoteEpk, _room.cwd);
+  @override
+  List<HomeItem> get workspaceItems => allItems
+      .where(
+        (item) =>
+            HomeViewModel.workspaceKey(item.peer.remoteEpk, item.room.cwd) ==
+            selectedWorkspace,
+      )
+      .toList();
   @override
   bool get isRelayConnected => true;
   @override
@@ -257,6 +280,15 @@ Future<void> _save(WidgetTester tester, GlobalKey key, String path) async {
     await File(path).writeAsBytes(data!.buffer.asUint8List());
     image.dispose();
   });
+}
+
+class _ContextRepository implements IContextUsageRepository {
+  @override
+  Future<ContextUsageSnapshot> fetch() async => const ContextUsageSnapshot(
+    tokens: 74240,
+    window: 200000,
+    source: 'codex',
+  );
 }
 
 void main() {
@@ -456,30 +488,15 @@ void main() {
       );
       await tester.pumpAndSettle();
       await _save(tester, chatKey, '$output/activity-details.png');
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(drawerKey),
-          matching: find.text('Working 1'),
-        ),
-      );
-      await tester.pumpAndSettle();
       expect(
         find.descendant(
           of: find.byKey(drawerKey),
-          matching: find.text('backend'),
+          matching: find.byKey(const Key('workspace-selector')),
         ),
         findsOneWidget,
       );
-      expect(
-        find.descendant(
-          of: find.descendant(
-            of: find.byKey(drawerKey),
-            matching: find.byType(SessionSidebar),
-          ),
-          matching: find.text('remote_pi'),
-        ),
-        findsNothing,
-      );
+      expect(find.text('All'), findsNothing);
+      expect(find.text('Working 1'), findsNothing);
       tester.view.physicalSize = const Size(412, 892);
       final homeKey = GlobalKey();
       await tester.pumpWidget(
@@ -499,7 +516,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Your workspaces'), findsOneWidget);
+      expect(find.text('Sessions in this workspace'), findsOneWidget);
       await _save(tester, homeKey, '$output/home.png');
       final agentPickerKey = GlobalKey();
       await tester.pumpWidget(
@@ -522,6 +539,38 @@ void main() {
       await _save(tester, agentPickerKey, '$output/agent-picker.png');
       await tester.tap(find.byTooltip('Close agent picker'));
       await tester.pumpAndSettle();
+      final contextVm = ContextUsageViewModel(_ContextRepository());
+      await contextVm.refresh();
+      final contextKey = GlobalKey();
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ContextUsageViewModel>.value(
+              value: contextVm,
+            ),
+            ChangeNotifierProvider<ChatViewModel>.value(value: chat),
+            ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
+            ChangeNotifierProvider<AttachmentViewModel>.value(
+              value: attachment,
+            ),
+            ChangeNotifierProvider<Preferences>.value(value: prefs),
+          ],
+          child: RepaintBoundary(
+            key: contextKey,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: previewTheme,
+              home: const ChatPage(showBack: false),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Context usage'));
+      await tester.pumpAndSettle();
+      await _save(tester, contextKey, '$output/context-usage.png');
+      contextVm.dispose();
+
       chat.emit(
         ChatReady(
           messages: List.generate(

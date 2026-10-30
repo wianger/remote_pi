@@ -200,6 +200,7 @@ export type ClientMessage =
   | { type: "session_compact"; id: string }
   | { type: "model_set"; id: string; provider: string; model_id: string }
   | { type: "thinking_set"; id: string; level: ThinkingLevel }
+  | { type: "context_usage_get"; id: string }
   | { type: "list_models"; id: string }
   // Plan/57 — interactive extension prompt response (ask_user via pi-ask).
   // Mirrors RpcExtensionUIResponse; the optional `ask` envelope carries
@@ -352,6 +353,7 @@ export type ServerMessage =
   // highlight the selected row without a second round-trip.
   | { type: "action_ok"; in_reply_to: string; action: ActionName }
   | { type: "action_error"; in_reply_to: string; action: ActionName; error: string }
+  | { type: "context_usage"; in_reply_to: string; tokens: number | null; context_window: number | null; percent: number | null; source: "pi" | "codex" }
   | { type: "models_list"; in_reply_to: string; models: WireModel[]; current?: WireModel }
   // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
   // RpcExtensionUIRequest (select/confirm/input/editor/notify); the optional

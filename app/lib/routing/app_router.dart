@@ -22,6 +22,7 @@ import 'package:app/ui/settings/settings_page.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:app/ui/sync_required/sync_required_page.dart';
 import 'package:flutter/material.dart';
+import 'package:app/ui/chat/context/viewmodels/context_usage_viewmodel.dart';
 import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -290,6 +291,7 @@ GoRouter buildRouter(
             providers: [
               ViewmodelProvider<HomeViewModel>(),
               ViewmodelProvider<ChatViewModel>(),
+              ViewmodelProvider<ContextUsageViewModel>(),
               ViewmodelProvider<VoiceInputViewModel>(),
               ViewmodelProvider<AttachmentViewModel>(),
             ],

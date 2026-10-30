@@ -15,6 +15,7 @@ const SERVER_TYPES = new Set<ServerMessage["type"]>([
   "pong",
   "bye",
   "session_history",
+  "context_usage",
   // Plan/57 — interactive extension prompt (ask_user via pi-ask).
   "extension_ui_request",
 ]);

@@ -285,6 +285,10 @@ class WorkspaceRepository extends IWorkspaceRepository {
       }
     }
     _ensureCurrent(generation);
+    await _preferences.restoreSession(peer.remoteEpk, roomId);
+    await _preferences.setSelectedWorkspace(
+      '${toStandardB64(peer.remoteEpk)}:$cwd',
+    );
     await _preferences.setSelectedRoom(epk: peer.remoteEpk, roomId: roomId);
     await _switchConnection(peer, roomId, generation);
     return OpenedWorkspace(

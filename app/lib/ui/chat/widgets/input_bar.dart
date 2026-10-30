@@ -135,7 +135,7 @@ class _InputBarState extends State<InputBar> {
   }
 
   void _onTextChange() {
-    final next = _controller.text.isEmpty;
+    final next = _controller.text.trim().isEmpty;
     if (next == _empty) return;
     setState(() {
       _empty = next;
@@ -152,6 +152,7 @@ class _InputBarState extends State<InputBar> {
   }
 
   void _submit() {
+    if (widget.disabled) return;
     final text = _controller.text.trim();
     // Plan/30 — an attached image makes an empty-caption send valid.
     final hasImage = widget.attachment?.hasImage ?? false;
@@ -408,7 +409,31 @@ class _InputBarState extends State<InputBar> {
                           ),
                         ),
                       ),
+                      if (!hasContent &&
+                          !widget.streaming &&
+                          !voiceUnsupported &&
+                          (widget.voice != null ||
+                              widget.onStartAudio != null)) ...[
+                        _ComposerActionButton(
+                          key: const ValueKey('voice-action'),
+                          audioOnly: true,
+                          streaming: false,
+                          hasContent: false,
+                          disabled: widget.disabled,
+                          onSendText: _submit,
+                          onCancel: null,
+                          onStartAudio: widget.onStartAudio,
+                          voiceEnabled: widget.voice != null,
+                          voiceUnsupported: voiceUnsupported,
+                          onVoiceLongPressStart: _onVoiceStart,
+                          onVoiceLongPressMoveUpdate: _onVoiceMove,
+                          onVoiceLongPressEnd: _onVoiceEnd,
+                          onVoiceTap: _onVoiceTap,
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       _ComposerActionButton(
+                        key: const ValueKey('message-action'),
                         streaming: widget.streaming,
                         hasContent: hasContent,
                         disabled: widget.disabled,
@@ -808,6 +833,8 @@ enum _ComposerMode { sendAudio, sendText, cancel }
 
 class _ComposerActionButton extends StatelessWidget {
   const _ComposerActionButton({
+    super.key,
+    this.audioOnly = false,
     required this.streaming,
     required this.hasContent,
     required this.disabled,
@@ -823,6 +850,7 @@ class _ComposerActionButton extends StatelessWidget {
   });
 
   final bool streaming;
+  final bool audioOnly;
 
   /// Text typed OR an image attached → the button is "send" (decision #6).
   final bool hasContent;
@@ -840,9 +868,9 @@ class _ComposerActionButton extends StatelessWidget {
   final VoidCallback onVoiceTap;
 
   _ComposerMode get _mode {
+    if (audioOnly) return _ComposerMode.sendAudio;
     if (streaming && !hasContent) return _ComposerMode.cancel;
-    if (hasContent) return _ComposerMode.sendText;
-    return _ComposerMode.sendAudio;
+    return _ComposerMode.sendText;
   }
 
   IconData get _icon {
@@ -861,7 +889,7 @@ class _ComposerActionButton extends StatelessWidget {
       case _ComposerMode.cancel:
         return onCancel;
       case _ComposerMode.sendText:
-        return disabled ? null : onSendText;
+        return disabled || !hasContent ? null : onSendText;
       case _ComposerMode.sendAudio:
         return disabled ? null : onStartAudio;
     }
@@ -887,16 +915,32 @@ class _ComposerActionButton extends StatelessWidget {
       );
     }
 
-    return GestureDetector(
-      key: const Key('input-bar-action'),
-      onTap: _resolveTap(),
-      child: _button(context),
+    final label = _mode == _ComposerMode.sendAudio
+        ? 'Voice input'
+        : _mode == _ComposerMode.cancel
+        ? 'Stop response'
+        : 'Send message';
+    return Semantics(
+      button: true,
+      label: label,
+      enabled: _resolveTap() != null,
+      child: Tooltip(
+        message: label,
+        child: GestureDetector(
+          key: _mode == _ComposerMode.sendAudio
+              ? const Key('input-bar-voice')
+              : const Key('input-bar-action'),
+          onTap: _resolveTap(),
+          child: _button(context),
+        ),
+      ),
     );
   }
 
   Widget _button(BuildContext context) {
     final colors = context.colors;
-    final visualEnabled = !disabled;
+    final visualEnabled =
+        !disabled && (_mode != _ComposerMode.sendText || hasContent);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: 38,

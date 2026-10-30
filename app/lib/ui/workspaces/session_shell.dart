@@ -43,6 +43,48 @@ Future<void> _openSession(
   }
 }
 
+Future<void> _deleteFromPhone(BuildContext context, HomeItem item) async {
+  final vm = context.read<HomeViewModel>();
+  final selection = context.read<SessionSelection>();
+  final wasSelected = selection.matches(item.peer.remoteEpk, item.room.roomId);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete from phone?'),
+      content: Text(
+        'Remove "${item.displayName}" and clear its cached messages on this phone? Computer history and the running agent are kept.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted || confirmed != true) return;
+  try {
+    await vm.deleteSession(item);
+    if (!context.mounted) return;
+    if (wasSelected) {
+      selection.clear();
+      context.go('/home');
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not remove this session. Try again.'),
+        ),
+      );
+    }
+  }
+}
+
 class SessionShell extends StatefulWidget {
   const SessionShell({super.key, required this.child});
   final Widget child;
@@ -103,7 +145,6 @@ class SessionSidebar extends StatefulWidget {
 class _SessionSidebarState extends State<SessionSidebar> {
   String _query = '';
   bool _opening = false;
-  bool _workingOnly = false;
 
   Future<void> _open(HomeItem item) async {
     if (_opening) return;
@@ -121,22 +162,13 @@ class _SessionSidebarState extends State<SessionSidebar> {
     final vm = context.watch<HomeViewModel>();
     final state = vm.state;
     final selection = context.watch<SessionSelection>();
-    final all = state is HomeList
-        ? state.items(normalizeEpk: HomeViewModel.normalizeEpkForLookup)
-        : <HomeItem>[];
-    final working = all
+    final workspaces = vm.workspaces;
+    final selectedWorkspace = vm.selectedWorkspace;
+    final items = vm.workspaceItems
         .where(
-          (item) => vm.isRoomWorking(item.peer.remoteEpk, item.room.roomId),
-        )
-        .length;
-    final items = all
-        .where(
-          (item) =>
-              (!_workingOnly ||
-                  vm.isRoomWorking(item.peer.remoteEpk, item.room.roomId)) &&
-              '${item.displayName} ${item.room.cwd ?? ''} ${item.peer.nickname ?? item.peer.sessionName}'
-                  .toLowerCase()
-                  .contains(_query.toLowerCase()),
+          (item) => '${item.displayName} ${item.room.cwd ?? ''}'
+              .toLowerCase()
+              .contains(_query.toLowerCase()),
         )
         .toList();
     final groups = <String, List<HomeItem>>{};
@@ -180,7 +212,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${all.length} sessions${working > 0 ? ' · $working working' : ''}',
+                    'Sessions · ${vm.workspaceItems.length}',
                     style: TextStyle(color: colors.muted, fontSize: 12),
                   ),
                 ],
@@ -211,7 +243,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 onChanged: (value) => setState(() => _query = value),
                 style: context.typo.sansBody.copyWith(fontSize: 14),
                 decoration: const InputDecoration(
-                  hintText: 'Search projects and sessions',
+                  hintText: 'Search sessions',
                   isDense: true,
                   prefixIcon: Icon(LucideIcons.search, size: 17),
                 ),
@@ -219,22 +251,47 @@ class _SessionSidebarState extends State<SessionSidebar> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  ChoiceChip(
-                    label: const Text('All'),
-                    selected: !_workingOnly,
-                    showCheckmark: false,
-                    onSelected: (_) => setState(() => _workingOnly = false),
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Workspace',
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
                   ),
-                  ChoiceChip(
-                    label: Text('Working $working'),
-                    selected: _workingOnly,
-                    showCheckmark: false,
-                    onSelected: (_) => setState(() => _workingOnly = true),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    key: const Key('workspace-selector'),
+                    value: selectedWorkspace,
+                    isExpanded: true,
+                    hint: const Text('Select a workspace'),
+                    items: workspaces.entries.map((entry) {
+                      final item = entry.value;
+                      final path = item.room.cwd ?? 'Other sessions';
+                      final segments = path
+                          .split(RegExp(r'[/\\]'))
+                          .where((part) => part.isNotEmpty);
+                      final label = segments.lastOrNull ?? path;
+                      final computer =
+                          item.peer.nickname ?? item.peer.sessionName;
+                      return DropdownMenuItem(
+                        value: entry.key,
+                        child: Tooltip(
+                          message: '$computer · $path',
+                          child: Text(
+                            '$label · $computer',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) vm.selectWorkspace(value);
+                    },
                   ),
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -248,8 +305,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         child: Text(
                           state is HomeNoPeer
                               ? 'Pair a computer to see your workspaces.'
-                              : _workingOnly
-                              ? 'No sessions are working right now.'
                               : _query.isEmpty
                               ? 'Your projects will appear when a computer is online.'
                               : 'No matching workspaces',
@@ -314,6 +369,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                 item.room.roomId,
                               ),
                               onTap: _opening ? null : () => _open(item),
+                              onDelete: () => _deleteFromPhone(context, item),
                             ),
                         ],
                       ],
@@ -371,10 +427,12 @@ class _SessionRow extends StatelessWidget {
     required this.online,
     required this.working,
     this.onTap,
+    this.onDelete,
   });
   final HomeItem item;
   final bool selected, online, working;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -441,9 +499,16 @@ class _SessionRow extends StatelessWidget {
             ],
           ),
         ),
-        trailing: selected
-            ? Icon(LucideIcons.chevronRight, size: 14, color: colors.muted2)
-            : null,
+        trailing: PopupMenuButton<String>(
+          key: ValueKey('session-menu-${item.room.roomId}'),
+          tooltip: 'Session actions',
+          icon: Icon(LucideIcons.ellipsis, size: 18, color: colors.muted2),
+          onSelected: (_) => onDelete?.call(),
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'delete', child: Text('Delete from phone')),
+          ],
+        ),
+        onLongPress: onDelete,
         onTap: onTap,
       ),
     );
@@ -457,9 +522,7 @@ class SessionWelcome extends StatelessWidget {
     final colors = context.colors;
     final vm = context.watch<HomeViewModel>();
     final state = vm.state;
-    final items = state is HomeList
-        ? state.items(normalizeEpk: HomeViewModel.normalizeEpkForLookup)
-        : <HomeItem>[];
+    final items = vm.workspaceItems;
     final active = items
         .where(
           (item) => vm.isRoomWorking(item.peer.remoteEpk, item.room.roomId),
@@ -518,7 +581,7 @@ class SessionWelcome extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      'Your workspaces',
+                      'Sessions in this workspace',
                       style: context.typo.sansBody.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -558,6 +621,7 @@ class SessionWelcome extends StatelessWidget {
                         item.room.roomId,
                       ),
                       onTap: () => _openSession(context, item),
+                      onDelete: () => _deleteFromPhone(context, item),
                     ),
               ],
             ),

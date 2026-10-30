@@ -182,3 +182,24 @@ without merging the two processes or their in-memory agent state.
 For an already-running phone-created Pi daemon, wait until its turn finishes,
 then use `/remote-pi daemon restart <id>` (or omit the id to restart all).
 This reloads the development extension in the daemon as well as the desktop.
+
+
+## Mobile controls (1.2.2 / Android build 10)
+
+The sidebar Workspace selector switches between paired computer/directory pairs.
+Only that workspace's conversations are listed; the selected workspace persists.
+Each session's menu (or long press) offers Delete from phone. It removes the row
+and clears this phone's message/index/runtime cache, without stopping the agent
+or deleting computer history. Local tombstones prevent relay refreshes and app
+relaunch from recreating deleted rows. Open that directory explicitly to restore
+its conversation on this phone. Different phones retain their own histories.
+
+The composer always displays a Send arrow, disabled while empty or offline.
+Voice dictation has a separate button; existing hold-to-talk, images, steering
+and Stop controls remain available.
+
+The chat toolbar's Context usage button opens used tokens, context window and
+percentage with a refresh action. Pi reports the public SDK estimate. Codex uses
+its last per-thread token-usage report rather than cumulative billed tokens.
+Unknown tokens are displayed as Not reported. The matching computer extension
+must be reloaded to answer this read-only query. No prompts are transferred.

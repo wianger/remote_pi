@@ -815,6 +815,7 @@ sealed class ServerMessage {
       'bye' => Bye.fromJson(json),
       'action_ok' => ActionOk.fromJson(json),
       'action_error' => ActionError.fromJson(json),
+      'context_usage' => ContextUsageReply.fromJson(json),
       'models_list' => ModelsList.fromJson(json),
       'workspace_listing' => WorkspaceListing(
         inReplyTo: json['in_reply_to'] as String,
@@ -1774,5 +1775,36 @@ class ExtensionUiResponse extends ClientMessage {
     if (confirmed != null) m['confirmed'] = confirmed;
     if (ask != null) m['ask'] = ask!.toJson();
     return m;
+  }
+}
+
+class GetContextUsage extends ClientMessage {
+  GetContextUsage({required this.id});
+  final String id;
+  @override
+  Map<String, dynamic> toJson() => {'type': 'context_usage_get', 'id': id};
+}
+
+class ContextUsageReply extends ServerMessage {
+  ContextUsageReply({
+    required this.inReplyTo,
+    this.tokens,
+    this.window,
+    this.source,
+  });
+  final String inReplyTo;
+  final int? tokens, window;
+  final String? source;
+  factory ContextUsageReply.fromJson(Map<String, dynamic> json) {
+    int? value(Object? raw, {bool positive = false}) =>
+        raw is num && raw.isFinite && (positive ? raw > 0 : raw >= 0)
+        ? raw.toInt()
+        : null;
+    return ContextUsageReply(
+      inReplyTo: json['in_reply_to'] as String,
+      tokens: value(json['tokens']),
+      window: value(json['context_window'], positive: true),
+      source: json['source'] as String?,
+    );
   }
 }
