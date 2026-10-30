@@ -12,6 +12,22 @@ future ids, and send the selected id unchanged in `workspace_open`. Only the
 computer decides which registered adapters can execute. The current computer
 adapters are Pi and Codex; a catalog label alone does not add a runtime.
 
+### Development history fragments and live cursor
+
+Pi and Codex histories are sent as ordered `session_history` fragments sharing
+`in_reply_to`. Only the last fragment has `eos: true`; receivers accumulate all
+fragments before replacing the transcript. Batches target 1 MiB of UTF-8 JSON;
+individual attachments may use a larger frame with transport headroom. An
+individual event that cannot fit produces an error before any history fragment
+is sent, rather than a silently incomplete reply.
+
+The final Codex fragment also carries `streaming: {in_reply_to, text}` for an
+unfinished response, or `streaming: null` when idle. This cursor is not a
+completed `agent_message`. The app replaces its current streaming buffer at
+that boundary, then appends later `agent_chunk` deltas and persists one response
+at the next tool/turn boundary. Absence of the field keeps legacy Pi streaming
+behavior. Use the matching development app and extension for these fixes.
+
 ### Android development branch: thinking activities
 
 The development extension and Android app add an opaque inner frame

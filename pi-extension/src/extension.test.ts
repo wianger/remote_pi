@@ -2359,6 +2359,39 @@ describe("multi-channel broadcast (W2D)", () => {
     };
   }
 
+  test("full Pi history is fragmented before it exceeds relay limits", async () => {
+    await _pairForTest("ownerA__1234567890");
+    _setSessionStartedAtForTest(1);
+    _setMessageBufferForTest(Array.from({ length: 100 }, (_, i) => ({
+      role: "user", content: "x".repeat(50 * 1024), timestamp: i + 1,
+    })));
+    const before = relayRef.current!.send.mock.calls.length;
+    relayRef.current!.emit("message", JSON.stringify({ peer: "ownerA__1234567890",
+      ct: Buffer.from(JSON.stringify({ type: "session_sync", id: "large-pi", limit: 30 })).toString("base64") }));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const frames = relayRef.current!.send.mock.calls.slice(before)
+      .map((call) => decodeSentCt(call[0] as string).inner)
+      .filter((message) => message.type === "session_history");
+    expect(frames.length).toBeGreaterThan(1);
+    expect(frames.flatMap((frame) => frame.events as unknown[])).toHaveLength(100);
+    expect(frames.filter((frame) => frame.eos)).toHaveLength(1);
+    expect(frames.at(-1)!.eos).toBe(true);
+    for (const frame of frames) expect(Buffer.byteLength(JSON.stringify(frame))).toBeLessThan(1024 * 1024);
+    _setMessageBufferForTest([{ role: "user", content: "x".repeat(4 * 1024 * 1024), timestamp: 1 }]);
+    const tooLarge = relayRef.current!.send.mock.calls.length;
+    await syncFullHistoryError();
+    const errors = relayRef.current!.send.mock.calls.slice(tooLarge)
+      .map((call) => decodeSentCt(call[0] as string).inner);
+    expect(errors).toContainEqual(expect.objectContaining({ type: "error", code: "history_too_large" }));
+    expect(errors.some((message) => message.type === "session_history")).toBe(false);
+  });
+
+  async function syncFullHistoryError() {
+    relayRef.current!.emit("message", JSON.stringify({ peer: "ownerA__1234567890",
+      ct: Buffer.from(JSON.stringify({ type: "session_sync", id: "too-large" })).toString("base64") }));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
   test("full history restores a resumed branch and replays more than 30 events", async () => {
     await _pairForTest("ownerA__1234567890");
     _setSessionStartedAtForTest(1699999999000);

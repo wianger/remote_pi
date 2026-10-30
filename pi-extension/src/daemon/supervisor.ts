@@ -308,7 +308,7 @@ export class Supervisor {
         already.push(entry.id);
         continue;
       }
-      this._spawnEntry(entry.id, entry.cwd);
+      this._spawnEntry(entry.id, entry.cwd, entry.name);
       started.push(entry.id);
     }
     return { ok: true, data: { started, already_running: already } };

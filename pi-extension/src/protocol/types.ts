@@ -337,6 +337,9 @@ export type ServerMessage =
       in_reply_to: string;
       session_started_at: number;
       events: SessionHistoryEvent[];
+      /** Only on the final fragment. Null explicitly clears an old cursor;
+       * absence preserves legacy Pi streaming behavior. */
+      streaming?: { in_reply_to: string; text: string } | null;
       eos: boolean;
       truncated: boolean;
     }

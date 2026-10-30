@@ -669,11 +669,34 @@ class SyncService extends Service {
           events: List.of(_historyParts),
           eos: true,
           truncated: msg.truncated,
+          streaming: msg.streaming,
+          hasStreamingSnapshot: msg.hasStreamingSnapshot,
         );
         _historyRequestId = null;
         _historyParts.clear();
         // ignore: discarded_futures
         _applyHistory(history);
+        // Restore the cursor synchronously before any newer delta arrives.
+        // The history DB write was already queued, so finishing this stream
+        // later appends exactly one response after the completed transcript.
+        if (history.hasStreamingSnapshot) {
+          _discardStreamingState();
+          final cursor = history.streaming;
+          if (cursor != null) {
+            _chunkReplyTo = cursor.inReplyTo;
+            if (cursor.text.isNotEmpty) {
+              _emitStreaming(
+                StreamingMessage(
+                  inReplyTo: cursor.inReplyTo,
+                  buffer: cursor.text,
+                ),
+              );
+            }
+            _setWorking(true, replyTo: cursor.inReplyTo);
+          } else {
+            _setWorking(false);
+          }
+        }
 
       case ErrorMessage(:final code, :final message):
         if (code.contains('unknown_peer')) {

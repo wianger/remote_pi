@@ -99,6 +99,7 @@ import { callSupervisor, supervisorOnline, SupervisorOfflineError } from "./daem
 import type { ControlRequest, DaemonInfo } from "./daemon/control_protocol.js";
 import { EXIT_DAEMON_FRESH_SESSION } from "./daemon/rpc_child.js";
 import { handleWorkspaceRequest } from "./workspace/service.js";
+import { historyFrames } from "./protocol/history.js";
 import { installService, uninstallService, linkCliBinaries, unlinkCliBinaries, LAUNCHD_LABEL, SYSTEMD_UNIT, WINDOWS_TASK_NAME } from "./daemon/install.js";
 import {
   defaultAgentName,
@@ -4717,16 +4718,17 @@ function _handleSessionSync(
   const allEvents = _mapAgentMessagesToEvents(_messageBuffer);
   const slice = effectiveLimit > 0 ? allEvents.slice(-effectiveLimit) : [];
   const truncated = allEvents.length > effectiveLimit;
-  _lastHistorySync = { requested: msg.limit, sent: slice.length, total: allEvents.length, truncated };
-
-  sender.send({
-    type: "session_history",
-    in_reply_to: msg.id,
-    session_started_at: _sessionStartedAt,
-    events: slice,
-    eos: true,
-    truncated,
-  });
+  try {
+    const frames = historyFrames({ in_reply_to: msg.id,
+      session_started_at: _sessionStartedAt, events: slice, truncated });
+    for (const frame of frames) sender.send(frame);
+    _lastHistorySync = { requested: msg.limit, sent: slice.length, total: allEvents.length, truncated };
+  } catch (error) {
+    _lastHistorySync = { requested: msg.limit, sent: 0, total: allEvents.length, truncated: true };
+    sender.send({ type: "error", in_reply_to: msg.id, code: "history_too_large",
+      message: error instanceof Error ? error.message : "Could not synchronize history." });
+    return;
+  }
 
   // Plan/57 — replay ask_user flows still awaiting an answer. The bridge
   // broadcasts `started` once; a peer that connects afterwards would otherwise

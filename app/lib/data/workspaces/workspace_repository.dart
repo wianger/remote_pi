@@ -21,6 +21,34 @@ class WorkspaceRepository extends IWorkspaceRepository {
   final PairingStorage _storage;
   final Preferences _preferences;
   final Duration timeout;
+  int _generation = 0;
+  Future<void> _connectionQueue = Future<void>.value();
+
+  void _ensureCurrent(int generation) {
+    if (generation != _generation) {
+      throw const WorkspaceFailure('Folder request cancelled.');
+    }
+  }
+
+  // A slow switch must finish before a restore/new switch can take ownership.
+  // Invalidated requests never change the room or send on the newer channel.
+  Future<void> _switchConnection(
+    PeerRecord peer,
+    String roomId,
+    int generation,
+  ) {
+    final operation = _connectionQueue.then((_) async {
+      _ensureCurrent(generation);
+      await _connection.switchTo(peer.copyWith(roomId: roomId));
+      _ensureCurrent(generation);
+      _connection.switchRoom(roomId);
+    });
+    _connectionQueue = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
 
   @override
   WorkspaceSelection? get currentSelection {
@@ -64,8 +92,9 @@ class WorkspaceRepository extends IWorkspaceRepository {
     );
   }
 
-  Future<IChannel> _connect(String hostId) async {
+  Future<IChannel> _connect(String hostId, int generation) async {
     final peer = await _peer(hostId);
+    _ensureCurrent(generation);
     final rooms = _connection
         .roomsFor(peer.remoteEpk)
         .where((room) => _connection.isRoomLive(peer.remoteEpk, room.roomId))
@@ -80,8 +109,8 @@ class WorkspaceRepository extends IWorkspaceRepository {
       (entry) => entry.roomId == current,
       orElse: () => rooms.first,
     );
-    await _connection.switchTo(peer.copyWith(roomId: room.roomId));
-    _connection.switchRoom(room.roomId);
+    await _switchConnection(peer, room.roomId, generation);
+    _ensureCurrent(generation);
     final channel = _connection.channel;
     if (channel == null) {
       throw const WorkspaceFailure('Could not connect to this computer.');
@@ -92,8 +121,10 @@ class WorkspaceRepository extends IWorkspaceRepository {
   Future<Map<String, dynamic>> _request(
     String hostId,
     ClientMessage Function(String) makeMessage,
+    int generation,
   ) async {
-    final channel = await _connect(hostId);
+    final channel = await _connect(hostId, generation);
+    _ensureCurrent(generation);
     final id = uuid7();
     final completer = Completer<Map<String, dynamic>>();
     late final StreamSubscription<ServerMessage> subscription;
@@ -150,6 +181,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
         reply,
         channel.send(makeMessage(id)),
       ], eagerError: true);
+      _ensureCurrent(generation);
       return results.first as Map<String, dynamic>;
     } finally {
       await subscription.cancel();
@@ -162,10 +194,12 @@ class WorkspaceRepository extends IWorkspaceRepository {
     String? path,
     bool showHidden = false,
   }) async {
+    final generation = ++_generation;
     try {
       final data = await _request(
         hostId,
         (id) => WorkspaceBrowse(id: id, path: path, showHidden: showHidden),
+        generation,
       );
       final directories = (data['directories'] as List).cast<Map>();
       return WorkspaceDirectory(
@@ -199,7 +233,9 @@ class WorkspaceRepository extends IWorkspaceRepository {
     String path,
     WorkspaceAgent agent,
   ) async {
+    final generation = ++_generation;
     final peer = await _peer(hostId);
+    _ensureCurrent(generation);
     RoomInfo? existing;
     for (final room in _connection.roomsFor(hostId)) {
       if (room.cwd == path &&
@@ -220,6 +256,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
       final result = await _request(
         hostId,
         (id) => WorkspaceOpen(id: id, path: path, agent: agent.id),
+        generation,
       );
       roomId = result['room_id'] as String;
       cwd = result['cwd'] as String;
@@ -227,6 +264,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
       final deadline = DateTime.now().add(timeout);
       RoomInfo? ready;
       while (DateTime.now().isBefore(deadline)) {
+        _ensureCurrent(generation);
         for (final room in _connection.roomsFor(hostId)) {
           if ((room.roomId == roomId || room.cwd == cwd && room.name == name) &&
               _connection.isRoomLive(hostId, room.roomId)) {
@@ -246,9 +284,9 @@ class WorkspaceRepository extends IWorkspaceRepository {
         );
       }
     }
+    _ensureCurrent(generation);
     await _preferences.setSelectedRoom(epk: peer.remoteEpk, roomId: roomId);
-    await _connection.switchTo(peer.copyWith(roomId: roomId));
-    _connection.switchRoom(roomId);
+    await _switchConnection(peer, roomId, generation);
     return OpenedWorkspace(
       hostId: peer.remoteEpk,
       hostLabel: _label(peer),
@@ -261,9 +299,9 @@ class WorkspaceRepository extends IWorkspaceRepository {
 
   @override
   Future<void> restore(WorkspaceSelection? selection) async {
+    final generation = ++_generation;
     if (selection == null) return;
     final peer = await _peer(selection.hostId);
-    await _connection.switchTo(peer.copyWith(roomId: selection.roomId));
-    _connection.switchRoom(selection.roomId);
+    await _switchConnection(peer, selection.roomId, generation);
   }
 }

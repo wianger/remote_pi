@@ -102,6 +102,62 @@ void main() {
   }
 
   test(
+    'Codex reconnect replaces the live cursor and saves one complete reply',
+    () async {
+      final s = await setup();
+      s.ch.push(AgentChunk(inReplyTo: 'u', delta: 'Hel'));
+      await _settle();
+      s.ch.push(
+        ServerMessage.fromJson({
+          'type': 'session_history',
+          'in_reply_to': 'resume',
+          'session_started_at': 1,
+          'events': [
+            {'type': 'user_input', 'ts': 1, 'id': 'u', 'text': 'Hi'},
+          ],
+          'eos': false,
+          'truncated': false,
+        }),
+      );
+      s.ch.push(
+        ServerMessage.fromJson({
+          'type': 'session_history',
+          'in_reply_to': 'resume',
+          'session_started_at': 1,
+          'events': [],
+          'eos': true,
+          'truncated': false,
+          'streaming': {'in_reply_to': 'u', 'text': 'Hello'},
+        }),
+      );
+      s.ch.push(AgentChunk(inReplyTo: 'u', delta: ' world'));
+      s.ch.push(AgentDone(inReplyTo: 'u'));
+      await _settle();
+      expect(messages(s.epk).map((m) => m.text), ['Hi', 'Hello world']);
+      expect(s.sync.isWorking, false);
+      // A later idle snapshot also clears a cursor when agent_done was missed.
+      s.ch.push(AgentChunk(inReplyTo: 'missed', delta: 'stale'));
+      await _settle();
+      s.ch.push(
+        ServerMessage.fromJson({
+          'type': 'session_history',
+          'in_reply_to': 'idle',
+          'session_started_at': 1,
+          'events': [],
+          'eos': true,
+          'truncated': false,
+          'streaming': null,
+        }),
+      );
+      await _settle();
+      expect(s.sync.isWorking, false);
+      expect(messages(s.epk), isEmpty);
+      s.sync.dispose();
+      s.conn.dispose();
+    },
+  );
+
+  test(
     'thinking snapshots update one row and survive history replay',
     () async {
       final s = await setup();

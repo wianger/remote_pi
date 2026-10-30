@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { daemonIdForAgent } from "../daemon/id.js";
+import { historyFrames } from "../protocol/history.js";
 import type {
   ClientMessage, ExtensionUiRequestWire, ServerMessage, SessionHistoryEvent,
   QueuedMessageItem, WireModel,
@@ -99,6 +100,7 @@ export class CodexSession {
   close(): void {
     this.finishThinking();
     this.flushText();
+    this.finishInteractions("Interrupted when Codex stopped.");
     this.busy = false;
     this.persist();
     this.client.close();
@@ -199,6 +201,7 @@ export class CodexSession {
     }));
     const thread = object(result.thread);
     if (typeof thread.id !== "string" || !thread.id) throw new Error("Codex did not return a thread id.");
+    this.finishInteractions("The previous conversation ended.");
     this.threadId = thread.id;
     this.model = typeof result.model === "string" ? result.model : this.model;
     this.startedAt = Date.now();
@@ -301,6 +304,7 @@ export class CodexSession {
       const userId = this.userId;
       this.finishThinking();
       this.flushText();
+      this.finishInteractions(turn.status === "interrupted" ? "Interrupted by the user." : "The response ended.");
       if (turn.status === "failed" && userId) {
         this.options.broadcast({ type: "error", in_reply_to: userId, code: "codex_error",
           message: String(object(turn.error).message ?? "Codex could not complete this response.") });
@@ -384,6 +388,19 @@ export class CodexSession {
     this.persist();
   }
 
+  private finishInteractions(reason: string): void {
+    // Codex has ended these RPCs. Do not answer dead request ids or replay
+    // their UI into a later turn/thread. Also finish interrupted tool rows.
+    for (const id of [...this.toolItems.keys()]) this.toolResult(id, undefined, reason);
+    this.approvals.clear();
+    for (const id of this.questionPrompts.keys()) {
+      this.options.broadcast({ type: "extension_ui_request", id,
+        method: "notify", message: reason, notify_type: "info" });
+    }
+    this.questions.clear();
+    this.questionPrompts.clear();
+  }
+
   private serverRequest(request: CodexServerRequest): void {
     if (request.params.threadId && request.params.threadId !== this.threadId) {
       this.client.rejectRequest(request.id, "Unknown thread."); return;
@@ -463,24 +480,12 @@ export class CodexSession {
   }
 
   private sync(sender: PeerChannel, id: string): void {
-    // Split complete history into frames that fit the existing relay limit.
-    const chunks: SessionHistoryEvent[][] = [[]];
-    let bytes = 0;
-    const snapshot: SessionHistoryEvent[] = [...this.events];
-    if (this.busy && this.text && this.userId) {
-      snapshot.push({ ts: Date.now(), type: "agent_message", in_reply_to: this.historyTextId(), text: this.text });
-    }
-    for (const event of snapshot) {
-      const size = Buffer.byteLength(JSON.stringify(event), "utf8");
-      // A single compressed phone image may exceed the usual 1 MiB batch.
-      // Keep its double-base64 envelope below the relay's 4 MiB ceiling.
-      if (size > 2.8 * 1024 * 1024) throw new Error("A history attachment is too large to synchronize.");
-      if (bytes + size > 1024 * 1024 && chunks[chunks.length - 1]!.length) { chunks.push([]); bytes = 0; }
-      chunks[chunks.length - 1]!.push(event);
-      bytes += size;
-    }
-    chunks.forEach((events, index) => sender.send({ type: "session_history", in_reply_to: id,
-      session_started_at: this.startedAt, events, eos: index === chunks.length - 1, truncated: false }));
+    // A live cursor is separate from completed history. Receivers replace
+    // their streaming buffer with it, then append subsequent delta frames.
+    const frames = historyFrames({ in_reply_to: id,
+      session_started_at: this.startedAt, events: [...this.events], truncated: false,
+      streaming: this.busy && this.userId ? { in_reply_to: this.userId, text: this.text } : null });
+    for (const frame of frames) sender.send(frame);
     // Reconnects must restore outstanding decisions, not silently allow them.
     for (const [tool_call_id, approval] of this.approvals) {
       sender.send({ type: "tool_request", tool_call_id, tool: approval.tool, args: approval.args });

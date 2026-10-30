@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { RpcChild } from "./rpc_child.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createConnection } from "node:net";
@@ -75,6 +76,26 @@ afterEach(async () => {
 });
 
 describe("Supervisor — control UDS surface", () => {
+  test("batch start and restart retain Pi/Codex names in the same directory", async () => {
+    const pi = addDaemon(testHome, "project");
+    const codex = addDaemon(testHome, "Codex · project", "codex");
+    // Inspect real supervisor configuration without booting external agents.
+    const spawn = vi.spyOn(RpcChild.prototype, "spawn").mockImplementation(() => {});
+    const stop = vi.spyOn(RpcChild.prototype, "stop").mockResolvedValue();
+    try {
+      await ask({ op: "start_all" });
+      await ask({ op: "restart_all" });
+      expect(spawn).toHaveBeenCalledTimes(4);
+      const options = spawn.mock.contexts.map((child) =>
+        (child as unknown as { opts: { agent: string; config: { agent_name: string } } }).opts);
+      expect(options.map((option) => [option.agent, option.config.agent_name])).toEqual([
+        ["pi", "project"], ["codex", "Codex · project"],
+        ["pi", "project"], ["codex", "Codex · project"],
+      ]);
+      expect(pi.id).not.toBe(codex.id);
+    } finally { spawn.mockRestore(); stop.mockRestore(); }
+  });
+
   test("list returns empty daemons array when registry is empty", async () => {
     const r = await ask({ op: "list" });
     expect(r).toMatchObject({ ok: true, data: { daemons: [] } });

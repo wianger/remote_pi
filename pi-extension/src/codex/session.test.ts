@@ -150,9 +150,16 @@ describe("Codex mobile session bridge", () => {
     await session.handle(sender, { type: "user_message", id: "m", text: "Hello" });
     client.emit("notification", "item/agentMessage/delta", { threadId: "thread-1", itemId: "answer", delta: "Still working" });
     await session.handle(sender, { type: "session_sync", id: "second-phone" });
-    expect(replies).toContainEqual(expect.objectContaining({ type: "session_history", events: expect.arrayContaining([
-      expect.objectContaining({ type: "agent_message", text: "Still working" }),
-    ]) }));
+    expect(replies).toContainEqual(expect.objectContaining({ type: "session_history",
+      streaming: { in_reply_to: "m", text: "Still working" } }));
+    const frame = replies.find((message) => message.type === "session_history");
+    expect(frame?.type === "session_history" && frame.events.some((event) => event.type === "agent_message")).toBe(false);
+    client.emit("notification", "item/agentMessage/delta", { threadId: "thread-1", itemId: "answer", delta: " now" });
+    client.emit("notification", "turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "completed" } });
+    replies.length = 0;
+    await session.handle(sender, { type: "session_sync", id: "completed-phone" });
+    expect(replies).toContainEqual(expect.objectContaining({ type: "session_history", streaming: null,
+      events: expect.arrayContaining([expect.objectContaining({ type: "agent_message", text: "Still working now" })]) }));
   });
 
   test("resumes the saved thread and returns all history even when an old app asks for one event", async () => {
@@ -163,6 +170,26 @@ describe("Codex mobile session bridge", () => {
     await session.handle(sender, { type: "session_sync", id: "history", limit: 1 });
     const history = replies.find((message) => message.type === "session_history");
     expect(history?.type === "session_history" && history.events).toHaveLength(90);
+  });
+
+  test("interrupted requests close on every phone and never reappear in a new thread", async () => {
+    await session.start();
+    await session.handle(sender, { type: "user_message", id: "interrupted", text: "Check" });
+    client.emit("request", { id: 70, method: "item/commandExecution/requestApproval",
+      params: { threadId: "thread-1", itemId: "command", command: "git status" } });
+    client.emit("request", { id: 71, method: "item/tool/requestUserInput",
+      params: { threadId: "thread-1", questions: [{ id: "q", question: "Continue?" }] } });
+    client.emit("notification", "turn/completed", { threadId: "thread-1", turn: { id: "turn-1", status: "interrupted" } });
+    expect(broadcasts).toContainEqual(expect.objectContaining({ type: "tool_result", tool_call_id: "command", error: expect.stringContaining("Interrupted") }));
+    expect(broadcasts).toContainEqual(expect.objectContaining({ type: "extension_ui_request", id: "codex_question_71", method: "notify" }));
+    for (const id of ["after-interrupt", "after-new"]) {
+      if (id === "after-new") await session.handle(sender, { type: "session_new", id: "new" });
+      replies.length = 0;
+      await session.handle(sender, { type: "session_sync", id });
+      expect(replies.some((m) => m.type === "tool_request" || m.type === "extension_ui_request")).toBe(false);
+    }
+    await session.handle(sender, { type: "approve_tool", id: "stale", tool_call_id: "command", decision: "allow" });
+    expect(client.respond).not.toHaveBeenCalled();
   });
 
   test("unknown server requests are rejected rather than silently approved", async () => {

@@ -1203,6 +1203,17 @@ class Compaction extends ServerMessage {
 // SessionHistory + embedded event types
 // ---------------------------------------------------------------------------
 
+class HistoryStreamingSnapshot {
+  const HistoryStreamingSnapshot({required this.inReplyTo, required this.text});
+  final String inReplyTo;
+  final String text;
+  factory HistoryStreamingSnapshot.fromJson(Map<String, dynamic> j) =>
+      HistoryStreamingSnapshot(
+        inReplyTo: j['in_reply_to'] as String,
+        text: j['text'] as String,
+      );
+}
+
 /// Reply to a `session_sync`. May arrive in batches; the final batch
 /// sets `eos: true`. `truncated: true` indicates Pi had more events
 /// than the requested `limit` and dropped the oldest — surfaced to
@@ -1213,12 +1224,18 @@ class SessionHistory extends ServerMessage {
   final List<SessionHistoryEvent> events;
   final bool eos;
   final bool truncated;
+  final HistoryStreamingSnapshot? streaming;
+
+  /// Distinguishes an idle Codex cursor (explicit null) from legacy history.
+  final bool hasStreamingSnapshot;
   SessionHistory({
     required this.inReplyTo,
     required this.sessionStartedAt,
     required this.events,
     required this.eos,
     this.truncated = false,
+    this.streaming,
+    this.hasStreamingSnapshot = false,
   });
 
   factory SessionHistory.fromJson(Map<String, dynamic> j) => SessionHistory(
@@ -1230,6 +1247,12 @@ class SessionHistory extends ServerMessage {
     eos: j['eos'] as bool,
     // Tolerate absence during the protocol transition window.
     truncated: (j['truncated'] as bool?) ?? false,
+    hasStreamingSnapshot: j.containsKey('streaming'),
+    streaming: j['streaming'] == null
+        ? null
+        : HistoryStreamingSnapshot.fromJson(
+            Map<String, dynamic>.from(j['streaming'] as Map),
+          ),
   );
 }
 

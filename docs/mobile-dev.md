@@ -115,6 +115,21 @@ test is skipped on other hosts. For an optional phone-sized folder chooser
 preview, set `REMOTE_PI_PREVIEW_DIR` and run
 `flutter test test/ui/workspaces/new_session_page_test.dart`.
 
+## Recovery behavior
+
+Use the matching development extension and Android APK for history fragments
+and Codex cursor restoration. Pi and Codex now share byte-bounded history
+batching; a single event above the supported frame size returns a clear error.
+Codex interrupted turns close outstanding approvals/questions on all phones;
+starting a new thread cannot replay their old requests. Batch start/restart
+retains each agent's registered name, including Pi and Codex in one directory.
+
+Directory requests are invalidated when the user cancels or changes selection.
+Connection switches and restoration run in order, so a slow earlier connection
+cannot later replace the restored room or send its request to another computer.
+Restoration can wait for the bounded in-flight connection attempt to finish.
+Building these changes does not change the active official Pi installation.
+
 ## Bundled fonts
 
 The Android UI uses Geist for controls, input and the wordmark, Source Serif 4
