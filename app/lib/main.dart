@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/config/dependencies.dart';
 import 'package:app/data/local/boxes.dart';
 import 'package:app/data/mesh/mesh_sync_service.dart';
@@ -96,7 +97,7 @@ class _RemotePiAppState extends State<RemotePiApp> with WidgetsBindingObserver {
       // [Preferences] → this Consumer rebuilds → MaterialApp swaps theme.
       child: Consumer<Preferences>(
         builder: (context, prefs, _) => MaterialApp.router(
-          title: 'Remote Pi',
+          title: kAppName,
           theme: buildLightTheme(),
           darkTheme: buildDarkTheme(),
           themeMode: prefs.themeMode,

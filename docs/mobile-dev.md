@@ -203,3 +203,19 @@ percentage with a refresh action. Pi reports the public SDK estimate. Codex uses
 its last per-thread token-usage report rather than cumulative billed tokens.
 Unknown tokens are displayed as Not reported. The matching computer extension
 must be reloaded to answer this read-only query. No prompts are transferred.
+
+
+## Device-first navigation and ThreadDeck (1.2.3 / build 11)
+
+The custom Android app is named ThreadDeck. Select Device, then Workspace,
+then a session in the sidebar. Paired devices without rooms remain selectable;
+workspaces never include another device's paths. Each device remembers its
+workspace, and changing selectors clears search without redirecting the active
+chat. The prior combined workspace preference migrates on first load.
+
+The original folded-thread mark is defined in app/branding/threaddeck-mark.svg,
+Flutter AppMarkPainter and Android vector drawables. The adaptive launcher has
+a monochrome variant for themed icons. The Android id dev.wianger.remotepi,
+private signing key and RemotePi-Dev-Android.apk release asset stay stable for
+in-place updates. The GitHub repository, Pi commands and protocol names remain
+Remote Pi for compatibility. No custom iOS changes are included.

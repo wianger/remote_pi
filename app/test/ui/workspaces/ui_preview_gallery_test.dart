@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 // Manual preview renderer. Only runs when REMOTE_PI_PREVIEW_DIR is set.
 // Uses production widgets with fixture ViewModels; no pairing or network.
 import 'dart:async';
@@ -92,8 +93,18 @@ class _Home extends ViewModel<HomeState> implements HomeViewModel {
     normalizeEpk: HomeViewModel.normalizeEpkForLookup,
   );
   @override
+  Map<String, PeerRecord> get devices => {
+    _computer.remoteEpk: _computer,
+    _linux.remoteEpk: _linux,
+  };
+  @override
+  String get selectedDevice => _computer.remoteEpk;
+  @override
+  List<HomeItem> get deviceItems =>
+      allItems.where((item) => item.peer.remoteEpk == selectedDevice).toList();
+  @override
   Map<String, HomeItem> get workspaces => {
-    for (final item in allItems)
+    for (final item in deviceItems)
       HomeViewModel.workspaceKey(item.peer.remoteEpk, item.room.cwd): item,
   };
   @override
@@ -377,7 +388,7 @@ void main() {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'REMOTE PI  /  ANDROID PREVIEW',
+                        'THREADDECK  /  ANDROID PREVIEW',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w700,
@@ -570,6 +581,31 @@ void main() {
       await tester.pumpAndSettle();
       await _save(tester, contextKey, '$output/context-usage.png');
       contextVm.dispose();
+      final brandKey = GlobalKey();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: previewTheme,
+          home: RepaintBoundary(
+            key: brandKey,
+            child: Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AppMark(size: 196, tile: true),
+                    const SizedBox(height: 32),
+                    Text(kAppName, style: brandTextStyle(fontSize: 40)),
+                    const SizedBox(height: 12),
+                    const Text('Devices. Workspaces. Conversations.'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _save(tester, brandKey, '$output/brand.png');
 
       chat.emit(
         ChatReady(

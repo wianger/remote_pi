@@ -46,7 +46,10 @@ class HomeViewModel extends ViewModel<HomeState> {
   }
 
   void _onPreferencesChanged() {
-    if (!_disposed) _onRooms(_conn.roomsSnapshot);
+    if (_disposed) return;
+    final before = state;
+    _onRooms(_conn.roomsSnapshot);
+    if (identical(before, state)) notifyListeners();
   }
 
   Map<String, List<RoomInfo>> _visibleRooms(
@@ -65,18 +68,50 @@ class HomeViewModel extends ViewModel<HomeState> {
       ? (state as HomeList).items(normalizeEpk: normalizeEpkForLookup)
       : const [];
 
+  Map<String, PeerRecord> get devices {
+    final current = state;
+    if (current is! HomeList) return const {};
+    final peers = [...current.peers]
+      ..sort(
+        (a, b) => (a.nickname ?? a.sessionName).toLowerCase().compareTo(
+          (b.nickname ?? b.sessionName).toLowerCase(),
+        ),
+      );
+    return {for (final peer in peers) toStandardB64(peer.remoteEpk): peer};
+  }
+
+  String? get selectedDevice {
+    final choices = devices;
+    final remembered = _prefs.selectedDeviceEpk;
+    if (choices.containsKey(remembered)) return remembered;
+    final active = _prefs.selectedPeerEpk;
+    if (active != null && choices.containsKey(toStandardB64(active))) {
+      return toStandardB64(active);
+    }
+    return choices.keys.firstOrNull;
+  }
+
+  List<HomeItem> get deviceItems => allItems
+      .where((item) => toStandardB64(item.peer.remoteEpk) == selectedDevice)
+      .toList();
+
   Map<String, HomeItem> get workspaces => {
-    for (final item in allItems)
+    for (final item in deviceItems)
       workspaceKey(item.peer.remoteEpk, item.room.cwd): item,
   };
 
   String? get selectedWorkspace {
     final choices = workspaces;
-    if (choices.containsKey(_prefs.selectedWorkspace)) {
-      return _prefs.selectedWorkspace;
-    }
-    for (final item in allItems) {
-      if (item.peer.remoteEpk == _prefs.selectedPeerEpk &&
+    final device = selectedDevice;
+    final remembered = device == null
+        ? null
+        : _prefs.workspaceForDevice(device);
+    if (choices.containsKey(remembered)) return remembered;
+    for (final item in deviceItems) {
+      if (toStandardB64(item.peer.remoteEpk) ==
+              (_prefs.selectedPeerEpk == null
+                  ? null
+                  : toStandardB64(_prefs.selectedPeerEpk!)) &&
           item.room.roomId == _prefs.selectedRoomId) {
         return workspaceKey(item.peer.remoteEpk, item.room.cwd);
       }
@@ -86,7 +121,7 @@ class HomeViewModel extends ViewModel<HomeState> {
 
   List<HomeItem> get workspaceItems {
     final selected = selectedWorkspace;
-    return allItems
+    return deviceItems
         .where(
           (item) =>
               workspaceKey(item.peer.remoteEpk, item.room.cwd) == selected,
@@ -94,7 +129,14 @@ class HomeViewModel extends ViewModel<HomeState> {
         .toList();
   }
 
-  Future<void> selectWorkspace(String key) => _prefs.setSelectedWorkspace(key);
+  Future<void> selectDevice(String epk) async {
+    final key = toStandardB64(epk);
+    if (devices.containsKey(key)) await _prefs.setSelectedDevice(key);
+  }
+
+  Future<void> selectWorkspace(String key) async {
+    if (workspaces.containsKey(key)) await _prefs.setSelectedWorkspace(key);
+  }
 
   Future<void> deleteSession(HomeItem item) async {
     final epk = item.peer.remoteEpk, room = item.room.roomId;

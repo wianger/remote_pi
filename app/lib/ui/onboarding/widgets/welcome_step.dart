@@ -1,6 +1,6 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Onboarding step 1 — welcome. Static, no animations (per plan 14 D2 —
 /// "Welcome conservador (sem animações)").
@@ -17,10 +17,10 @@ class WelcomeStep extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(LucideIcons.terminal, color: colors.accent, size: 64),
+          const Center(child: AppMark(size: 88, tile: true)),
           const SizedBox(height: 32),
           Text(
-            'Remote Pi',
+            kAppName,
             textAlign: TextAlign.center,
             style: brandTextStyle(
               fontSize: 24,
@@ -31,7 +31,7 @@ class WelcomeStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Control your Pi agent from anywhere',
+            'Your agents. Across devices.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kMonoFamily,
@@ -41,9 +41,8 @@ class WelcomeStep extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           Text(
-            'Pair this app with the Pi running on your computer '
-            '(Mac, Linux, or Windows) so you can chat with it even '
-            'when you\'re away from home.',
+            'Pair your computer, choose a workspace, and continue '
+            'your Pi or Codex conversations wherever you are.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kMonoFamily,

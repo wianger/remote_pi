@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/update/states/update_banner_state.dart';
 import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
@@ -34,7 +35,7 @@ class UpdateSettingsSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Remote Pi Dev ${vm.currentVersion} (${vm.currentBuildNumber})',
+            '$kAppName ${vm.currentVersion} (${vm.currentBuildNumber})',
             style: context.typo.monoSmall.copyWith(color: context.colors.muted),
           ),
           const SizedBox(height: 12),

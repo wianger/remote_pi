@@ -79,7 +79,7 @@ void main() {
       expect(find.text('Beta task'), findsNothing);
       await tester.tap(find.byKey(const Key('workspace-selector')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('beta · PC').last);
+      await tester.tap(find.text('beta').last);
       await tester.pumpAndSettle();
       expect(find.text('Beta task'), findsOneWidget);
       expect(find.text('Alpha task'), findsNothing);

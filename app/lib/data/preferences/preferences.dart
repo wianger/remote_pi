@@ -18,6 +18,9 @@ class Preferences extends ChangeNotifier {
   bool _hideToolCalls = false;
   Set<String> _hiddenSessions = {};
   String? _selectedWorkspace;
+  String? _selectedDeviceEpk;
+  Map<String, String> _workspacesByDevice = {};
+  Future<void> _navigationWrites = Future.value();
   String? _selectedPeerEpk;
   String? _relayUrl;
   bool _onboardingCompleted = false;
@@ -29,6 +32,7 @@ class Preferences extends ChangeNotifier {
 
   static const _kHiddenSessionsKey = 'prefs.hidden_sessions';
   static const _kSelectedWorkspaceKey = 'prefs.selected_workspace';
+  static const _kNavigationKey = 'prefs.workspace_navigation';
 
   static const _kHideToolCallsKey = 'prefs.hide_tool_calls';
   static const _kSelectedPeerEpkKey = 'prefs.selected_peer_epk';
@@ -154,6 +158,44 @@ class Preferences extends ChangeNotifier {
       _selectedWorkspace = workspace;
       changed = true;
     }
+    // Migrate the previous combined computer/workspace selection lazily.
+    String? device;
+    final remembered = <String, String>{};
+    if (workspace != null && workspace.contains(':')) {
+      device = toStandardB64(workspace.substring(0, workspace.indexOf(':')));
+      remembered[device] =
+          '$device:${workspace.substring(workspace.indexOf(':') + 1)}';
+    }
+    final navigationRaw = await _store.read(key: _kNavigationKey);
+    try {
+      final navigation = navigationRaw == null
+          ? null
+          : jsonDecode(navigationRaw);
+      if (navigation is Map) {
+        device = navigation['device'] is String
+            ? toStandardB64(navigation['device'] as String)
+            : null;
+        remembered.clear();
+        final entries = navigation['workspaces'];
+        if (entries is Map) {
+          for (final entry in entries.entries) {
+            if (entry.key is! String || entry.value is! String) continue;
+            final epk = toStandardB64(entry.key as String);
+            final key = entry.value as String;
+            if (key.startsWith('$epk:')) remembered[epk] = key;
+          }
+        }
+      }
+    } on FormatException {
+      // Keep a valid legacy selection if the new preference is damaged.
+    }
+    if (device != _selectedDeviceEpk ||
+        !mapEquals(remembered, _workspacesByDevice)) {
+      _selectedDeviceEpk = device;
+      _workspacesByDevice = remembered;
+      changed = true;
+    }
+    _selectedWorkspace = remembered[device];
     if (changed) notifyListeners();
   }
 
@@ -163,6 +205,9 @@ class Preferences extends ChangeNotifier {
   bool isSessionHidden(String epk, String room) =>
       _hiddenSessions.contains(_conversationKey(epk, room));
   String? get selectedWorkspace => _selectedWorkspace;
+  String? get selectedDeviceEpk => _selectedDeviceEpk;
+  String? workspaceForDevice(String epk) =>
+      _workspacesByDevice[toStandardB64(epk)];
 
   Future<void> hideSession(String epk, String room) async {
     final key = _conversationKey(epk, room);
@@ -194,11 +239,42 @@ class Preferences extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSelectedWorkspace(String value) async {
-    if (_selectedWorkspace == value) return;
-    _selectedWorkspace = value;
-    await _store.write(key: _kSelectedWorkspaceKey, value: value);
-    notifyListeners();
+  Future<void> setSelectedDevice(String epk) =>
+      _updateNavigation(toStandardB64(epk));
+
+  Future<void> setSelectedWorkspace(String value) {
+    final separator = value.indexOf(':');
+    if (separator < 1) {
+      throw ArgumentError.value(value, 'value', 'Invalid workspace');
+    }
+    final epk = toStandardB64(value.substring(0, separator));
+    return _updateNavigation(
+      epk,
+      workspace: '$epk:${value.substring(separator + 1)}',
+    );
+  }
+
+  Future<void> _updateNavigation(String epk, {String? workspace}) {
+    final pending = _navigationWrites.then((_) async {
+      final remembered = Map<String, String>.of(_workspacesByDevice);
+      if (workspace != null) remembered[epk] = workspace;
+      if (_selectedDeviceEpk == epk &&
+          mapEquals(remembered, _workspacesByDevice)) {
+        return;
+      }
+      // One write commits device and per-device workspaces together. Publish
+      // only after persistence succeeds, and serialize rapid selector changes.
+      await _store.write(
+        key: _kNavigationKey,
+        value: jsonEncode({'device': epk, 'workspaces': remembered}),
+      );
+      _selectedDeviceEpk = epk;
+      _workspacesByDevice = remembered;
+      _selectedWorkspace = remembered[epk];
+      notifyListeners();
+    });
+    _navigationWrites = pending.catchError((Object _) {});
+    return pending;
   }
 
   Future<void> setHideToolCalls(bool value) async {

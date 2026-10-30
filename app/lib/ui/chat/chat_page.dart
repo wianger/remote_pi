@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
 import 'package:app/pairing/storage.dart';
@@ -310,11 +311,11 @@ class ChatPage extends StatelessWidget {
       return _inferSessionName(state.messages);
     }
     // Plan/24-fix-title: Home knows the peer label before /chat
-    // mounts; use it instead of the generic 'Remote Pi' placeholder
+    // mounts; use it instead of the generic kAppName placeholder
     // while we wait for the first room_meta_updated to populate
     // `room.name`.
     if (initialTitle != null && initialTitle.isNotEmpty) return initialTitle;
-    return 'Remote Pi';
+    return kAppName;
   }
 
   static String _peerDisplayName(PeerRecord? peer, String? fallback) {
@@ -537,7 +538,7 @@ class ChatPage extends StatelessWidget {
     for (final m in msgs) {
       if (m is UserMsg) return m.text.substring(0, m.text.length.clamp(0, 32));
     }
-    return 'Remote Pi';
+    return kAppName;
   }
 }
 

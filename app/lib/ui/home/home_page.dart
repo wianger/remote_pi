@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/data/transport/epk_encoding.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart' show RoomInfo;
@@ -133,7 +134,7 @@ class HomePage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Remote Pi',
+                          kAppName,
                           style: brandTextStyle(
                             fontSize: 32,
                             fontWeight: FontWeight.w700,
@@ -162,7 +163,7 @@ class HomePage extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Remote Pi',
+                        kAppName,
                         style: brandTextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -559,7 +560,7 @@ class HomePage extends StatelessWidget {
       : peer.remoteEpk.substring(0, 8);
 
   /// Plan/24-fix-title: the peer/room label we already know here, so the
-  /// Chat AppBar doesn't show '—' / 'Remote Pi' until the ChatViewModel
+  /// Chat AppBar doesn't show '—' / kAppName until the ChatViewModel
   /// loads the PeerRecord + the first room_meta_updated arrives. Prefers
   /// room.name (per-cwd title) → cwd tail → nickname → sessionName.
   static String _titleFor(PeerRecord peer, RoomInfo room) {

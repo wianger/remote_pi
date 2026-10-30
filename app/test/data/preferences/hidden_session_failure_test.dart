@@ -17,6 +17,22 @@ class _Store implements FlutterSecureStorage {
 
 void main() {
   test(
+    'failed navigation write preserves selection and the next write can recover',
+    () async {
+      final store = _Store()..fail = false;
+      final prefs = Preferences(store);
+      await prefs.setSelectedWorkspace('device:/code/one');
+      final before = prefs.selectedWorkspace;
+      store.fail = true;
+      await expectLater(prefs.setSelectedDevice('other'), throwsStateError);
+      expect(prefs.selectedWorkspace, before);
+      store.fail = false;
+      await prefs.setSelectedWorkspace('other:/code/two');
+      expect(prefs.selectedWorkspace, endsWith(':/code/two'));
+      prefs.dispose();
+    },
+  );
+  test(
     'a failed persistence operation cannot falsely hide or restore a conversation',
     () async {
       final store = _Store(), prefs = Preferences(_Store());

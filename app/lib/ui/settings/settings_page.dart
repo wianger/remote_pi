@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/relay_config.dart';
 import 'package:app/pairing/storage.dart';
@@ -79,10 +80,8 @@ class SettingsPage extends StatelessWidget {
           ListTile(
             title: const Text('Open-source licenses'),
             trailing: const Icon(LucideIcons.chevronRight, size: 18),
-            onTap: () => showLicensePage(
-              context: context,
-              applicationName: 'Remote Pi Dev',
-            ),
+            onTap: () =>
+                showLicensePage(context: context, applicationName: kAppName),
           ),
         ],
       ),

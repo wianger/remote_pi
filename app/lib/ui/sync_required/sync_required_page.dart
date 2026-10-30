@@ -1,3 +1,4 @@
+import 'package:app/ui/core/branding/app_brand.dart';
 import 'dart:io' show Platform;
 
 import 'package:app/config/dependencies.dart';
@@ -39,10 +40,10 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
     final isIOS = Platform.isIOS;
     final requirements = isIOS ? _iosRequirements : _androidRequirements;
     final why = isIOS
-        ? 'Remote Pi keeps your Ed25519 owner key in iCloud Keychain so '
+        ? '$kAppName keeps your Ed25519 owner key in iCloud Keychain so '
               'you can switch iPhones or pair your iPad without scanning '
               'a new QR.'
-        : 'Remote Pi keeps your Ed25519 owner key in Google Block Store '
+        : '$kAppName keeps your Ed25519 owner key in Google Block Store '
               'so you can restore it on a new device through Google '
               'Backup without losing your paired Pis.';
 
@@ -157,7 +158,8 @@ const _androidRequirements = <_Requirement>[
   ),
   _Requirement(
     title: 'Turn on Google Backup',
-    path: 'Settings › System › Backup\n'
+    path:
+        'Settings › System › Backup\n'
         '(Samsung: Settings › Accounts and backup › Backup data)',
   ),
   _Requirement(
