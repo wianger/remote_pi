@@ -221,3 +221,21 @@ icons. The Android id dev.wianger.remotepi,
 private signing key and RemotePi-Dev-Android.apk release asset stay stable for
 in-place updates. The GitHub repository, Pi commands and protocol names remain
 Remote Pi for compatibility. No custom iOS changes are included.
+
+## Apple-inspired controls (1.2.6 / build 14)
+
+The Android shell borrows the hierarchy of Apple's current Liquid Glass design:
+a diffused control layer for the chat toolbar, composer and session sidebar,
+with bounded blur, soft depth, clear edges, capsule actions and Baya teal.
+Chat prose, thinking, commands and output retain opaque reading surfaces.
+Device -> Workspace -> Session navigation and all existing actions remain.
+
+This is a Flutter treatment on Android, not Apple's native glass renderer.
+High contrast uses opaque control fills without blur or shadows. Composer
+action transitions respect reduced motion. Primary send/voice controls and
+scope selectors provide at least 44 logical pixels of touch height.
+The bundled Geist / Source Serif 4 / Geist Mono fonts are retained.
+
+References:
+- https://developer.apple.com/design/human-interface-guidelines/materials
+- https://developer.apple.com/videos/play/wwdc2026/102/

@@ -4,6 +4,7 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
 import 'package:app/ui/chat/widgets/thinking_block.dart';
@@ -139,94 +140,111 @@ class ChatPage extends StatelessWidget {
         : online
         ? 'Ready'
         : 'Offline';
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      color: colors.bg,
-      child: Row(
-        children: [
-          if (SessionShell.menuOf(context) != null)
-            IconButton(
-              tooltip: 'Sessions',
-              onPressed: SessionShell.menuOf(context),
-              icon: Icon(LucideIcons.panelLeft, size: 21, color: colors.text),
-            )
-          else if (showBack)
-            IconButton(
-              tooltip: 'Back',
-              icon: const Icon(LucideIcons.chevronLeft, size: 21),
-              onPressed: () =>
-                  context.canPop() ? context.pop() : context.go('/home'),
-            )
-          else
-            const SizedBox(width: 12),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.typo.sansBody.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.3,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: BayaGlassSurface(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 68),
+          child: Row(
+            children: [
+              if (SessionShell.menuOf(context) != null)
+                IconButton(
+                  tooltip: 'Sessions',
+                  onPressed: SessionShell.menuOf(context),
+                  icon: Icon(
+                    LucideIcons.panelLeft,
+                    size: 21,
+                    color: colors.text,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
+                )
+              else if (showBack)
+                IconButton(
+                  tooltip: 'Back',
+                  icon: const Icon(LucideIcons.chevronLeft, size: 21),
+                  onPressed: () =>
+                      context.canPop() ? context.pop() : context.go('/home'),
+                )
+              else
+                const SizedBox(width: 12),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Text(
-                        device,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: colors.muted),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 5,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: statusColor,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
                     Text(
-                      status,
-                      style: TextStyle(fontSize: 11, color: statusColor),
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.typo.sansBody.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            device,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: colors.muted),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: statusColor,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          status,
+                          style: TextStyle(fontSize: 12, color: statusColor),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              IconButton(
+                tooltip: 'New session',
+                onPressed: () => openNewSession(context),
+                icon: Icon(
+                  LucideIcons.squarePen,
+                  size: 20,
+                  color: colors.muted2,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Context usage',
+                onPressed: online ? () => showContextUsage(context) : null,
+                icon: Icon(LucideIcons.gauge, size: 20, color: colors.muted2),
+              ),
+              IconButton(
+                tooltip: 'Session info',
+                icon: Icon(
+                  LucideIcons.ellipsis,
+                  size: 21,
+                  color: colors.muted2,
+                ),
+                onPressed: () {
+                  final p = vm.activePeer;
+                  if (p != null) {
+                    _showSessionInfo(context, p, vm.activeRoom, roomName);
+                  }
+                },
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'New session',
-            onPressed: () => openNewSession(context),
-            icon: Icon(LucideIcons.squarePen, size: 20, color: colors.muted2),
-          ),
-          IconButton(
-            tooltip: 'Context usage',
-            onPressed: online ? () => showContextUsage(context) : null,
-            icon: Icon(LucideIcons.gauge, size: 20, color: colors.muted2),
-          ),
-          IconButton(
-            tooltip: 'Session info',
-            icon: Icon(LucideIcons.ellipsis, size: 21, color: colors.muted2),
-            onPressed: () {
-              final p = vm.activePeer;
-              if (p != null) {
-                _showSessionInfo(context, p, vm.activeRoom, roomName);
-              }
-            },
-          ),
-        ],
+        ),
       ),
     );
   }

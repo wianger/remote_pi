@@ -1,4 +1,5 @@
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/workspaces/states/new_session_state.dart';
 import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
 import 'package:app/ui/workspaces/widgets/agent_picker.dart';
@@ -59,7 +60,13 @@ class _NewSessionPageState extends State<NewSessionPage> {
       child: Scaffold(
         backgroundColor: colors.bg,
         appBar: AppBar(
-          backgroundColor: colors.bg,
+          backgroundColor: colors.bg.withValues(alpha: 0),
+          flexibleSpace: const BayaGlassSurface(
+            radius: 0,
+            elevated: false,
+            child: SizedBox.expand(),
+          ),
+          centerTitle: true,
           leading: IconButton(
             onPressed: ready?.opening == true ? null : _cancel,
             icon: const Icon(LucideIcons.x),
@@ -121,10 +128,11 @@ class _NewSessionPageState extends State<NewSessionPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'COMPUTER',
-            style: context.typo.mono.copyWith(
+            'Computer',
+            style: context.typo.sansBody.copyWith(
               color: colors.muted,
-              fontSize: 11,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 8),

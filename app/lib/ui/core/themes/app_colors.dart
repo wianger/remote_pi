@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 /// `buildLightTheme()` so `Theme.of(context).extension<AppColors>()` resolves
 /// the right palette for the active brightness.
 ///
-/// Warm neutral palettes for the workspace shell and reading-focused chat.
+/// Quiet neutral palettes with Baya teal for the shell and readable chat.
 /// Keep both brightness variants here so features share the same semantics.
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
@@ -96,27 +96,36 @@ class AppColors extends ThemeExtension<AppColors> {
   /// Text-field fill. Was the hardcoded `Color(0xFF0E0E0E)`.
   final Color inputFill;
 
+  // Functional chrome uses these tokens; prose and code use opaque surfaces.
+  bool get _isDark => bg.computeLuminance() < 0.2;
+  Color get glassFill => inputFill.withValues(alpha: _isDark ? 0.91 : 0.89);
+  Color get glassTint => surface.withValues(alpha: _isDark ? 0.94 : 0.90);
+  Color get glassEdge => text.withValues(alpha: _isDark ? 0.18 : 0.10);
+  Color get glassShadow =>
+      const Color(0xFF000000).withValues(alpha: _isDark ? 0.16 : 0.06);
+  Color get selection => accent.withValues(alpha: _isDark ? 0.13 : 0.09);
+
   /// Dark palette (default). Mirrors the original `app_theme.dart` constants.
   static const AppColors dark = AppColors(
-    bg: Color(0xFF252523),
-    surface: Color(0xFF2D2D2A),
-    border: Color(0xFF42423D),
-    text: Color(0xFFECEAE3),
-    muted: Color(0xFF96968D),
-    muted2: Color(0xFFBAB9AF),
-    accent: Color(0xFFDDA78E),
-    onAccent: Color(0xFF28211D),
-    highlight: Color(0xFFE4BDA7),
+    bg: Color(0xFF11191C),
+    surface: Color(0xFF1B272B),
+    border: Color(0xFF34454A),
+    text: Color(0xFFEDF3F2),
+    muted: Color(0xFF9EAFB2),
+    muted2: Color(0xFFBDCDCE),
+    accent: Color(0xFFA4D7CB),
+    onAccent: Color(0xFF123B35),
+    highlight: Color(0xFFB8DDD4),
     success: Color(0xFF9CBDA5),
     error: Color(0xFFE69C94),
     warning: Color(0xFFDABD85),
     working: Color(0xFFA1B7CD),
-    codeBg: Color(0xFF20201E),
-    userBubble: Color(0xFF363632),
-    modelBadgeBg: Color(0xFF383833),
-    modelBadgeBorder: Color(0xFF48483F),
-    denyBorder: Color(0xFF49423D),
-    inputFill: Color(0xFF30302C),
+    codeBg: Color(0xFF172125),
+    userBubble: Color(0xFF25363A),
+    modelBadgeBg: Color(0xFF26383B),
+    modelBadgeBorder: Color(0xFF3C5155),
+    denyBorder: Color(0xFF554141),
+    inputFill: Color(0xFF223136),
   );
 
   /// Light palette — derived from [dark]. Foreground tints are tuned for
@@ -125,24 +134,24 @@ class AppColors extends ThemeExtension<AppColors> {
   /// washed out on white), and `accent`/`highlight` are deepened cyans so
   /// accent-colored *text* (links, "Use default" buttons) stays legible.
   static const AppColors light = AppColors(
-    bg: Color(0xFFFAF9F5),
-    surface: Color(0xFFF1F0E9),
-    border: Color(0xFFE0DDD3),
-    text: Color(0xFF292824),
-    muted: Color(0xFF737168),
-    muted2: Color(0xFF5F5D56),
-    accent: Color(0xFF9F5C43),
+    bg: Color(0xFFF6F8F8),
+    surface: Color(0xFFEDF2F2),
+    border: Color(0xFFD9E2E3),
+    text: Color(0xFF19282B),
+    muted: Color(0xFF637479),
+    muted2: Color(0xFF4D6267),
+    accent: Color(0xFF225F57),
     onAccent: Color(0xFFFFFFFF),
-    highlight: Color(0xFF865B45),
+    highlight: Color(0xFF275F59),
     success: Color(0xFF417454),
     error: Color(0xFFAF453E),
     warning: Color(0xFF916B30),
     working: Color(0xFF4E6B86),
-    codeBg: Color(0xFFF0EEE7),
-    userBubble: Color(0xFFEFEDE5),
-    modelBadgeBg: Color(0xFFEAE7DE),
-    modelBadgeBorder: Color(0xFFDCD7CA),
-    denyBorder: Color(0xFFDCD1C7),
+    codeBg: Color(0xFFEDF2F3),
+    userBubble: Color(0xFFE5EEEC),
+    modelBadgeBg: Color(0xFFE4EEEC),
+    modelBadgeBorder: Color(0xFFD1E0DC),
+    denyBorder: Color(0xFFE3D6D3),
     inputFill: Color(0xFFFFFFFF),
   );
 

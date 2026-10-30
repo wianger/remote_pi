@@ -8,6 +8,7 @@ import 'package:app/ui/chat/voice/states/voice_input_state.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:app/ui/chat/voice/widgets/recording_strip.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -334,13 +335,9 @@ class _InputBarState extends State<InputBar> {
         widget.onCancel != null;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.inputFill,
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: colors.border.withValues(alpha: 0.8)),
-        ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: BayaGlassSurface(
+        radius: 30,
         child: Stack(
           children: [
             Padding(
@@ -939,24 +936,31 @@ class _ComposerActionButton extends StatelessWidget {
 
   Widget _button(BuildContext context) {
     final colors = context.colors;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final visualEnabled =
         !disabled && (_mode != _ComposerMode.sendText || hasContent);
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: 38,
-      height: 38,
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 200),
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
         color: visualEnabled
             ? (_mode == _ComposerMode.sendAudio ? colors.text : colors.accent)
             : colors.muted.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: ScaleTransition(scale: anim, child: child),
-        ),
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        transitionBuilder: (child, anim) => reduceMotion
+            ? child
+            : FadeTransition(
+                opacity: anim,
+                child: ScaleTransition(scale: anim, child: child),
+              ),
         child: Icon(
           _icon,
           key: ValueKey(_mode),

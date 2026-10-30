@@ -44,6 +44,8 @@ ThemeData _buildTheme({
       backgroundColor: colors.bg,
       foregroundColor: colors.text,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      toolbarHeight: 64,
       titleTextStyle: TextStyle(
         fontFamily: kSansFamily,
         fontSize: 17,
@@ -56,19 +58,61 @@ ThemeData _buildTheme({
       bodyMedium: typo.sansBody,
       bodySmall: typo.sansBody.copyWith(fontSize: 12, color: colors.muted2),
     ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        foregroundColor: colors.text,
+        shape: const CircleBorder(),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(44, 48),
+        shape: const StadiumBorder(),
+        textStyle: typo.sansBody.copyWith(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(44, 46),
+        shape: const StadiumBorder(),
+        side: BorderSide(color: colors.border),
+      ),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: colors.bg,
+      surfaceTintColor: colors.bg,
+      dragHandleColor: colors.muted.withValues(alpha: 0.5),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: colors.inputFill,
+      surfaceTintColor: colors.inputFill,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: colors.inputFill,
+      surfaceTintColor: colors.inputFill,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colors.inputFill,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(19),
-        borderSide: BorderSide(color: colors.border),
+        borderRadius: BorderRadius.circular(22),
+        borderSide: BorderSide(color: colors.border.withValues(alpha: 0.55)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(19),
-        borderSide: BorderSide(color: colors.border),
+        borderRadius: BorderRadius.circular(22),
+        borderSide: BorderSide(color: colors.border.withValues(alpha: 0.55)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(19),
+        borderRadius: BorderRadius.circular(22),
         borderSide: BorderSide(color: colors.accent, width: 1.2),
       ),
       hintStyle: typo.sansBody.copyWith(color: colors.muted, fontSize: 14),

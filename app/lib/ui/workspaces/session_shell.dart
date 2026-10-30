@@ -2,6 +2,7 @@ import 'package:app/ui/core/branding/app_brand.dart';
 import 'dart:math' as math;
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/home/states/home_state.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
@@ -108,9 +109,15 @@ class _SessionShellState extends State<SessionShell> {
         drawer: wide
             ? null
             : Drawer(
-                width: math.min(336, MediaQuery.sizeOf(context).width - 44),
-                backgroundColor: context.colors.surface,
-                shape: const RoundedRectangleBorder(),
+                width: math.min(352, MediaQuery.sizeOf(context).width - 28),
+                backgroundColor: context.colors.bg.withValues(alpha: 0),
+                elevation: 0,
+                clipBehavior: Clip.antiAlias,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.horizontal(
+                    right: Radius.circular(28),
+                  ),
+                ),
                 child: SessionSidebar(
                   close: () => _scaffold.currentState?.closeDrawer(),
                 ),
@@ -199,247 +206,271 @@ class _SessionSidebarState extends State<SessionSidebar> {
               item.displayName.toLowerCase().contains(_query.toLowerCase()),
         )
         .toList();
-    return Material(
-      color: colors.surface,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 12, 16),
-              child: Row(
-                children: [
-                  const AppMark(size: 32, tile: true),
-                  const SizedBox(width: 10),
-                  Text(
-                    kAppName,
-                    style: brandTextStyle(fontSize: 19, color: colors.text),
-                  ),
-                  const Spacer(),
-                  if (widget.close != null)
-                    IconButton(
-                      onPressed: widget.close,
-                      tooltip: 'Close sidebar',
-                      icon: const Icon(LucideIcons.panelLeftClose, size: 19),
+    return BayaGlassSurface(
+      elevated: false,
+      child: Material(
+        color: colors.bg.withValues(alpha: 0),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 12, 16),
+                child: Row(
+                  children: [
+                    const AppMark(size: 36, tile: true),
+                    const SizedBox(width: 10),
+                    Text(
+                      kAppName,
+                      style: brandTextStyle(fontSize: 22, color: colors.text),
                     ),
-                ],
+                    const Spacer(),
+                    if (widget.close != null)
+                      IconButton(
+                        onPressed: widget.close,
+                        tooltip: 'Close sidebar',
+                        icon: const Icon(LucideIcons.panelLeftClose, size: 19),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ScopeSelector(
-                label: 'Device',
-                icon: LucideIcons.monitor,
-                child: DropdownButton<String>(
-                  key: const Key('device-selector'),
-                  value: vm.selectedDevice,
-                  isExpanded: true,
-                  hint: const Text('Pair a device'),
-                  items: vm.devices.entries
-                      .map(
-                        (entry) => DropdownMenuItem(
-                          value: entry.key,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _ScopeSelector(
+                  label: 'Device',
+                  icon: LucideIcons.monitor,
+                  child: DropdownButton<String>(
+                    key: const Key('device-selector'),
+                    value: vm.selectedDevice,
+                    isExpanded: true,
+                    isDense: true,
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    icon: Icon(
+                      LucideIcons.chevronDown,
+                      size: 16,
+                      color: colors.muted2,
+                    ),
+                    hint: const Text('Pair a device'),
+                    items: vm.devices.entries
+                        .map(
+                          (entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(
+                              entry.value.nickname ?? entry.value.sessionName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _choosing
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              _choose(() => vm.selectDevice(value));
+                            }
+                          },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _ScopeSelector(
+                  label: 'Workspace',
+                  icon: LucideIcons.folder,
+                  child: DropdownButton<String>(
+                    key: const Key('workspace-selector'),
+                    value: vm.selectedWorkspace,
+                    isExpanded: true,
+                    isDense: true,
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    icon: Icon(
+                      LucideIcons.chevronDown,
+                      size: 16,
+                      color: colors.muted2,
+                    ),
+                    hint: Text(
+                      vm.selectedDevice == null
+                          ? 'Choose a device first'
+                          : 'No workspaces yet',
+                    ),
+                    items: workspaces.entries.map((entry) {
+                      final path = entry.value.room.cwd ?? 'Other sessions';
+                      final parts = path
+                          .split(RegExp(r'[/\\]'))
+                          .where((part) => part.isNotEmpty);
+                      final label = parts.lastOrNull ?? path;
+                      final duplicate =
+                          workspaces.values
+                              .where(
+                                (item) =>
+                                    (item.room.cwd ?? 'Other sessions')
+                                        .split(RegExp(r'[/\\]'))
+                                        .where((part) => part.isNotEmpty)
+                                        .lastOrNull ==
+                                    label,
+                              )
+                              .length >
+                          1;
+                      return DropdownMenuItem(
+                        value: entry.key,
+                        child: Tooltip(
+                          message: path,
                           child: Text(
-                            entry.value.nickname ?? entry.value.sessionName,
+                            duplicate ? path : label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                      );
+                    }).toList(),
+                    onChanged: _choosing
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              _choose(() => vm.selectWorkspace(value));
+                            }
+                          },
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                child: FilledButton.icon(
+                  onPressed: () {
+                    widget.close?.call();
+                    openNewSession(context);
+                  },
+                  icon: const Icon(LucideIcons.plus, size: 17),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 11),
+                    child: Text('New session'),
+                  ),
+                  style: FilledButton.styleFrom(shape: const StadiumBorder()),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _search,
+                  onChanged: (value) => setState(() => _query = value),
+                  style: context.typo.sansBody.copyWith(fontSize: 14),
+                  decoration: const InputDecoration(
+                    hintText: 'Search sessions',
+                    isDense: true,
+                    prefixIcon: Icon(LucideIcons.search, size: 17),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                child: Text(
+                  'Sessions · ${vm.workspaceItems.length}',
+                  style: TextStyle(
+                    color: colors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: state is HomeLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : items.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            state is HomeNoPeer
+                                ? 'Pair a computer to get started.'
+                                : _query.isNotEmpty
+                                ? 'No matching sessions in this workspace.'
+                                : 'No sessions on this device yet. Open a workspace to begin.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: colors.muted,
+                              height: 1.6,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
                       )
-                      .toList(),
-                  onChanged: _choosing
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            _choose(() => vm.selectDevice(value));
-                          }
-                        },
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _ScopeSelector(
-                label: 'Workspace',
-                icon: LucideIcons.folder,
-                child: DropdownButton<String>(
-                  key: const Key('workspace-selector'),
-                  value: vm.selectedWorkspace,
-                  isExpanded: true,
-                  hint: Text(
-                    vm.selectedDevice == null
-                        ? 'Choose a device first'
-                        : 'No workspaces yet',
-                  ),
-                  items: workspaces.entries.map((entry) {
-                    final path = entry.value.room.cwd ?? 'Other sessions';
-                    final parts = path
-                        .split(RegExp(r'[/\\]'))
-                        .where((part) => part.isNotEmpty);
-                    final label = parts.lastOrNull ?? path;
-                    final duplicate =
-                        workspaces.values
-                            .where(
-                              (item) =>
-                                  (item.room.cwd ?? 'Other sessions')
-                                      .split(RegExp(r'[/\\]'))
-                                      .where((part) => part.isNotEmpty)
-                                      .lastOrNull ==
-                                  label,
-                            )
-                            .length >
-                        1;
-                    return DropdownMenuItem(
-                      value: entry.key,
-                      child: Tooltip(
-                        message: path,
-                        child: Text(
-                          duplicate ? path : label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    : ListView(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        children: [
+                          for (final item in items)
+                            _SessionRow(
+                              item: item,
+                              selected: selection.matches(
+                                item.peer.remoteEpk,
+                                item.room.roomId,
+                              ),
+                              online: vm.isRoomLive(
+                                item.peer.remoteEpk,
+                                item.room.roomId,
+                              ),
+                              working: vm.isRoomWorking(
+                                item.peer.remoteEpk,
+                                item.room.roomId,
+                              ),
+                              onTap: _opening ? null : () => _open(item),
+                              onDelete: () => _deleteFromPhone(context, item),
+                            ),
+                        ],
                       ),
-                    );
-                  }).toList(),
-                  onChanged: _choosing
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            _choose(() => vm.selectWorkspace(value));
-                          }
-                        },
-                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-              child: FilledButton.icon(
-                onPressed: () {
+              Divider(
+                color: colors.border.withValues(alpha: 0.6),
+                height: 1,
+                indent: 20,
+                endIndent: 20,
+              ),
+              ListTile(
+                dense: true,
+                leading: Icon(
+                  LucideIcons.scanLine,
+                  size: 18,
+                  color: colors.accent,
+                ),
+                title: const Text(
+                  'Pair computer',
+                  style: TextStyle(fontSize: 13),
+                ),
+                onTap: () {
                   widget.close?.call();
-                  openNewSession(context);
+                  context.push('/pair');
                 },
-                icon: const Icon(LucideIcons.plus, size: 17),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 11),
-                  child: Text('New session'),
+              ),
+              ListTile(
+                dense: true,
+                leading: Icon(
+                  LucideIcons.settings2,
+                  size: 18,
+                  color: colors.accent,
                 ),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                title: const Text('Settings', style: TextStyle(fontSize: 13)),
+                trailing: Text(
+                  vm.isRelayConnected ? 'Connected' : 'Offline',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: vm.isRelayConnected ? colors.success : colors.muted,
                   ),
                 ),
+                onTap: () {
+                  widget.close?.call();
+                  context.push('/settings');
+                },
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _search,
-                onChanged: (value) => setState(() => _query = value),
-                style: context.typo.sansBody.copyWith(fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'Search sessions',
-                  isDense: true,
-                  prefixIcon: Icon(LucideIcons.search, size: 17),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-              child: Text(
-                'Sessions · ${vm.workspaceItems.length}',
-                style: TextStyle(
-                  color: colors.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Expanded(
-              child: state is HomeLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : items.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          state is HomeNoPeer
-                              ? 'Pair a computer to get started.'
-                              : _query.isNotEmpty
-                              ? 'No matching sessions in this workspace.'
-                              : 'No sessions on this device yet. Open a workspace to begin.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: colors.muted,
-                            height: 1.6,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    )
-                  : ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      children: [
-                        for (final item in items)
-                          _SessionRow(
-                            item: item,
-                            selected: selection.matches(
-                              item.peer.remoteEpk,
-                              item.room.roomId,
-                            ),
-                            online: vm.isRoomLive(
-                              item.peer.remoteEpk,
-                              item.room.roomId,
-                            ),
-                            working: vm.isRoomWorking(
-                              item.peer.remoteEpk,
-                              item.room.roomId,
-                            ),
-                            onTap: _opening ? null : () => _open(item),
-                            onDelete: () => _deleteFromPhone(context, item),
-                          ),
-                      ],
-                    ),
-            ),
-            Divider(color: colors.border, height: 1),
-            ListTile(
-              dense: true,
-              leading: Icon(
-                LucideIcons.scanLine,
-                size: 18,
-                color: colors.muted2,
-              ),
-              title: const Text(
-                'Pair computer',
-                style: TextStyle(fontSize: 13),
-              ),
-              onTap: () {
-                widget.close?.call();
-                context.push('/pair');
-              },
-            ),
-            ListTile(
-              dense: true,
-              leading: Icon(
-                LucideIcons.settings2,
-                size: 18,
-                color: colors.muted2,
-              ),
-              title: const Text('Settings', style: TextStyle(fontSize: 13)),
-              trailing: Text(
-                vm.isRelayConnected ? 'Connected' : 'Offline',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: vm.isRelayConnected ? colors.success : colors.muted,
-                ),
-              ),
-              onTap: () {
-                widget.close?.call();
-                context.push('/settings');
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -456,17 +487,45 @@ class _ScopeSelector extends StatelessWidget {
   final IconData icon;
   final Widget child;
   @override
-  Widget build(BuildContext context) => InputDecorator(
-    decoration: InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, size: 17),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    decoration: BoxDecoration(
+      color: context.colors.inputFill.withValues(alpha: 0.72),
+      borderRadius: BorderRadius.circular(22),
     ),
-    child: DropdownButtonHideUnderline(
-      child: DefaultTextStyle.merge(
-        style: context.typo.sansBody.copyWith(fontSize: 13),
-        child: child,
-      ),
+    child: Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: context.colors.selection,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, size: 17, color: context.colors.accent),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: context.typo.sansBody.copyWith(
+                  fontSize: 12,
+                  color: context.colors.muted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: DropdownButtonHideUnderline(child: child),
+              ),
+            ],
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -500,8 +559,8 @@ class _SessionRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: ListTile(
         selected: selected,
-        selectedTileColor: colors.userBubble,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        selectedTileColor: colors.selection,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         leading: Padding(
           padding: const EdgeInsets.only(top: 3),
@@ -582,7 +641,13 @@ class SessionWelcome extends StatelessWidget {
     return Scaffold(
       backgroundColor: colors.bg,
       appBar: AppBar(
-        backgroundColor: colors.bg,
+        backgroundColor: colors.bg.withValues(alpha: 0),
+        flexibleSpace: const BayaGlassSurface(
+          radius: 0,
+          elevated: false,
+          child: SizedBox.expand(),
+        ),
+        centerTitle: true,
         title: const Text('Sessions'),
         leading: SessionShell.menuOf(context) == null
             ? null
@@ -608,8 +673,9 @@ class SessionWelcome extends StatelessWidget {
               children: [
                 Text(
                   'What are we\nworking on?',
-                  style: context.typo.reading.copyWith(
+                  style: context.typo.sansBody.copyWith(
                     fontSize: 34,
+                    fontWeight: FontWeight.w700,
                     height: 1.2,
                     letterSpacing: -0.8,
                   ),
