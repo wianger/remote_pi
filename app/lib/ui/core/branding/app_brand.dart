@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:app/ui/core/themes/themes.dart';
 
-const kAppName = 'ThreadDeck';
+const kAppName = 'Pico';
 
 /// The folded thread connects devices, workspaces and conversations.
-/// Geometry matches branding/threaddeck-mark.svg and Android vector icons.
+/// Geometry matches branding/pico-mark.svg and Android vector icons.
 class AppMark extends StatelessWidget {
   const AppMark({super.key, this.size = 28, this.tile = false});
   final double size;

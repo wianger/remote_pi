@@ -55,7 +55,7 @@ $sums = Join-Path $stage 'SHA256SUMS.txt'
 [IO.File]::WriteAllText($sums, "$hash  RemotePi-Dev-Android.apk`n", [Text.UTF8Encoding]::new($false))
 $tag = "android-dev-v$version+$build"
 & $GhExe release create $tag $stagedApk $sums --repo wianger/remote_pi --target $commit `
-    --prerelease --draft --title "ThreadDeck Android $version ($build)" --notes-file $notes
+    --prerelease --draft --title "Pico Android $version ($build)" --notes-file $notes
 if ($LASTEXITCODE -ne 0) { throw 'Draft release creation/upload failed. Inspect the draft before retrying.' }
 $view = & $GhExe release view $tag --repo wianger/remote_pi --json assets,isDraft,url | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or -not $view.isDraft -or
