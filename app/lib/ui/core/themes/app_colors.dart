@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 /// `buildLightTheme()` so `Theme.of(context).extension<AppColors>()` resolves
 /// the right palette for the active brightness.
 ///
-/// Quiet neutral palettes with Baya teal for the shell and readable chat.
+/// Graphite neutrals with restrained gold details for the shell and chat.
 /// Keep both brightness variants here so features share the same semantics.
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
@@ -105,52 +105,49 @@ class AppColors extends ThemeExtension<AppColors> {
       const Color(0xFF000000).withValues(alpha: _isDark ? 0.16 : 0.06);
   Color get selection => accent.withValues(alpha: _isDark ? 0.13 : 0.09);
 
-  /// Dark palette (default). Mirrors the original `app_theme.dart` constants.
+  /// Graphite dark palette. Gold is reserved for the bird and small details.
   static const AppColors dark = AppColors(
-    bg: Color(0xFF11191C),
-    surface: Color(0xFF1B272B),
-    border: Color(0xFF34454A),
-    text: Color(0xFFEDF3F2),
-    muted: Color(0xFF9EAFB2),
-    muted2: Color(0xFFBDCDCE),
-    accent: Color(0xFFA4D7CB),
-    onAccent: Color(0xFF123B35),
-    highlight: Color(0xFFB8DDD4),
+    bg: Color(0xFF17191E),
+    surface: Color(0xFF202329),
+    border: Color(0xFF3D414A),
+    text: Color(0xFFF1F0ED),
+    muted: Color(0xFFB1B2BA),
+    muted2: Color(0xFFC8C7C2),
+    accent: Color(0xFFE8E3D8),
+    onAccent: Color(0xFF26282D),
+    highlight: Color(0xFFE1B465),
     success: Color(0xFF9CBDA5),
     error: Color(0xFFE69C94),
     warning: Color(0xFFDABD85),
     working: Color(0xFFA1B7CD),
-    codeBg: Color(0xFF172125),
-    userBubble: Color(0xFF25363A),
-    modelBadgeBg: Color(0xFF26383B),
-    modelBadgeBorder: Color(0xFF3C5155),
+    codeBg: Color(0xFF1E2026),
+    userBubble: Color(0xFF303238),
+    modelBadgeBg: Color(0xFF2F3037),
+    modelBadgeBorder: Color(0xFF45464E),
     denyBorder: Color(0xFF554141),
-    inputFill: Color(0xFF223136),
+    inputFill: Color(0xFF23262D),
   );
 
-  /// Light palette — derived from [dark]. Foreground tints are tuned for
-  /// WCAG-AA contrast on the white [bg] (≥4.5:1 for body, ≥3:1 for large/UI):
-  /// `muted`/`muted2` are dark grays (not the dark-theme mid-grays, which were
-  /// washed out on white), and `accent`/`highlight` are deepened cyans so
-  /// accent-colored *text* (links, "Use default" buttons) stays legible.
+  /// Light neutral surfaces keep reading dominant. Highlight gold is darkened
+  /// for text, while brand artwork retains its brighter gold independently.
   static const AppColors light = AppColors(
-    bg: Color(0xFFF6F8F8),
-    surface: Color(0xFFEDF2F2),
-    border: Color(0xFFD9E2E3),
-    text: Color(0xFF19282B),
-    muted: Color(0xFF637479),
-    muted2: Color(0xFF4D6267),
-    accent: Color(0xFF225F57),
+    bg: Color(0xFFF7F7F5),
+    surface: Color(0xFFF0F0ED),
+    border: Color(0xFFE0E1E3),
+    text: Color(0xFF24262C),
+    muted: Color(0xFF676A73),
+    muted2: Color(0xFF575A63),
+    accent: Color(0xFF30343C),
     onAccent: Color(0xFFFFFFFF),
-    highlight: Color(0xFF275F59),
+    highlight: Color(0xFF8A6226),
     success: Color(0xFF417454),
     error: Color(0xFFAF453E),
     warning: Color(0xFF916B30),
     working: Color(0xFF4E6B86),
-    codeBg: Color(0xFFEDF2F3),
-    userBubble: Color(0xFFE5EEEC),
-    modelBadgeBg: Color(0xFFE4EEEC),
-    modelBadgeBorder: Color(0xFFD1E0DC),
+    codeBg: Color(0xFFF0F0ED),
+    userBubble: Color(0xFFEDEAE4),
+    modelBadgeBg: Color(0xFFE9E8E4),
+    modelBadgeBorder: Color(0xFFDDDBD4),
     denyBorder: Color(0xFFE3D6D3),
     inputFill: Color(0xFFFFFFFF),
   );
@@ -233,15 +230,15 @@ class AppColors extends ThemeExtension<AppColors> {
 
 /// Fixed launcher/brand tile colors, shared by light and dark presentations.
 abstract final class AppBrandColors {
-  static const background = Color(0xFF163D3C);
-  static const backgroundLight = Color(0xFF3A6D67);
-  static const backgroundDeep = Color(0xFF0D282B);
-  static const foreground = Color(0xFFF6F0E4);
+  static const background = Color(0xFF30343C);
+  static const backgroundLight = Color(0xFF535861);
+  static const backgroundDeep = Color(0xFF171B22);
+  static const foreground = Color(0xFFF5F0E7);
   static const foregroundLight = Color(0xFFFFFDF7);
-  static const foregroundShade = Color(0xFFD4E4DE);
-  static const highlight = Color(0xFFE6AD72);
-  static const highlightLight = Color(0xFFFFE5B1);
-  static const highlightDeep = Color(0xFFC48A4C);
+  static const foregroundShade = Color(0xFFDDD9D2);
+  static const highlight = Color(0xFFE1B465);
+  static const highlightLight = Color(0xFFFFE9BC);
+  static const highlightDeep = Color(0xFFA97932);
   static const reflection = Color(0xFFFFFFFF);
-  static const shadow = Color(0xFF082326);
+  static const shadow = Color(0xFF12151C);
 }

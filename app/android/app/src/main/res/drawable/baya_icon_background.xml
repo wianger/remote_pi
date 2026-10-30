@@ -3,9 +3,9 @@
   <path android:pathData="M0 0H108V108H0Z">
     <aapt:attr name="android:fillColor">
       <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
-        <item android:offset="0" android:color="#FF3A6D67" />
-        <item android:offset=".55" android:color="#FF163D3C" />
-        <item android:offset="1" android:color="#FF0D282B" />
+        <item android:offset="0" android:color="#FF535861" />
+        <item android:offset=".55" android:color="#FF30343C" />
+        <item android:offset="1" android:color="#FF171B22" />
       </gradient>
     </aapt:attr>
   </path>

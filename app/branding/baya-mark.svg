@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
   <defs>
-    <linearGradient id="base" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="108" y2="108"><stop stop-color="#3A6D67"/><stop offset=".55" stop-color="#163D3C"/><stop offset="1" stop-color="#0D282B"/></linearGradient>
+    <linearGradient id="base" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="108" y2="108"><stop stop-color="#535861"/><stop offset=".55" stop-color="#30343C"/><stop offset="1" stop-color="#171B22"/></linearGradient>
     <linearGradient id="rim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="108" y2="108"><stop stop-color="#FFF" stop-opacity=".48"/><stop offset=".5" stop-color="#FFF" stop-opacity=".04"/><stop offset="1" stop-color="#FFF" stop-opacity=".16"/></linearGradient>
-    <linearGradient id="body" gradientUnits="userSpaceOnUse" x1="34" y1="26" x2="79" y2="86"><stop stop-color="#FFFDF7"/><stop offset=".45" stop-color="#F6F0E4"/><stop offset="1" stop-color="#D4E4DE"/></linearGradient>
-    <linearGradient id="gold" gradientUnits="userSpaceOnUse" x1="49" y1="25" x2="90" y2="52"><stop stop-color="#FFE5B1"/><stop offset=".6" stop-color="#E6AD72"/><stop offset="1" stop-color="#C48A4C"/></linearGradient>
-    <linearGradient id="thread" gradientUnits="userSpaceOnUse" x1="88" y1="51" x2="58" y2="88"><stop stop-color="#FFE5B1"/><stop offset=".65" stop-color="#E6AD72"/><stop offset="1" stop-color="#C48A4C"/></linearGradient>
+    <linearGradient id="body" gradientUnits="userSpaceOnUse" x1="34" y1="26" x2="79" y2="86"><stop stop-color="#FFFDF7"/><stop offset=".45" stop-color="#F5F0E7"/><stop offset="1" stop-color="#DDD9D2"/></linearGradient>
+    <linearGradient id="gold" gradientUnits="userSpaceOnUse" x1="49" y1="25" x2="90" y2="52"><stop stop-color="#FFE9BC"/><stop offset=".6" stop-color="#E1B465"/><stop offset="1" stop-color="#A97932"/></linearGradient>
+    <linearGradient id="thread" gradientUnits="userSpaceOnUse" x1="88" y1="51" x2="58" y2="88"><stop stop-color="#FFE9BC"/><stop offset=".65" stop-color="#E1B465"/><stop offset="1" stop-color="#A97932"/></linearGradient>
     <clipPath id="tile"><rect width="108" height="108" rx="24"/></clipPath>
   </defs>
   <g id="baya-background" clip-path="url(#tile)">
@@ -12,9 +12,9 @@
     <rect x=".6" y=".6" width="106.8" height="106.8" rx="23.4" fill="none" stroke="url(#rim)" stroke-width=".8"/>
   </g>
   <g id="baya-bird">
-    <path transform="translate(0 1.8)" fill="#082326" opacity=".38" fill-rule="evenodd" d="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65ZM37 59C45 67 55 69 66 60C61 73 46 77 37 65ZM73.6 40a2.6 2.6 0 1 0-5.2 0a2.6 2.6 0 1 0 5.2 0Z"/>
+    <path transform="translate(0 1.8)" fill="#12151C" opacity=".38" fill-rule="evenodd" d="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65ZM37 59C45 67 55 69 66 60C61 73 46 77 37 65ZM73.6 40a2.6 2.6 0 1 0-5.2 0a2.6 2.6 0 1 0 5.2 0Z"/>
     <path fill="url(#body)" stroke="#FFF" stroke-opacity=".35" stroke-width=".65" fill-rule="evenodd" d="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65ZM37 59C45 67 55 69 66 60C61 73 46 77 37 65ZM73.6 40a2.6 2.6 0 1 0-5.2 0a2.6 2.6 0 1 0 5.2 0Z"/>
-    <path transform="translate(0 .9)" fill="#082326" opacity=".2" d="M49 39C51 29 58 25 67 26C73 26 78 30 80 36L64 36C58 36 54 39 49 43Z"/>
+    <path transform="translate(0 .9)" fill="#12151C" opacity=".2" d="M49 39C51 29 58 25 67 26C73 26 78 30 80 36L64 36C58 36 54 39 49 43Z"/>
     <path fill="url(#gold)" d="M49 39C51 29 58 25 67 26C73 26 78 30 80 36L64 36C58 36 54 39 49 43ZM79 42L90 48L78 51Z"/>
     <path d="M53 34C58 29 64 28 70 30" fill="none" stroke="#FFF" stroke-opacity=".55" stroke-width="1" stroke-linecap="round"/>
     <path d="M88 51C88 76 77 88 58 88" fill="none" stroke="url(#thread)" stroke-width="3.4" stroke-linecap="round"/>

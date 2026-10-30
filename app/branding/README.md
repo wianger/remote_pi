@@ -2,8 +2,10 @@
 
 `baya-mark.svg` is the portable colored tile. Its background, bird, crown and
 thread use separate layers, directional color and restrained edge highlights.
-The Flutter `AppMarkPainter` renders the same composition; high contrast and
-untiled glyphs keep the flat treatment for clarity.
+The approved graphite / soft gold palette uses a graphite tile, ivory bird
+and gold crown and thread. The Flutter `AppMarkPainter` renders the same
+composition; high contrast and untiled glyphs keep the flat treatment for
+clarity.
 
 Run `python app/branding/sync_android_icons.py` from the repository root to
 export the Android vectors and transparent `baya-foreground.svg` /

@@ -253,3 +253,11 @@ the launcher mask. Color and monochrome PNG fallbacks cover five densities.
 There are no animation, runtime image downloads or new package dependencies.
 
 Reference: https://developer.apple.com/design/human-interface-guidelines/app-icons
+
+## Graphite and soft gold (1.2.8 / build 16)
+
+The owner selected Graphite / Soft Gold from the palette proposals. The bird,
+launcher and startup surface now share the graphite/ivory/gold composition.
+The light and dark interface uses neutral primary actions, with gold reserved
+for the bird and limited text details. Semantic status colors are retained.
+Layer geometry, fonts, glass controls and session behavior are unchanged.
