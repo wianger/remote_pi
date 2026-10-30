@@ -493,3 +493,14 @@ Longo prazo:
 ## Reportar problemas de segurança
 
 [Definir canal] — por enquanto, abra issue marcando como `security` ou contate maintainers diretamente.
+
+
+### Pi logical conversation and physical room
+
+Development Pi endpoints may use `pi_<sessionHash>_<mode>_<instanceHash>` as their
+opaque room id. sessionHash is the first 16 base64url characters of SHA-256 over
+the persisted Pi SDK session id; mode is `d` (daemon) or `i` (interactive);
+instanceHash is the existing 12-character cwd/name room hash. Relays route this
+whole string unchanged. Clients may group/cache by the `pi_<sessionHash>` prefix
+within a single computer identity, but must send to exactly one full room id.
+Legacy and Codex room ids retain their existing interpretation.

@@ -2,55 +2,119 @@ import 'dart:convert';
 
 import 'package:app/domain/contracts/update_checker.dart';
 import 'package:app/domain/entities/update_info.dart';
+import 'package:app/domain/value_objects/semver.dart';
 import 'package:dio/dio.dart';
 
-/// Busca o `latest.json` do app via HTTP (Dio — mesmo client já usado pelo
-/// mesh, plano 24). Timeout curto; qualquer falha → `null` (nunca lança), pra
-/// que o aviso seja totalmente silencioso quando offline/indisponível.
-///
-/// Espelha o schema do manifest do Cockpit (plano 43/44), com 1 artefato
-/// `android`/`apk`. O parsing/validação fica em [UpdateInfo.fromJson].
+/// Only this fork's signed Android development release channel is installable.
 class UpdateCheckerImpl implements UpdateChecker {
-  UpdateCheckerImpl({
-    String? manifestUrl,
-    Duration timeout = const Duration(seconds: 5),
-    Dio? dio,
-  })  : manifestUrl = manifestUrl ?? defaultManifestUrl,
-        _dio = dio ?? _defaultDio(timeout);
+  UpdateCheckerImpl({Dio? dio, Duration timeout = const Duration(seconds: 10)})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: timeout,
+              sendTimeout: timeout,
+              receiveTimeout: timeout,
+              validateStatus: (_) => true,
+              responseType: ResponseType.plain,
+            ),
+          );
 
-  static const String defaultManifestUrl =
-      'https://rp-s3.jacobmoura.work/downloads/app/latest.json';
-
-  final String manifestUrl;
+  static const releasesUrl = 'https://github.com/wianger/remote_pi/releases';
+  static const apiUrl =
+      'https://api.github.com/repos/wianger/remote_pi/releases?per_page=100';
+  static const apkName = 'RemotePi-Dev-Android.apk';
   final Dio _dio;
-
-  static Dio _defaultDio(Duration timeout) {
-    return Dio(
-      BaseOptions(
-        connectTimeout: timeout,
-        sendTimeout: timeout,
-        receiveTimeout: timeout,
-        // Tratamos status não-2xx manualmente — não deixa o Dio lançar.
-        validateStatus: (_) => true,
-        // Plain: jsonDecode manual, não deixa o parser do Dio tropeçar num
-        // corpo vazio/não-JSON num 4xx/5xx.
-        responseType: ResponseType.plain,
-      ),
-    );
-  }
 
   @override
   Future<UpdateInfo?> fetchLatest() async {
     try {
-      final response = await _dio.getUri<Object?>(Uri.parse(manifestUrl));
+      final response = await _dio.get<Object?>(
+        apiUrl,
+        options: Options(headers: {'Accept': 'application/vnd.github+json'}),
+      );
       if (response.statusCode != 200) return null;
-      final data = response.data;
-      final body = data is String ? data : null;
-      if (body == null || body.isEmpty) return null;
-      return UpdateInfo.fromJson(jsonDecode(body));
-    } catch (_) {
-      // sem rede / 404 / JSON inválido / schema errado → silencioso.
+      final body = response.data;
+      return parseReleases(body is String ? jsonDecode(body) : body);
+    } on DioException {
+      return null;
+    } on FormatException {
       return null;
     }
+  }
+
+  static bool _isOwnAssetUrl(Object? raw, String tag) {
+    if (raw is! String) return false;
+    final uri = Uri.tryParse(raw);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'github.com' ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        uri.port != 443) {
+      return false;
+    }
+    return uri.pathSegments.join('/') ==
+        'wianger/remote_pi/releases/download/$tag/$apkName';
+  }
+
+  /// Prereleases are intentional on this channel; tags/assets are the filter.
+  static UpdateInfo? parseReleases(Object? json) {
+    if (json is! List) return null;
+    final candidates = <UpdateInfo>[];
+    for (final release in json) {
+      if (release is! Map || release['draft'] != false) continue;
+      final tag = release['tag_name'];
+      if (tag is! String) continue;
+      final match = RegExp(
+        r'^android-dev-v(\d+\.\d+\.\d+)\+(\d+)$',
+      ).firstMatch(tag);
+      if (match == null) continue;
+      final build = int.tryParse(match.group(2)!);
+      final assets = release['assets'];
+      if (build == null || build <= 0 || assets is! List) continue;
+      final expectedUrl = '$releasesUrl/download/$tag/$apkName';
+      for (final asset in assets) {
+        if (asset is! Map ||
+            asset['name'] != apkName ||
+            !_isOwnAssetUrl(asset['browser_download_url'], tag) ||
+            asset['state'] != 'uploaded' ||
+            asset['size'] is! num ||
+            (asset['size'] as num) <= 0) {
+          continue;
+        }
+        final digest = asset['digest'];
+        candidates.add(
+          UpdateInfo(
+            version: match.group(1)!,
+            buildNumber: build,
+            date: release['published_at'] is String
+                ? release['published_at'] as String
+                : '',
+            notes: release['body'] is String ? release['body'] as String : '',
+            releaseUrl: '$releasesUrl/tag/$tag',
+            artifacts: [
+              UpdateArtifact(
+                platform: 'android',
+                arch: 'arm64',
+                format: 'apk',
+                url: expectedUrl,
+                sha256: digest is String && digest.startsWith('sha256:')
+                    ? digest.substring(7)
+                    : '',
+                size: (asset['size'] as num).toInt(),
+              ),
+            ],
+          ),
+        );
+        break;
+      }
+    }
+    candidates.sort((a, b) {
+      final version = compareSemver(b.version, a.version);
+      return version != 0 ? version : b.buildNumber.compareTo(a.buildNumber);
+    });
+    return candidates.firstOrNull;
   }
 }

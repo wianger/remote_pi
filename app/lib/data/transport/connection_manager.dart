@@ -34,6 +34,7 @@ import 'dart:async';
 import 'package:app/data/transport/channel.dart';
 import 'package:app/data/transport/epk_encoding.dart';
 import 'package:app/domain/contracts/service.dart';
+import 'package:app/domain/value_objects/session_room.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 
@@ -228,6 +229,11 @@ class ConnectionManager extends Service {
   /// url-safe or standard base64.
   List<RoomInfo> roomsFor(String epk) =>
       List.unmodifiable(_roomsByPeer[toStandardB64(epk)] ?? const []);
+
+  /// One destination per actual conversation, for lists and workspace selection.
+  /// Keep roomsFor unfiltered so metadata for the active physical route remains accessible.
+  List<RoomInfo> conversationRoomsFor(String epk) =>
+      List.unmodifiable(_conversationRooms(toStandardB64(epk)));
 
   /// Active destination room (the Pi-side room id). 'main' = default.
   String get activeRoomId => _activeRoomId;
@@ -820,8 +826,50 @@ class ConnectionManager extends Service {
   }
 
   Map<String, List<RoomInfo>> _roomsSnapshot() => Map.unmodifiable(
-    _roomsByPeer.map((k, v) => MapEntry(k, List<RoomInfo>.unmodifiable(v))),
+    _roomsByPeer.map(
+      (k, _) => MapEntry(k, List<RoomInfo>.unmodifiable(_conversationRooms(k))),
+    ),
   );
+
+  List<RoomInfo> _conversationRooms(String peer) {
+    final grouped = <String, RoomInfo>{};
+    final rooms = _roomsByPeer[peer] ?? <RoomInfo>[];
+    final replacements = <String, String?>{
+      for (final room in rooms)
+        if (legacyPiInstanceRoomId(room.roomId) case final String legacy)
+          legacy: room.cwd,
+    };
+    for (final room in rooms) {
+      // Pre-upgrade rooms represented instance slots, not conversations.
+      // Hide a retired slot only when its exact new route is known; keep data.
+      if (!isRoomLive(peer, room.roomId) &&
+          replacements.containsKey(room.roomId) &&
+          replacements[room.roomId] == room.cwd) {
+        continue;
+      }
+      final identity = conversationRoomId(room.roomId);
+      final existing = grouped[identity];
+      if (existing == null || _preferRoom(peer, room, existing)) {
+        grouped[identity] = room;
+      }
+    }
+    return grouped.values.toList();
+  }
+
+  bool _preferRoom(String peer, RoomInfo candidate, RoomInfo existing) {
+    final candidateLive = isRoomLive(peer, candidate.roomId);
+    final existingLive = isRoomLive(peer, existing.roomId);
+    if (candidateLive != existingLive) return candidateLive;
+    if (candidateLive && candidate.working != existing.working) {
+      return candidate.working;
+    }
+    final interactive = isInteractivePiRoom(candidate.roomId);
+    if (interactive != isInteractivePiRoom(existing.roomId)) return interactive;
+    if (candidate.startedAt != existing.startedAt) {
+      return candidate.startedAt > existing.startedAt;
+    }
+    return candidate.roomId.compareTo(existing.roomId) < 0;
+  }
 
   /// Returns `true` if `roomId` is currently announced live for the
   /// peer (the relay's last `room_announced` / `rooms` push included

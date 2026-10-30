@@ -1,0 +1,70 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$Apk,
+    [Parameter(Mandatory)][string]$NotesFile,
+    [string]$SourceRoot = (Split-Path $PSScriptRoot -Parent),
+    [string]$AndroidSdk = 'C:\Scoop\persist\android-clt',
+    [string]$GhExe = 'gh',
+    [string]$ExpectedCertificateSha256 = 'bdaba7b38a226cf6bcf2673d24a8f56453ffdce66f3b3402e48e0bca7b884eaa',
+    [switch]$Publish
+)
+$ErrorActionPreference = 'Stop'
+$repo = (Resolve-Path -LiteralPath $SourceRoot).ProviderPath
+$apkFile = (Resolve-Path -LiteralPath $Apk).ProviderPath
+$notes = (Resolve-Path -LiteralPath $NotesFile).ProviderPath
+$branch = (& git -C $repo branch --show-current).Trim()
+if ($LASTEXITCODE -ne 0 -or $branch -ne 'codex/mobile-sessions-ui-20261029') { throw 'Use the development branch.' }
+$dirty = & git -C $repo status --porcelain
+if ($LASTEXITCODE -ne 0 -or $dirty) { throw 'Commit the development source and keep the checkout clean before publishing.' }
+$commit = (& git -C $repo rev-parse HEAD).Trim()
+$remote = (& $GhExe api 'repos/wianger/remote_pi/commits/codex/mobile-sessions-ui-20261029' --jq '.sha').Trim()
+if ($LASTEXITCODE -ne 0 -or $remote -ne $commit) { throw 'Push this exact development commit before publishing.' }
+$pubspec = [IO.File]::ReadAllText((Join-Path $repo 'app\pubspec.yaml'))
+$versionMatch = [regex]::Match($pubspec, '(?m)^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$')
+if (-not $versionMatch.Success) { throw 'pubspec needs version x.y.z+buildNumber.' }
+$version = $versionMatch.Groups[1].Value
+$build = [int]$versionMatch.Groups[2].Value
+$tools = Join-Path $AndroidSdk 'build-tools\36.0.0'
+$badging = & (Join-Path $tools 'aapt2.exe') dump badging $apkFile
+if ($LASTEXITCODE -ne 0) { throw 'Could not inspect APK.' }
+$package = [regex]::Match(($badging -join "`n"), "package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'")
+if (-not $package.Success -or $package.Groups[1].Value -ne 'dev.wianger.remotepi' -or
+    [int]$package.Groups[2].Value -ne $build -or $package.Groups[3].Value -ne $version) {
+    throw 'APK package/version does not match the development source.'
+}
+$signature = & (Join-Path $tools 'apksigner.bat') verify --print-certs $apkFile
+if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
+$certificate = [regex]::Match(($signature -join "`n"), 'certificate SHA-256 digest:\s*([0-9a-fA-F]+)')
+if (-not $certificate.Success -or $certificate.Groups[1].Value -ne $ExpectedCertificateSha256) {
+    throw 'APK was not signed by the personal development key; existing installs could not update.'
+}
+$published = & $GhExe api 'repos/wianger/remote_pi/releases?per_page=100'
+if ($LASTEXITCODE -ne 0) { throw 'Could not check existing release version codes.' }
+foreach ($release in ($published | ConvertFrom-Json)) {
+    $previous = [regex]::Match($release.tag_name, '^android-dev-v\d+\.\d+\.\d+\+(\d+)$')
+    if ($previous.Success -and [int]$previous.Groups[1].Value -ge $build) {
+        throw 'Increment the Android build number before publishing. Existing releases are never overwritten.'
+    }
+}
+$stage = Join-Path ([IO.Path]::GetTempPath()) ('RemotePiRelease-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stage | Out-Null
+$stagedApk = Join-Path $stage 'RemotePi-Dev-Android.apk'
+Copy-Item -LiteralPath $apkFile -Destination $stagedApk
+$hash = (Get-FileHash -LiteralPath $stagedApk -Algorithm SHA256).Hash.ToLowerInvariant()
+$sums = Join-Path $stage 'SHA256SUMS.txt'
+[IO.File]::WriteAllText($sums, "$hash  RemotePi-Dev-Android.apk`n", [Text.UTF8Encoding]::new($false))
+$tag = "android-dev-v$version+$build"
+& $GhExe release create $tag $stagedApk $sums --repo wianger/remote_pi --target $commit `
+    --prerelease --draft --title "Remote Pi Dev Android $version ($build)" --notes-file $notes
+if ($LASTEXITCODE -ne 0) { throw 'Draft release creation/upload failed. Inspect the draft before retrying.' }
+$view = & $GhExe release view $tag --repo wianger/remote_pi --json assets,isDraft,url | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0 -or -not $view.isDraft -or
+    @($view.assets | Where-Object { $_.name -eq 'RemotePi-Dev-Android.apk' -and $_.size -eq (Get-Item -LiteralPath $stagedApk).Length }).Count -ne 1 -or
+    @($view.assets | Where-Object { $_.name -eq 'SHA256SUMS.txt' }).Count -ne 1) {
+    throw 'Draft asset verification failed. The release remains unpublished.'
+}
+if ($Publish) {
+    & $GhExe release edit $tag --repo wianger/remote_pi --draft=false --prerelease
+    if ($LASTEXITCODE -ne 0) { throw 'Publishing failed; inspect the existing draft.' }
+}
+[pscustomobject]@{ Tag = $tag; Commit = $commit; Published = [bool]$Publish; Sha256 = $hash; Stage = $stage }

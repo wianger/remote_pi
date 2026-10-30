@@ -27,3 +27,16 @@ final class UpdateBannerVisible extends UpdateBannerState {
   @override
   int get hashCode => info.version.hashCode;
 }
+
+final class UpdateCheckInProgress extends UpdateBannerState {
+  const UpdateCheckInProgress();
+}
+
+final class UpdateCheckCurrent extends UpdateBannerState {
+  const UpdateCheckCurrent();
+}
+
+final class UpdateCheckFailed extends UpdateBannerState {
+  const UpdateCheckFailed(this.message);
+  final String message;
+}

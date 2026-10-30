@@ -64,7 +64,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
   }
 
   bool _online(PeerRecord peer) => _connection
-      .roomsFor(peer.remoteEpk)
+      .conversationRoomsFor(peer.remoteEpk)
       .any((room) => _connection.isRoomLive(peer.remoteEpk, room.roomId));
 
   @override
@@ -96,7 +96,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
     final peer = await _peer(hostId);
     _ensureCurrent(generation);
     final rooms = _connection
-        .roomsFor(peer.remoteEpk)
+        .conversationRoomsFor(peer.remoteEpk)
         .where((room) => _connection.isRoomLive(peer.remoteEpk, room.roomId))
         .toList();
     if (rooms.isEmpty) {
@@ -237,7 +237,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
     final peer = await _peer(hostId);
     _ensureCurrent(generation);
     RoomInfo? existing;
-    for (final room in _connection.roomsFor(hostId)) {
+    for (final room in _connection.conversationRoomsFor(hostId)) {
       if (room.cwd == path &&
           matchesLegacyWorkspaceAgent(room.name, agent) &&
           _connection.isRoomLive(hostId, room.roomId)) {
@@ -265,7 +265,7 @@ class WorkspaceRepository extends IWorkspaceRepository {
       RoomInfo? ready;
       while (DateTime.now().isBefore(deadline)) {
         _ensureCurrent(generation);
-        for (final room in _connection.roomsFor(hostId)) {
+        for (final room in _connection.conversationRoomsFor(hostId)) {
           if ((room.roomId == roomId || room.cwd == cwd && room.name == name) &&
               _connection.isRoomLive(hostId, room.roomId)) {
             ready = room;

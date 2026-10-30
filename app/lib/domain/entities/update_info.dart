@@ -18,12 +18,16 @@ class UpdateInfo {
     required this.date,
     required this.notes,
     required this.artifacts,
+    this.buildNumber = 0,
+    this.releaseUrl,
   });
 
   final String version;
   final String date;
   final String notes;
   final List<UpdateArtifact> artifacts;
+  final int buildNumber;
+  final String? releaseUrl;
 
   /// Parseia o manifest. **Lança** `FormatException` se o shape estiver errado
   /// (campos obrigatórios ausentes/tipo errado) — o checker trata como "sem

@@ -1,6 +1,7 @@
 import 'package:app/domain/contracts/dismissed_update_store.dart';
 import 'package:app/domain/contracts/update_checker.dart';
 import 'package:app/domain/contracts/url_opener.dart';
+import 'package:app/domain/entities/update_info.dart';
 import 'package:app/domain/value_objects/semver.dart';
 import 'package:app/ui/core/viewmodel/viewmodel.dart';
 import 'package:app/ui/update/states/update_banner_state.dart';
@@ -21,6 +22,7 @@ class UpdateBannerViewModel extends ViewModel<UpdateBannerState> {
     this._opener, {
     required this.currentVersion,
     required this.enabled,
+    this.currentBuildNumber = 0,
     this.platform = 'android',
     this.format = 'apk',
     this.arch = 'universal',
@@ -33,6 +35,7 @@ class UpdateBannerViewModel extends ViewModel<UpdateBannerState> {
 
   /// Versão do app rodando (de `package_info`, injetada no boot).
   final String currentVersion;
+  final int currentBuildNumber;
 
   /// `true` só no Android — em iOS o app atualiza pela App Store, então o
   /// aviso nunca aparece.
@@ -47,7 +50,7 @@ class UpdateBannerViewModel extends ViewModel<UpdateBannerState> {
   final String fallbackUrl;
 
   static const String _kFallbackUrl =
-      'https://remote-pi.jacobmoura.work/download';
+      'https://github.com/wianger/remote_pi/releases';
 
   bool _checked = false;
   bool _disposed = false;
@@ -63,7 +66,7 @@ class UpdateBannerViewModel extends ViewModel<UpdateBannerState> {
     final latest = await _checker.fetchLatest();
     if (_disposed) return;
     if (latest == null) return; // sem rede/manifest/inválido → nada.
-    if (!isNewerVersion(latest.version, currentVersion)) {
+    if (!_isNewer(latest)) {
       return; // igual/menor → nada.
     }
 
@@ -73,6 +76,35 @@ class UpdateBannerViewModel extends ViewModel<UpdateBannerState> {
 
     emit(UpdateBannerVisible(latest));
   }
+
+  bool _isNewer(UpdateInfo info) {
+    if (info.buildNumber > 0 && currentBuildNumber > 0) {
+      return info.buildNumber > currentBuildNumber &&
+          compareSemver(info.version, currentVersion) >= 0;
+    }
+    return isNewerVersion(info.version, currentVersion);
+  }
+
+  /// Manual checks bypass dismissal and report network/API failures visibly.
+  Future<void> checkManually() async {
+    if (!enabled || state is UpdateCheckInProgress) return;
+    emit(const UpdateCheckInProgress());
+    final latest = await _checker.fetchLatest();
+    if (_disposed) return;
+    if (latest == null) {
+      emit(
+        const UpdateCheckFailed(
+          'Could not check GitHub. Check your connection and try again.',
+        ),
+      );
+    } else if (_isNewer(latest)) {
+      emit(UpdateBannerVisible(latest));
+    } else {
+      emit(const UpdateCheckCurrent());
+    }
+  }
+
+  Future<bool> openReleases() => _opener.open(fallbackUrl);
 
   /// Fecha o card e persiste a versão como dispensada — não reaparece pra ela
   /// (volta numa versão maior).
@@ -86,15 +118,15 @@ class UpdateBannerViewModel extends ViewModel<UpdateBannerState> {
 
   /// Baixa o APK do Android (abre a URL no navegador → download direto). Sem
   /// artefato compatível no manifest → abre a página de download do site.
-  Future<void> download() async {
+  Future<bool> download() async {
     final current = state;
-    if (current is! UpdateBannerVisible) return;
+    if (current is! UpdateBannerVisible) return false;
     final artifact = current.info.artifactFor(
       platform: platform,
       format: format,
       arch: arch,
     );
-    await _opener.open(artifact?.url ?? fallbackUrl);
+    return _opener.open(artifact?.url ?? fallbackUrl);
   }
 
   @override

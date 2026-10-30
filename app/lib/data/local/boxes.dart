@@ -10,6 +10,7 @@
 //   VOLATILE runtime  (wiped@boot)  key = <epk>:<roomId>   → RuntimeRecord
 
 import 'package:app/data/transport/epk_encoding.dart';
+import 'package:app/domain/value_objects/session_room.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 const String _kNamespace = 'rp_v2';
@@ -66,7 +67,8 @@ class LocalBoxes {
   /// `:` and the epk's `/`+`=` would break the on-disk filename — sanitise to
   /// the url-safe, unpadded epk form (same approach as the v1 store).
   static String msgsBoxName(String epk, String roomId) =>
-      'msgs_${toAppEpk(epk)}__$roomId';
+      'msgs_${toAppEpk(epk)}__${conversationRoomId(roomId)}';
 
-  static String sessionKey(String epk, String roomId) => '$epk:$roomId';
+  static String sessionKey(String epk, String roomId) =>
+      '$epk:${conversationRoomId(roomId)}';
 }

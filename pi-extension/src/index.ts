@@ -74,7 +74,7 @@ import {
   createExtensionUiBridge,
   type ExtensionUiBridge,
 } from "./extension_ui_bridge.js";
-import { roomIdFor } from "./rooms.js";
+import { roomIdForPiSession } from "./rooms.js";
 import { registerAgentTools } from "./session/tools.js";
 import { formatPeerInventory } from "./session/peer_inventory.js";
 import { MeshNode } from "./session/mesh_node.js";
@@ -1612,6 +1612,15 @@ async function _attemptReconnect(
   _emitRelayState();
 }
 
+/** Separate a persisted Pi conversation from the process serving it. */
+function _roomForSession(cwd: string, name: string, ctx: unknown): string {
+  const context = (ctx ?? {}) as Partial<ExtensionContext>;
+  let id: string | undefined;
+  try { id = (context.sessionManager ?? (_lastEventCtx as Partial<ExtensionContext> | null)?.sessionManager)?.getSessionId(); }
+  catch { /* Older SDKs expose no persisted identity. Keep their legacy route. */ }
+  return roomIdForPiSession(cwd, name, id, process.env["REMOTE_PI_DAEMON"] === "1");
+}
+
 // ── Relay state event + transparent control channel (Cockpit toggle) ─────────
 
 /** Current relay connectivity, derived from `_state` + `_relay`. */
@@ -2033,10 +2042,10 @@ async function _handlePairRequest(
     session_started_at: _sessionStartedAt ?? Date.now(),
     // App uses this to address subsequent inner messages to the right room
     // when this Pi runs alongside others with the same epk. Defensive fallback
-    // to roomIdFor(cwd, name) covers the edge case where pair_request lands
+    // to the current SDK conversation covers the edge case where pair_request lands
     // before _cmdStart could set _myRoomId (shouldn't happen in practice) —
     // and stays plan/41-consistent (same (cwd, name) derivation as the announce).
-    room_id: _myRoomId ?? roomIdFor(cwd, sessionName),
+    room_id: _myRoomId ?? _roomForSession(cwd, sessionName, _lastEventCtx ?? _lastCtx),
     // Plan/27 Wave A — surface the host coding-agent identity + machine
     // hostname so the app can render a meaningful device row (and tell
     // two PCs apart even when nicknames collide).
@@ -2945,12 +2954,9 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
   // Same name we send in pair_ok — keeps room_meta.name and the per-pair
   // session_name aligned so the app shows consistent labels.
   const sessionName = _displayName(cwd);
-  // plan/41: derive the App↔Pi room from (cwd, name) so several agents in the
-  // SAME folder get distinct rooms (the app renders one tile per agent). The
-  // default/unnamed case preserves the legacy cwd-only id (no re-keying). Uses
-  // the SAME name as room_meta.name / pair_ok below — the invariant that the
-  // app pairs on the room the Pi actually announces.
-  const roomId = roomIdFor(cwd, sessionName);
+  // Use the persisted SDK session id for conversation grouping. The physical
+  // cwd/name suffix stays distinct so a mobile prompt reaches one process.
+  const roomId = _roomForSession(cwd, sessionName, ctx);
 
   // Seed the current model from the SDK's resolved selection so room_meta
   // carries it on connect. `model_select` only fires on an explicit set/cycle
@@ -3204,7 +3210,7 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
   const ttlMatch = /--ttl\s+(\d+)/.exec(args);
   const ttlMs = ttlMatch ? clampPairTtlMs(Number(ttlMatch[1]) * 1000) : TOKEN_TTL_MS;
   const { token, expiresAt } = qrSession.issueToken(ttlMs);
-  const roomId = _myRoomId ?? roomIdFor(cwd, sessionName);
+  const roomId = _myRoomId ?? _roomForSession(cwd, sessionName, ctx);
   const qrUri = buildQRUri(token, edKp.publicKey, sessionName, roomId);
   // Render both the QR ASCII and the copy-paste URI inside the Pi TUI's
   // chat panel via `pi.sendMessage` — the same channel the SDK uses for

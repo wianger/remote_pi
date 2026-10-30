@@ -53,3 +53,16 @@ export function roomIdFor(cwd: string, name?: string): string {
   const sep = String.fromCharCode(0);
   return createHash("sha256").update(target + sep + name).digest("base64url").slice(0, 12);
 }
+
+/** Carry conversation identity without requiring new relay metadata fields.
+ * The suffix keeps instances distinct so a prompt has exactly one recipient.
+ * Missing SDK identity preserves legacy clients and minimal test contexts. */
+export function roomIdForPiSession(
+  cwd: string, name: string | undefined, sessionId: string | undefined,
+  daemon = false,
+): string {
+  const route = roomIdFor(cwd, name);
+  if (!sessionId) return route;
+  const session = createHash("sha256").update(sessionId).digest("base64url").slice(0, 16);
+  return `pi_${session}_${daemon ? "d" : "i"}_${route}`;
+}

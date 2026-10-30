@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:app/domain/value_objects/session_room.dart';
 
 /// Lado menor (em pixels lógicos) a partir do qual o app entra no modo tablet
 /// de dois painéis (master + detail).
@@ -92,7 +93,9 @@ class SessionSelection extends ChangeNotifier {
   /// `true` se `(epk, roomId)` é a sessão selecionada agora.
   bool matches(String epk, String roomId) {
     final c = _current;
-    return c != null && c.epk == epk && c.roomId == roomId;
+    return c != null &&
+        c.epk == epk &&
+        conversationRoomId(c.roomId) == conversationRoomId(roomId);
   }
 
   /// Plan/32g — `device` é o nome do dispositivo pareado (nickname /

@@ -6,6 +6,7 @@ import 'package:app/ui/settings/states/settings_state.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:app/ui/settings/widgets/widgets.dart';
 import 'package:flutter/material.dart';
+import 'package:app/ui/update/widgets/update_settings_section.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -51,6 +52,8 @@ class SettingsPage extends StatelessWidget {
           const _RelaySection(),
           Divider(color: colors.border, height: 1),
           const _DisplaySection(),
+          Divider(color: colors.border, height: 1),
+          const UpdateSettingsSection(),
           Divider(color: colors.border, height: 1),
           const _SectionHeader('Pairings'),
           switch (state) {

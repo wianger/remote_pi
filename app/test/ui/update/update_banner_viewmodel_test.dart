@@ -42,15 +42,13 @@ class _FakeOpener implements UrlOpener {
   }
 }
 
-UpdateInfo _info(
-  String version, {
-  List<UpdateArtifact>? artifacts,
-}) =>
+UpdateInfo _info(String version, {List<UpdateArtifact>? artifacts}) =>
     UpdateInfo(
       version: version,
       date: '2026-06-12',
       notes: '',
-      artifacts: artifacts ??
+      artifacts:
+          artifacts ??
           const [
             UpdateArtifact(
               platform: 'android',
@@ -69,14 +67,13 @@ UpdateBannerViewModel _vm(
   String current = '1.1.0',
   _FakeDismissedStore? store,
   _FakeOpener? opener,
-}) =>
-    UpdateBannerViewModel(
-      checker,
-      store ?? _FakeDismissedStore(),
-      opener ?? _FakeOpener(),
-      currentVersion: current,
-      enabled: enabled,
-    );
+}) => UpdateBannerViewModel(
+  checker,
+  store ?? _FakeDismissedStore(),
+  opener ?? _FakeOpener(),
+  currentVersion: current,
+  enabled: enabled,
+);
 
 void main() {
   group('UpdateBannerViewModel.check — gating', () {
@@ -122,14 +119,17 @@ void main() {
       expect(vm.state, isA<UpdateBannerHidden>());
     });
 
-    test('dismissed an OLDER version → still Visible for the newer one', () async {
-      final vm = _vm(
-        _FakeChecker(_info('1.3.0')),
-        store: _FakeDismissedStore('1.2.0'),
-      );
-      await vm.check();
-      expect(vm.state, isA<UpdateBannerVisible>());
-    });
+    test(
+      'dismissed an OLDER version → still Visible for the newer one',
+      () async {
+        final vm = _vm(
+          _FakeChecker(_info('1.3.0')),
+          store: _FakeDismissedStore('1.2.0'),
+        );
+        await vm.check();
+        expect(vm.state, isA<UpdateBannerVisible>());
+      },
+    );
 
     test('check is idempotent per instance (single fetch)', () async {
       final checker = _FakeChecker(_info('1.2.0'));
@@ -161,6 +161,77 @@ void main() {
     });
   });
 
+  group('manual development update check', () {
+    test(
+      'build code detects a newer rebuild with the same visible version',
+      () async {
+        final info = UpdateInfo(
+          version: '1.2.1',
+          date: '',
+          notes: '',
+          artifacts: [],
+          buildNumber: 10,
+        );
+        final checker = _FakeChecker(info);
+        final vm = UpdateBannerViewModel(
+          checker,
+          _FakeDismissedStore('1.2.1'),
+          _FakeOpener(),
+          currentVersion: '1.2.1',
+          currentBuildNumber: 9,
+          enabled: true,
+        );
+        await vm.checkManually();
+        expect(vm.state, isA<UpdateBannerVisible>());
+        checker.result = UpdateInfo(
+          version: '1.2.1',
+          date: '',
+          notes: '',
+          artifacts: [],
+          buildNumber: 9,
+        );
+        await vm.checkManually();
+        expect(vm.state, isA<UpdateCheckCurrent>());
+      },
+    );
+    test(
+      'manual check bypasses dismissal and permits retry after API failure',
+      () async {
+        final checker = _FakeChecker(null);
+        final vm = _vm(checker, store: _FakeDismissedStore('1.2.0'));
+        await vm.checkManually();
+        expect(vm.state, isA<UpdateCheckFailed>());
+        checker.result = _info('1.2.0');
+        await vm.checkManually();
+        expect(vm.state, isA<UpdateBannerVisible>());
+        expect(checker.calls, 2);
+      },
+    );
+    test(
+      'a newer version with an older Android build code is not installable',
+      () async {
+        final vm = UpdateBannerViewModel(
+          _FakeChecker(
+            UpdateInfo(
+              version: '2.0.0',
+              date: '',
+              notes: '',
+              artifacts: [],
+              buildNumber: 8,
+            ),
+          ),
+          _FakeDismissedStore(),
+          _FakeOpener(),
+          currentVersion: '1.2.1',
+          currentBuildNumber: 9,
+          enabled: true,
+        );
+        await vm.checkManually();
+        expect(vm.state, isA<UpdateCheckCurrent>());
+      },
+    );
+  });
+
   group('UpdateBannerViewModel.download', () {
     test('opens the android/apk artifact url', () async {
       final opener = _FakeOpener();
@@ -188,7 +259,7 @@ void main() {
       final vm = _vm(_FakeChecker(info), opener: opener);
       await vm.check();
       await vm.download();
-      expect(opener.opened, ['https://remote-pi.jacobmoura.work/download']);
+      expect(opener.opened, ['https://github.com/wianger/remote_pi/releases']);
     });
   });
 }

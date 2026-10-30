@@ -32,7 +32,10 @@ class _UpdateBannerState extends State<UpdateBanner> {
   Widget build(BuildContext context) {
     final state = context.watch<UpdateBannerViewModel>().state;
     return switch (state) {
-      UpdateBannerHidden() => const SizedBox.shrink(),
+      UpdateBannerHidden() ||
+      UpdateCheckInProgress() ||
+      UpdateCheckCurrent() ||
+      UpdateCheckFailed() => const SizedBox.shrink(),
       UpdateBannerVisible(:final info) => _UpdateCard(info: info),
     };
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:app/config/utils/injector.dart';
 import 'package:app/data/actions/actions_repository.dart';
@@ -216,9 +217,9 @@ Future<void> setupDependencies() async {
       _injector.get<DismissedUpdateStore>(),
       _injector.get<UrlOpener>(),
       currentVersion: appVersion,
-      // Personal builds have a separate application id and signing identity.
-      // Upstream APK updates cannot update this app.
-      enabled: false,
+      // Only this fork's signed development APKs belong to this channel.
+      enabled: Platform.isAndroid,
+      currentBuildNumber: int.tryParse(packageInfo.buildNumber) ?? 0,
     ),
   );
 

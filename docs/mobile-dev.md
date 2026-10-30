@@ -140,3 +140,45 @@ required. CJK falls back to the device's installed sans fonts. Weight, italics,
 font size preferences and light/dark colors remain supported. The license
 notices are registered with Flutter's license page and shipped as APK assets.
 Pinned sources and SHA-256 checksums are in `app/assets/fonts/sources.json`.
+
+
+## GitHub development updates
+
+The Android app's Settings -> App updates -> Check for updates reads the fork's
+published GitHub Releases, including its development prereleases. Only tags
+`android-dev-v<version>+<versionCode>` with `RemotePi-Dev-Android.apk` are accepted.
+It shows release notes and opens the signed APK download in the browser; Android
+asks the user to install it over the existing app. No uninstall is needed.
+API/network failures are shown separately from an up-to-date result. GitHub's
+public API is used without storing a GitHub token in the mobile app.
+
+For each release, increment `app/pubspec.yaml`'s build number (including rebuilds
+of the same visible version), build with the existing private key, test, commit
+and push the explicit development branch. Then, from the clean Windows checkout:
+
+```powershell
+scripts/publish-android-dev-windows.ps1 -Apk "$env:USERPROFILE/Downloads/RemotePi-Dev-Android.apk" -NotesFile "$env:TEMP/remote-pi-release-notes.md" -Publish
+```
+
+Without `-Publish` the script creates a draft. It checks the pushed development
+commit, package id, versionCode/versionName, signing certificate, monotonically
+increasing version code and uploaded assets. Personal signing material stays on
+Windows and is never uploaded to GitHub. The old app needs one initial cover
+installation to gain this update entry. Future computer extension changes still
+need `git pull --ff-only`, `pnpm build` and Pi `/reload` (or restart).
+
+## Resumed Pi conversations
+
+Pi publishes a hashed SDK session id as part of its opaque room identifier.
+Mobile groups a daemon and a desktop resume of that exact conversation into one
+row and one message cache, preferring a live/working route, then the interactive
+route. Different conversations in the same directory remain independent, and
+commands always target one physical room. The existing relay needs no rebuild.
+Both Pi processes must load the new extension before this identity is available.
+Native `resume` still starts a separate Pi process; it does not attach its TUI to
+the supervisor's process. This change groups conversation views and routing,
+without merging the two processes or their in-memory agent state.
+
+For an already-running phone-created Pi daemon, wait until its turn finishes,
+then use `/remote-pi daemon restart <id>` (or omit the id to restart all).
+This reloads the development extension in the daemon as well as the desktop.
