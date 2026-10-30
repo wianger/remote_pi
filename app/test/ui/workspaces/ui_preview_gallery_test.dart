@@ -30,10 +30,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
-// Font-loading hooks keep the manual renderer offline.
-// ignore: implementation_imports
-import 'package:google_fonts/src/google_fonts_base.dart' as font_test;
 import 'package:provider/provider.dart';
 
 const _computer = PeerRecord(
@@ -112,7 +108,7 @@ class _Chat extends ViewModel<ChatState> implements ChatViewModel {
             AssistantMsg(
               id: 'a1',
               text:
-                  'The workspace is ready. You can:\n\n- Switch between Pi and Codex\n- Browse folders on your computer\n- Continue a session from your phone',
+                  'The workspace is *ready*. You can:\n\n- Switch between Pi and Codex\n- Browse folders on your computer\n- Continue a session from your phone',
             ),
             ToolEvent(
               id: 'tool',
@@ -125,7 +121,7 @@ class _Chat extends ViewModel<ChatState> implements ChatViewModel {
             AssistantMsg(
               id: 'a2',
               text:
-                  'Open **New session** in the sidebar to choose a folder and an agent.',
+                  'Open **New session** to choose a folder and an agent.\n\n中文回复也可阅读，代码使用 `pnpm test`。',
             ),
           ],
         ),
@@ -229,78 +225,26 @@ class _Workspaces extends IWorkspaceRepository {
   Future<void> restore(WorkspaceSelection? selection) async {}
 }
 
-class _FontAssets implements AssetManifest {
-  @override
-  List<String> listAssets() => ['preview/Inter-Bold.ttf'];
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
 Future<void> _fonts(WidgetTester tester) async {
-  final material = Platform.environment['REMOTE_PI_FONT_DIR']!;
-  Future<void> load(String family, List<File> files) async {
-    final loader = FontLoader(family);
-    for (final file in files) {
-      loader.addFont(file.readAsBytes().then(ByteData.sublistView));
-    }
-    await loader.load();
-  }
-
   await tester.runAsync(() async {
-    final sans = [
-      File('$material/roboto-regular.ttf'),
-      File('$material/roboto-bold.ttf'),
-    ];
-    await load('Ahem', sans);
-    await load('Roboto', sans);
-    await load(kReadingFamily, [
-      File(r'C:\Windows\Fonts\georgia.ttf'),
-      File(r'C:\Windows\Fonts\georgiab.ttf'),
-    ]);
-    final courier = File(r'C:\Windows\Fonts\cour.ttf');
-    await load(
-      kMonoFamily,
-      courier.existsSync()
-          ? [courier, File(r'C:\Windows\Fonts\courbd.ttf')]
-          : sans,
-    );
-    await load('MaterialIcons', [File('$material/materialicons-regular.otf')]);
-    for (final entry in {
-      'Lucide': 'lucide.ttf',
-      'Lucide600': 'build_font/LucideVariable-w600.ttf',
-    }.entries) {
-      final loader = FontLoader('packages/lucide_icons_flutter/${entry.key}')
-        ..addFont(
-          rootBundle.load(
-            'packages/lucide_icons_flutter/assets/${entry.value}',
-          ),
-        );
+    // Use exactly the packaged font manifest: no host Georgia/Courier or
+    // network fonts that could make previews differ from the Android APK.
+    final manifest =
+        jsonDecode(await rootBundle.loadString('FontManifest.json')) as List;
+    for (final entry in manifest) {
+      final loader = FontLoader(entry['family'] as String);
+      for (final face in entry['fonts'] as List) {
+        loader.addFont(rootBundle.load(face['asset'] as String));
+      }
       await loader.load();
     }
-    final data = ByteData.sublistView(
-      await File(Platform.environment['REMOTE_PI_INTER_FONT']!).readAsBytes(),
-    );
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    final oldManifest = font_test.assetManifest;
-    font_test.assetManifest = _FontAssets();
-    messenger.setMockMessageHandler('flutter/assets', (message) async {
-      final key = utf8.decode(
-        message!.buffer.asUint8List(
-          message.offsetInBytes,
-          message.lengthInBytes,
-        ),
-      );
-      if (key == 'preview/Inter-Bold.ttf') return data;
-      return null;
-    });
-    try {
-      GoogleFonts.inter(fontWeight: FontWeight.w700);
-      await GoogleFonts.pendingFonts();
-    } finally {
-      messenger.setMockMessageHandler('flutter/assets', null);
-      font_test.assetManifest = oldManifest;
-    }
+    // The test engine has no Android system fonts. Supply the open Noto CJK
+    // face used for this preview's device fallback; it is not an APK asset.
+    final cjk = Platform.environment['REMOTE_PI_PREVIEW_CJK_FONT'];
+    if (cjk == null) throw StateError('Set REMOTE_PI_PREVIEW_CJK_FONT');
+    final loader = FontLoader(kFontFallback.first)
+      ..addFont(File(cjk).readAsBytes().then(ByteData.sublistView));
+    await loader.load();
   });
 }
 
@@ -345,16 +289,7 @@ void main() {
       final foldersKey = GlobalKey();
       final light = Platform.environment['REMOTE_PI_PREVIEW_THEME'] == 'light';
       final theme = light ? buildLightTheme() : buildDarkTheme();
-      // Resolve Android's default sans font explicitly in the test engine,
-      // whose fallback family is Ahem instead of the device's Roboto.
-      final previewTheme = theme.copyWith(
-        platform: TargetPlatform.android,
-        appBarTheme: theme.appBarTheme.copyWith(
-          titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
-            fontFamily: 'Roboto',
-          ),
-        ),
-      );
+      final previewTheme = theme.copyWith(platform: TargetPlatform.android);
       Widget phone(String title, GlobalKey key, Widget child) => SizedBox(
         width: 412,
         child: Column(

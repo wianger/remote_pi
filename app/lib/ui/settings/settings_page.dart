@@ -72,6 +72,15 @@ class SettingsPage extends StatelessWidget {
           // peers/rooms already exist (PairingViewModel handles the
           // add path the same way as the first pair).
           const _AddPairingButton(),
+          Divider(color: colors.border, height: 1),
+          ListTile(
+            title: const Text('Open-source licenses'),
+            trailing: const Icon(LucideIcons.chevronRight, size: 18),
+            onTap: () => showLicensePage(
+              context: context,
+              applicationName: 'Remote Pi Dev',
+            ),
+          ),
         ],
       ),
     );
@@ -280,14 +289,8 @@ class _DisplaySection extends StatelessWidget {
                       value: ThemeMode.system,
                       label: Text('System'),
                     ),
-                    ButtonSegment(
-                      value: ThemeMode.light,
-                      label: Text('Light'),
-                    ),
-                    ButtonSegment(
-                      value: ThemeMode.dark,
-                      label: Text('Dark'),
-                    ),
+                    ButtonSegment(value: ThemeMode.light, label: Text('Light')),
+                    ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
                   ],
                   selected: {prefs.themeMode},
                   onSelectionChanged: (s) => prefs.setThemeMode(s.first),

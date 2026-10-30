@@ -78,8 +78,11 @@ For screenshots of the current Android UI with demonstration sessions, run
 with fixture ViewModels, without pairing or contacting an agent. It writes
 `overview.png`, `home.png`, `chat.png`, `sessions.png`, `new-session.png` and
 `activity-details.png` and `agent-picker.png` under
-`~/Downloads/RemotePi-UI-Preview`. The script only downloads the checked Inter
-font if it is not already cached; the widget renderer itself runs offline.
+`~/Downloads/RemotePi-UI-Preview`. The renderer loads the same bundled font
+manifest as the APK and runs offline. The helper caches a checksum-verified
+OFL Noto Sans CJK font to emulate Android's system fallback in the desktop
+renderer; this preview-only font is not shipped in the APK. The helper accepts
+`-FlutterRoot` if Scoop's `current` link is unavailable.
 The manual preview test is skipped in ordinary test runs.
 
 Use `-Theme light` for the warm light palette; `-Theme dark` is the default.
@@ -111,3 +114,14 @@ When testing a copied Windows snapshot, also copy
 test is skipped on other hosts. For an optional phone-sized folder chooser
 preview, set `REMOTE_PI_PREVIEW_DIR` and run
 `flutter test test/ui/workspaces/new_session_page_test.dart`.
+
+## Bundled fonts
+
+The Android UI uses Geist for controls, input and the wordmark, Source Serif 4
+for assistant prose, and Geist Mono for code, commands and paths. This is an
+open approximation of the Claude-like typography. All fonts are bundled under
+SIL OFL 1.1, including original copyright notices; no runtime font fetch is
+required. CJK falls back to the device's installed sans fonts. Weight, italics,
+font size preferences and light/dark colors remain supported. The license
+notices are registered with Flutter's license page and shipped as APK assets.
+Pinned sources and SHA-256 checksums are in `app/assets/fonts/sources.json`.

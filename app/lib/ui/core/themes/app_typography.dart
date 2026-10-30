@@ -1,34 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:app/ui/core/themes/app_colors.dart';
 
-/// Monospace family for code, commands and file paths. Navigation uses sans,
-/// while assistant prose uses the reading family below.
-///
-/// **To swap the app font, change this one line.** Bundle a real font in
-/// `pubspec.yaml` under this family name (e.g. JetBrains Mono) and it flows
-/// everywhere automatically. `'Courier'` is the platform fallback.
-const String kMonoFamily = 'Courier';
+/// Bundled OFL fonts. Interface, reading and code roles stay distinct.
+const String kSansFamily = 'Geist';
+const String kReadingFamily = 'Source Serif 4';
+const String kMonoFamily = 'Geist Mono';
 
-/// Sans family for body/system text. `null` → the platform default sans.
-/// Set to a bundled family name to override globally.
-const String? kSansFamily = null;
+/// CJK and other scripts use the device's installed sans fonts. Do not send
+/// Chinese text through a platform serif fallback when reading Latin prose.
+const List<String> kFontFallback = [
+  'Noto Sans CJK SC',
+  'Noto Sans SC',
+  'sans-serif',
+];
 
-/// Android resolves the generic serif family to its installed reading font.
-const String kReadingFamily = 'serif';
-
-/// Brand wordmark style — the "Remote Pi" marca. **Always Inter** (the
-/// wireframe's `RP_SANS`: `screens.jsx` renders the title in `RP_SANS` bold),
-/// served via the `google_fonts` package so it renders identically on iOS and
-/// Android. This is the ONE font that must stay constant everywhere the product
-/// name appears (Home title, onboarding, splash) — never substitute the
-/// mono/system font for it.
-///
-/// **To change the brand font, change this one call** (e.g. `GoogleFonts.x`).
-///
-/// Returns a runtime [TextStyle] (Google Fonts can't be `const`); pass the
-/// brightness-appropriate [color] from `context.colors.text`.
+/// The wordmark shares the bundled interface face and works fully offline.
 TextStyle brandTextStyle({
   required double fontSize,
   FontWeight fontWeight = FontWeight.w700,
@@ -36,7 +23,9 @@ TextStyle brandTextStyle({
   double? letterSpacing,
   double? height,
 }) {
-  return GoogleFonts.inter(
+  return TextStyle(
+    fontFamily: kSansFamily,
+    fontFamilyFallback: kFontFallback,
     fontSize: fontSize,
     fontWeight: fontWeight,
     color: color,
@@ -65,7 +54,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
   /// Primary monospace style (chat code, terminal chrome). Was `kMonoStyle`.
   final TextStyle mono;
 
-  /// Small monospace style (captions, metadata). Was `kMonoSmall`.
+  /// Small monospace style for paths and compact technical values.
   final TextStyle monoSmall;
 
   /// Sans body text. Was `kSansBody`.
@@ -74,6 +63,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
   /// Long responses use a reading face; terminal text stays monospace.
   TextStyle get reading => sansBody.copyWith(
     fontFamily: kReadingFamily,
+    fontFamilyFallback: kFontFallback,
     fontSize: 17,
     height: 1.65,
     letterSpacing: 0,
@@ -93,6 +83,7 @@ class AppTypography extends ThemeExtension<AppTypography> {
     return AppTypography(
       mono: TextStyle(
         fontFamily: kMonoFamily,
+        fontFamilyFallback: kFontFallback,
         fontSize: 12.5,
         color: monoColor,
         height: 1.5,
@@ -100,12 +91,14 @@ class AppTypography extends ThemeExtension<AppTypography> {
       ),
       monoSmall: TextStyle(
         fontFamily: kMonoFamily,
+        fontFamilyFallback: kFontFallback,
         fontSize: 12.0,
         color: c.muted2,
         height: 1.4,
       ),
       sansBody: TextStyle(
         fontFamily: kSansFamily,
+        fontFamilyFallback: kFontFallback,
         fontSize: 16.0,
         color: c.text,
         height: 1.5,

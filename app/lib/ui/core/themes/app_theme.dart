@@ -17,6 +17,8 @@ ThemeData _buildTheme({
 }) {
   return ThemeData(
     brightness: brightness,
+    fontFamily: kSansFamily,
+    fontFamilyFallback: kFontFallback,
     scaffoldBackgroundColor: colors.bg,
     colorScheme: ColorScheme(
       brightness: brightness,
@@ -50,7 +52,10 @@ ThemeData _buildTheme({
         letterSpacing: -0.2,
       ),
     ),
-    textTheme: TextTheme(bodyMedium: typo.sansBody, bodySmall: typo.monoSmall),
+    textTheme: TextTheme(
+      bodyMedium: typo.sansBody,
+      bodySmall: typo.sansBody.copyWith(fontSize: 12, color: colors.muted2),
+    ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: colors.inputFill,

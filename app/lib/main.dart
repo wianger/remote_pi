@@ -9,11 +9,13 @@ import 'package:app/pairing/storage.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/routing/app_router.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/themes/app_font_licenses.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerAppFontLicenses();
   // Plan 31 — open the v2 SSOT boxes + WIPE the volatile runtime box BEFORE
   // anything subscribes (#3 / Risk 2).
   await LocalBoxes.init();
