@@ -6,6 +6,7 @@ import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/home/states/home_state.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
+import 'package:app/ui/workspaces/widgets/scope_switchers.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -236,109 +237,32 @@ class _SessionSidebarState extends State<SessionSidebar> {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _ScopeSelector(
-                  label: 'Device',
-                  icon: LucideIcons.monitor,
-                  child: DropdownButton<String>(
-                    key: const Key('device-selector'),
-                    value: vm.selectedDevice,
-                    isExpanded: true,
-                    isDense: true,
-                    style: context.typo.sansBody.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    icon: Icon(
-                      LucideIcons.chevronDown,
-                      size: 16,
-                      color: colors.muted2,
-                    ),
-                    hint: const Text('Pair a device'),
-                    items: vm.devices.entries
-                        .map(
-                          (entry) => DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(
-                              entry.value.nickname ?? entry.value.sessionName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _choosing
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              _choose(() => vm.selectDevice(value));
-                            }
-                          },
-                  ),
+                child: DeviceSwitcher(
+                  key: const Key('device-selector'),
+                  devices: {
+                    for (final entry in vm.devices.entries)
+                      entry.key:
+                          entry.value.nickname ?? entry.value.sessionName,
+                  },
+                  selected: vm.selectedDevice,
+                  enabled: !_choosing,
+                  onSelected: (value) => _choose(() => vm.selectDevice(value)),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 14),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _ScopeSelector(
-                  label: 'Workspace',
-                  icon: LucideIcons.folder,
-                  child: DropdownButton<String>(
-                    key: const Key('workspace-selector'),
-                    value: vm.selectedWorkspace,
-                    isExpanded: true,
-                    isDense: true,
-                    style: context.typo.sansBody.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    icon: Icon(
-                      LucideIcons.chevronDown,
-                      size: 16,
-                      color: colors.muted2,
-                    ),
-                    hint: Text(
-                      vm.selectedDevice == null
-                          ? 'Choose a device first'
-                          : 'No workspaces yet',
-                    ),
-                    items: workspaces.entries.map((entry) {
-                      final path = entry.value.room.cwd ?? 'Other sessions';
-                      final parts = path
-                          .split(RegExp(r'[/\\]'))
-                          .where((part) => part.isNotEmpty);
-                      final label = parts.lastOrNull ?? path;
-                      final duplicate =
-                          workspaces.values
-                              .where(
-                                (item) =>
-                                    (item.room.cwd ?? 'Other sessions')
-                                        .split(RegExp(r'[/\\]'))
-                                        .where((part) => part.isNotEmpty)
-                                        .lastOrNull ==
-                                    label,
-                              )
-                              .length >
-                          1;
-                      return DropdownMenuItem(
-                        value: entry.key,
-                        child: Tooltip(
-                          message: path,
-                          child: Text(
-                            duplicate ? path : label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: _choosing
-                        ? null
-                        : (value) {
-                            if (value != null) {
-                              _choose(() => vm.selectWorkspace(value));
-                            }
-                          },
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: WorkspaceSwitcher(
+                  key: const Key('workspace-selector'),
+                  workspaces: {
+                    for (final entry in workspaces.entries)
+                      entry.key: entry.value.room.cwd ?? 'Other sessions',
+                  },
+                  selected: vm.selectedWorkspace,
+                  hasDevice: vm.selectedDevice != null,
+                  enabled: !_choosing,
+                  onSelected: (value) =>
+                      _choose(() => vm.selectWorkspace(value)),
                 ),
               ),
               Padding(
@@ -475,59 +399,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
       ),
     );
   }
-}
-
-class _ScopeSelector extends StatelessWidget {
-  const _ScopeSelector({
-    required this.label,
-    required this.icon,
-    required this.child,
-  });
-  final String label;
-  final IconData icon;
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-    decoration: BoxDecoration(
-      color: context.colors.inputFill.withValues(alpha: 0.72),
-      borderRadius: BorderRadius.circular(22),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: context.colors.selection,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, size: 17, color: context.colors.accent),
-        ),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: context.typo.sansBody.copyWith(
-                  fontSize: 12,
-                  color: context.colors.muted,
-                ),
-              ),
-              const SizedBox(height: 2),
-              ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 44),
-                child: DropdownButtonHideUnderline(child: child),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _SessionRow extends StatelessWidget {

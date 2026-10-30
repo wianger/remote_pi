@@ -261,3 +261,13 @@ launcher and startup surface now share the graphite/ivory/gold composition.
 The light and dark interface uses neutral primary actions, with gold reserved
 for the bird and limited text details. Semantic status colors are retained.
 Layer geometry, fonts, glass controls and session behavior are unchanged.
+
+## Context ring and scope controls (1.2.9 / build 17)
+
+The chat context button now displays a determinate usage ring and rounded
+percentage, and still opens the precise token usage sheet. It refreshes on
+connection, completed turns/idle message changes and app resume. Missing or
+offline usage shows a dash rather than zero, and the arc is bounded at 100%.
+Device selection uses a prominent monitor card and bottom sheet. Workspace
+selection uses a flat folder/path row and an anchored menu showing full paths.
+Both controls retain the existing scoped session list and saved selection.

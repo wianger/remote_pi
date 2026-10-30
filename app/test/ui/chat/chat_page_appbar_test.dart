@@ -16,6 +16,9 @@ import 'package:app/data/transport/channel.dart';
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:app/data/voice/speech_service.dart';
 import 'package:app/pairing/storage.dart';
+import 'package:app/domain/contracts/context_usage_repository.dart';
+import 'package:app/domain/entities/context_usage.dart';
+import 'package:app/ui/chat/context/viewmodels/context_usage_viewmodel.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
@@ -72,6 +75,11 @@ class _FakePicker implements IImagePickerService {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
+class _ContextRepository implements IContextUsageRepository {
+  @override
+  Future<ContextUsageSnapshot> fetch() async => const ContextUsageSnapshot();
+}
+
 void main() {
   late Directory dir;
   setUpAll(() async {
@@ -100,12 +108,14 @@ void main() {
       final voice = VoiceInputViewModel(_FakeSpeech());
       final attach = AttachmentViewModel(_FakePicker(), actions);
       final sel = SessionSelection();
+      final usage = ContextUsageViewModel(_ContextRepository());
 
       await tester.pumpWidget(
         MaterialApp(
           home: MultiProvider(
             providers: [
               ChangeNotifierProvider<ChatViewModel>.value(value: vm),
+              ChangeNotifierProvider<ContextUsageViewModel>.value(value: usage),
               ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
               ChangeNotifierProvider<AttachmentViewModel>.value(value: attach),
               ChangeNotifierProvider<Preferences>.value(value: prefs),
@@ -139,6 +149,7 @@ void main() {
       // before addTearDown; conn's watchdog must be cancelled here).
       await tester.pumpWidget(const SizedBox());
       vm.dispose();
+      usage.dispose();
       attach.dispose();
       voice.dispose();
       actions.dispose();

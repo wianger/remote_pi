@@ -307,6 +307,9 @@ void main() {
   testWidgets(
     'render Android chat, session drawer and folder chooser previews',
     (tester) async {
+      final disabledShadows = debugDisableShadows;
+      debugDisableShadows = false;
+      addTearDown(() => debugDisableShadows = disabledShadows);
       tester.view.physicalSize = const Size(1332, 1048);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -326,6 +329,7 @@ void main() {
           true,
         );
       final newSession = NewSessionViewModel(_Workspaces());
+      final contextVm = ContextUsageViewModel(_ContextRepository());
       final galleryKey = GlobalKey();
       final chatKey = GlobalKey();
       final drawerKey = GlobalKey();
@@ -366,6 +370,9 @@ void main() {
           providers: [
             ChangeNotifierProvider<HomeViewModel>.value(value: home),
             ChangeNotifierProvider<ChatViewModel>.value(value: chat),
+            ChangeNotifierProvider<ContextUsageViewModel>.value(
+              value: contextVm,
+            ),
             ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
             ChangeNotifierProvider<AttachmentViewModel>.value(
               value: attachment,
@@ -529,6 +536,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Sessions in this workspace'), findsOneWidget);
       await _save(tester, homeKey, '$output/home.png');
+      await tester.tap(find.byTooltip('Sessions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('device-selector')));
+      await tester.pumpAndSettle();
+      expect(find.text('Switch device'), findsOneWidget);
+      await _save(tester, homeKey, '$output/device-picker.png');
+      await tester.tap(find.byTooltip('Close device picker'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('workspace-selector')));
+      await tester.pumpAndSettle();
+      await _save(tester, homeKey, '$output/workspace-picker.png');
+      await tester.tapAt(const Offset(400, 850));
+      await tester.pumpAndSettle();
       final agentPickerKey = GlobalKey();
       await tester.pumpWidget(
         ChangeNotifierProvider<NewSessionViewModel>.value(
@@ -550,16 +570,15 @@ void main() {
       await _save(tester, agentPickerKey, '$output/agent-picker.png');
       await tester.tap(find.byTooltip('Close agent picker'));
       await tester.pumpAndSettle();
-      final contextVm = ContextUsageViewModel(_ContextRepository());
       await contextVm.refresh();
       final contextKey = GlobalKey();
       await tester.pumpWidget(
         MultiProvider(
           providers: [
+            ChangeNotifierProvider<ChatViewModel>.value(value: chat),
             ChangeNotifierProvider<ContextUsageViewModel>.value(
               value: contextVm,
             ),
-            ChangeNotifierProvider<ChatViewModel>.value(value: chat),
             ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
             ChangeNotifierProvider<AttachmentViewModel>.value(
               value: attachment,
@@ -580,7 +599,6 @@ void main() {
       await tester.tap(find.byTooltip('Context usage'));
       await tester.pumpAndSettle();
       await _save(tester, contextKey, '$output/context-usage.png');
-      contextVm.dispose();
       final brandKey = GlobalKey();
       await tester.pumpWidget(
         MaterialApp(
@@ -622,6 +640,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider<ChatViewModel>.value(value: chat),
+            ChangeNotifierProvider<ContextUsageViewModel>.value(
+              value: contextVm,
+            ),
             ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
             ChangeNotifierProvider<AttachmentViewModel>.value(
               value: attachment,
@@ -651,9 +672,11 @@ void main() {
         prefs,
         selection,
         newSession,
+        contextVm,
       ]) {
         notifier.dispose();
       }
+      debugDisableShadows = disabledShadows;
     },
     skip: output == null,
   );
