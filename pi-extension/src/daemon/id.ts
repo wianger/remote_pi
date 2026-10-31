@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
+import type { WorkspaceAgent } from "../workspace/types.js";
 
 /**
  * Stable 8-character hex id for a daemon, derived from the cwd it manages.
@@ -34,10 +35,10 @@ export function daemonIdForCwd(cwd: string): string {
   return createHash("sha256").update(target).digest("hex").slice(0, 8);
 }
 
-/** Keep existing Pi ids stable while allowing Codex in the same folder. */
-export function daemonIdForAgent(cwd: string, agent: "pi" | "codex" = "pi"): string {
+/** Keep existing Pi ids stable while allowing multiple agents in one folder. */
+export function daemonIdForAgent(cwd: string, agent: WorkspaceAgent = "pi"): string {
   if (agent === "pi") return daemonIdForCwd(cwd);
   let target: string;
   try { target = realpathSync(cwd); } catch { target = cwd; }
-  return createHash("sha256").update(`codex\0${target}`).digest("hex").slice(0, 8);
+  return createHash("sha256").update(`${agent}\0${target}`).digest("hex").slice(0, 8);
 }

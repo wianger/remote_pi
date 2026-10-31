@@ -187,6 +187,21 @@ describe("listDaemons", () => {
   test("empty registry yields []", () => {
     expect(listDaemons()).toEqual([]);
   });
+
+  test("keeps Pi, Codex and DeepSeek in one folder as distinct agents", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pi-agents-"));
+    addDaemon(dir);
+    addDaemon(dir, "Codex project", "codex");
+    addDaemon(dir, "DeepSeek project", "deepseek");
+    const entries = listDaemons();
+    expect(entries).toHaveLength(3);
+    expect(entries.map((entry) => entry.agent ?? "pi")).toEqual([
+      "pi",
+      "codex",
+      "deepseek",
+    ]);
+    expect(new Set(entries.map((entry) => entry.id)).size).toBe(3);
+  });
 });
 
 describe("migrateRegistryNames", () => {

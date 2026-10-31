@@ -1,6 +1,7 @@
 import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
+import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:app/domain/value_objects/session_room.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
@@ -151,7 +152,7 @@ class ChatPage extends StatelessWidget {
         ? prefs.sessionName(peer.remoteEpk, room.roomId)
         : null;
     final displayName = localName ?? roomName;
-    final title = displayName.replaceFirst('Codex · ', '');
+    final title = workspaceSessionTitle(displayName);
     final device = _peerDisplayName(peer, initialDevice);
     final statusColor = working
         ? colors.working
@@ -475,10 +476,9 @@ class ChatPage extends StatelessWidget {
 
     return InputBar(
       key: const ValueKey('chat-floating-composer'),
-      agentLabel:
-          (vm.activeRoom?.name ?? initialTitle ?? '').startsWith('Codex · ')
-          ? 'Codex'
-          : 'Pi',
+      agentLabel: workspaceAgentLabelForRoom(
+        vm.activeRoom?.name ?? initialTitle,
+      ),
       modelLabel: vm.activeRoom?.model ?? 'Model',
       disabled:
           !isReady ||

@@ -82,7 +82,11 @@ class ContextUsageSheet extends StatelessWidget {
                   ),
                 const SizedBox(height: 16),
                 Text(
-                  'Reported by ${state.usage.source == 'codex' ? 'Codex' : 'Pi'}. Token usage is an estimate and may be unavailable before the first response or just after compaction.',
+                  'Reported by ${switch (state.usage.source) {
+                    'codex' => 'Codex',
+                    'deepseek' => 'DeepSeek',
+                    _ => 'Pi',
+                  }}. Token usage is an estimate and may be unavailable before the first response or just after compaction.',
                   style: context.typo.sansBody.copyWith(
                     color: context.colors.muted,
                     fontSize: 12,

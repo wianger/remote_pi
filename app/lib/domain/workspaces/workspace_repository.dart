@@ -20,6 +20,11 @@ class WorkspaceAgent {
     label: 'Codex',
     description: 'Codex coding agent',
   );
+  static const deepseek = WorkspaceAgent(
+    id: 'deepseek',
+    label: 'DeepSeek',
+    description: 'DeepSeek Harness',
+  );
   final String id;
   final String label;
   final String description;
@@ -31,6 +36,33 @@ class WorkspaceAgent {
   @override
   int get hashCode => id.hashCode;
 }
+
+const _workspaceAgentPrefixes = <String, String>{
+  'Pi': 'Pi',
+  'Codex': 'Codex',
+  'DeepSeek': 'DeepSeek',
+};
+
+/// Agent label encoded in a legacy room name such as `Codex · project`.
+String? workspaceAgentLabelFromRoomName(String? roomName) {
+  if (roomName == null) return null;
+  for (final label in _workspaceAgentPrefixes.keys) {
+    if (roomName.startsWith('$label · ')) return label;
+  }
+  return null;
+}
+
+/// Room title without the agent prefix. Unprefixed Pi rooms stay unchanged.
+String workspaceSessionTitle(String? roomName) {
+  final label = workspaceAgentLabelFromRoomName(roomName);
+  return label == null
+      ? (roomName ?? '')
+      : roomName!.substring(label.length + 3);
+}
+
+/// Agent label for a room, preserving the legacy unprefixed Pi convention.
+String workspaceAgentLabelForRoom(String? roomName) =>
+    workspaceAgentLabelFromRoomName(roomName) ?? 'Pi';
 
 class WorkspaceHost {
   const WorkspaceHost({

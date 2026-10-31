@@ -1,5 +1,5 @@
 /** Shared, SDK-independent contract for opening an agent in a host folder. */
-export type WorkspaceAgent = "pi" | "codex";
+export type WorkspaceAgent = "pi" | "codex" | "deepseek";
 
 export interface WorkspaceAgentInfo {
   id: WorkspaceAgent;

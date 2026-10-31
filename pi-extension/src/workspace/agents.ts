@@ -8,6 +8,7 @@ export const workspaceAgents: ReadonlyArray<{
 }> = [
   { id: "pi", name: "Pi", command: "pi", description: "Pi coding agent" },
   { id: "codex", name: "Codex", command: "codex", description: "Codex coding agent" },
+  { id: "deepseek", name: "DeepSeek", command: "dsh", description: "DeepSeek Harness" },
 ];
 
 export function workspaceAgentDefinition(id: unknown) {

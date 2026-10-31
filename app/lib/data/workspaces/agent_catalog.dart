@@ -20,13 +20,14 @@ List<WorkspaceAgent> decodeWorkspaceAgents(Object? raw) {
   return List.unmodifiable(agents.values);
 }
 
-/// Old room announcements lack an agent id. Only use their legacy naming
-/// convention for Pi/Codex; other ids must be resolved by the computer.
+/// Old room announcements lack an agent id. Use only known legacy prefixes;
+/// other ids must be resolved by the computer.
 bool matchesLegacyWorkspaceAgent(String? roomName, WorkspaceAgent agent) {
-  final codex = roomName?.startsWith('Codex · ') == true;
+  final prefix = workspaceAgentLabelFromRoomName(roomName);
   return switch (agent.id) {
-    'pi' => !codex,
-    'codex' => codex,
+    'pi' => prefix == null || prefix == 'Pi',
+    'codex' => prefix == 'Codex',
+    'deepseek' => prefix == 'DeepSeek',
     _ => false,
   };
 }

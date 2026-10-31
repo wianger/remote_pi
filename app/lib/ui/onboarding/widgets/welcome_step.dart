@@ -42,7 +42,7 @@ class WelcomeStep extends StatelessWidget {
           const SizedBox(height: 28),
           Text(
             'Pair your computer, choose a workspace, and continue '
-            'your Pi or Codex conversations wherever you are.',
+            'your coding-agent conversations wherever you are.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kMonoFamily,

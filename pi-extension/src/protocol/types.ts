@@ -354,7 +354,7 @@ export type ServerMessage =
   // highlight the selected row without a second round-trip.
   | { type: "action_ok"; in_reply_to: string; action: ActionName }
   | { type: "action_error"; in_reply_to: string; action: ActionName; error: string }
-  | { type: "context_usage"; in_reply_to: string; tokens: number | null; context_window: number | null; percent: number | null; source: "pi" | "codex" }
+  | { type: "context_usage"; in_reply_to: string; tokens: number | null; context_window: number | null; percent: number | null; source: "pi" | "codex" | "deepseek" }
   | { type: "models_list"; in_reply_to: string; models: WireModel[]; current?: WireModel }
   | {
       type: "commands_list";

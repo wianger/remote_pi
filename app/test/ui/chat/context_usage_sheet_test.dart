@@ -70,4 +70,30 @@ void main() {
       expect(find.byType(LinearProgressIndicator), findsNothing);
     },
   );
+
+  testWidgets('context sheet identifies DeepSeek Harness as the source', (
+    tester,
+  ) async {
+    final vm = ContextUsageViewModel(
+      _Repo(
+        const ContextUsageSnapshot(
+          tokens: 10_000,
+          window: 100_000,
+          source: 'deepseek',
+        ),
+      ),
+    );
+    addTearDown(vm.dispose);
+    await vm.refresh();
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: vm,
+        child: MaterialApp(
+          theme: buildLightTheme(),
+          home: const Scaffold(body: ContextUsageSheet()),
+        ),
+      ),
+    );
+    expect(find.textContaining('Reported by DeepSeek.'), findsOneWidget);
+  });
 }

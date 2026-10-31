@@ -24,7 +24,11 @@ describe("mobile folder browsing", () => {
     expect(JSON.stringify(listing)).not.toContain("PRIVATE TEST CONTENT");
     expect(listing.path).toBe(realpathSync(root));
     expect(listing.parent).toBe(dirname(realpathSync(root)));
-    expect(listing.agents.map((agent) => agent.id)).toEqual(["pi", "codex"]);
+    expect(listing.agents.map((agent) => agent.id)).toEqual([
+      "pi",
+      "codex",
+      "deepseek",
+    ]);
   });
 
   test("hidden folders are opt-in", async () => {

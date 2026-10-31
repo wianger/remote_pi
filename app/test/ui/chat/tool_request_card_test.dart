@@ -104,7 +104,7 @@ void main() {
     await tester.pump();
     expect(find.text('Done'), findsNothing);
   });
-  testWidgets('Codex paused approval sends one explicit allow decision', (
+  testWidgets('paused agent approval sends one explicit allow decision', (
     tester,
   ) async {
     ApproveDecision? decision;

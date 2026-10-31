@@ -5,6 +5,17 @@ import { daemonIdForAgent } from "./id.js";
 import type { WorkspaceAgent } from "../workspace/types.js";
 import { defaultAgentName } from "../session/local_config.js";
 
+function isAgent(value: unknown): value is WorkspaceAgent {
+  return value === "pi" || value === "codex" || value === "deepseek";
+}
+
+function defaultDaemonName(cwd: string, agent: WorkspaceAgent): string {
+  const folder = defaultAgentName(cwd);
+  if (agent === "codex") return `Codex · ${folder}`;
+  if (agent === "deepseek") return `DeepSeek · ${folder}`;
+  return folder;
+}
+
 /**
  * The global daemon registry: which working directories are promoted to
  * always-on daemons under the supervisor.
@@ -84,7 +95,8 @@ export function loadRegistry(): DaemonRegistry {
         const rawName = (item as { name?: unknown }).name;
         const entry: DaemonEntry = { cwd };
         if (typeof rawName === "string" && rawName.length > 0) entry.name = rawName;
-        if ((item as { agent?: unknown }).agent === "codex") entry.agent = "codex";
+        const rawAgent = (item as { agent?: unknown }).agent;
+        if (isAgent(rawAgent) && rawAgent !== "pi") entry.agent = rawAgent;
         daemons.push(entry);
       }
     }
@@ -112,8 +124,8 @@ export function addDaemon(rawCwd: string, name?: string, agent: WorkspaceAgent =
   }
   // Always persist a name (the registry is the source of truth now that the
   // supervisor injects config via env instead of a local config file).
-  const resolvedName = name?.trim() || (agent === "codex" ? `Codex · ${defaultAgentName(cwd)}` : defaultAgentName(cwd));
-  reg.daemons.push({ cwd, name: resolvedName, ...(agent === "codex" ? { agent } : {}) });
+  const resolvedName = name?.trim() || defaultDaemonName(cwd, agent);
+  reg.daemons.push({ cwd, name: resolvedName, ...(agent !== "pi" ? { agent } : {}) });
   saveRegistry(reg);
   return { id: daemonIdForAgent(cwd, agent), cwd, name: resolvedName };
 }
@@ -141,7 +153,7 @@ export function listDaemons(): Array<{ id: string; cwd: string; name: string; ag
     // Legacy entries (cwd only) fall back to the folder-derived name so a
     // daemon is never nameless. New entries already carry an explicit name.
     name: d.name ?? defaultAgentName(d.cwd),
-    ...(d.agent === "codex" ? { agent: d.agent } : {}),
+    ...(d.agent && d.agent !== "pi" ? { agent: d.agent } : {}),
   }));
 }
 

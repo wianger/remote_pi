@@ -99,7 +99,7 @@ class AboutPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'A focused remote client for Pi and Codex sessions on your '
+                  'A focused remote client for coding-agent sessions on your '
                   'own computers.',
                   textAlign: TextAlign.center,
                   style: context.typo.sansBody.copyWith(

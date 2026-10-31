@@ -347,3 +347,44 @@ Compact and fresh-session actions live in that palette instead of permanent
 chat buttons. A user turn groups all of its completed tool calls into one
 Claude-mobile-style run row and detail sheet. Final assistant text contains one
 copy action rather than one per tool-separated segment.
+
+## Settings drill-down (1.2.13 / build 21)
+
+The Settings root is now a compact index. Connection, Chat and appearance, and
+Information each expose one glass entry with a current-state summary and a
+single disclosure action. Relay URL editing, theme, text size and tool-call
+visibility open on dedicated detail screens, so the root no longer mixes
+configuration controls with navigation. App update checks, project links,
+licenses and contributor details remain under the single About entry.
+
+## DeepSeek Harness
+
+Remote Pi supports DeepSeek Harness as a third agent adapter alongside Pi and
+Codex. The desktop host launches the official ACP stdio server with
+`dsh --profile acp`; it does not implement DeepSeek's provider API directly and
+does not persist an API key. Configure the provider through DeepSeek Harness's
+official setup before opening a DeepSeek workspace.
+
+Install the published CLI on the computer:
+
+```powershell
+npm install -g @deepseek-ai/dsh
+dsh web
+```
+
+Finish the provider sign-in/API-key flow in the official `dsh web` interface,
+then stop it and verify that `dsh` is on the same `PATH` as the supervised Remote
+Pi host. The current DeepSeek package requires Node.js 24.9 or newer. A custom
+executable can be selected with the `REMOTE_PI_DSH_BIN` environment variable.
+
+DeepSeek workspaces use their own daemon id, room name (`DeepSeek · folder`) and
+stored ACP session id, so Pi, Codex and DeepSeek can run in the same directory.
+Remote Pi maps ACP text and thought chunks, tool lifecycle updates, one-shot
+permission requests, model and reasoning choices, context usage, cancellation,
+new sessions and persisted resume to the existing mobile UI.
+
+ACP intentionally exposes DeepSeek's automation surface rather than its
+interactive presentation layer. Remote Pi therefore does not expose ACP context
+compaction, elicitation/`ask_user`, plans or terminal-client callbacks for this
+adapter. Those controls should be treated as unavailable for DeepSeek rather
+than silently emulated.

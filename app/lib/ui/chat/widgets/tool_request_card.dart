@@ -150,7 +150,7 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
                   const SizedBox(height: 12),
                   if (_needsApproval) ...[
                     Text(
-                      'Codex is waiting for your approval.',
+                      'The agent is waiting for your approval.',
                       style: TextStyle(color: colors.text, fontSize: 13),
                     ),
                     const SizedBox(height: 12),

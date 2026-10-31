@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { daemonIdForCwd } from "./id.js";
+import { daemonIdForAgent, daemonIdForCwd } from "./id.js";
 
 describe("daemonIdForCwd", () => {
   test("deterministic for the same cwd", () => {
@@ -35,4 +35,13 @@ describe("daemonIdForCwd", () => {
     const id = daemonIdForCwd("/no/such/path/anywhere/xyz");
     expect(id).toMatch(/^[0-9a-f]{8}$/);
   });
+});
+
+test("Pi, Codex and DeepSeek coexist in the same folder without changing Pi ids", () => {
+  const cwd = "/tmp/shared-folder";
+  const pi = daemonIdForAgent(cwd, "pi");
+  const codex = daemonIdForAgent(cwd, "codex");
+  const deepseek = daemonIdForAgent(cwd, "deepseek");
+  expect(pi).toBe(daemonIdForCwd(cwd));
+  expect(new Set([pi, codex, deepseek]).size).toBe(3);
 });

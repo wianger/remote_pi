@@ -26,7 +26,10 @@ export async function availableAgents(
   resolveExecutable: (command: string) => Promise<string | null> = findExecutable,
 ): Promise<WorkspaceAgentInfo[]> {
   return Promise.all(workspaceAgents.map(async ({ id, name, command, description }) => {
-    const available = await resolveExecutable(command) !== null;
+    const override = id === "deepseek"
+      ? process.env["REMOTE_PI_DSH_BIN"]?.trim()
+      : undefined;
+    const available = await resolveExecutable(override || command) !== null;
     return { id, name, description, available,
       ...(!available ? { reason: `${name} is not installed on this computer.` } : {}) };
   }));

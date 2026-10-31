@@ -8,6 +8,7 @@ import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/workspaces/session_dialogs.dart';
 import 'package:app/ui/workspaces/widgets/scope_switchers.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
+import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -653,10 +654,8 @@ class _SessionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final codex = item.room.name?.startsWith('Codex · ') == true;
-    final title = codex
-        ? displayName.replaceFirst('Codex · ', '')
-        : displayName;
+    final agentLabel = workspaceAgentLabelForRoom(item.room.name);
+    final title = workspaceSessionTitle(displayName);
     final statusColor = working
         ? colors.working
         : online
@@ -695,7 +694,7 @@ class _SessionRow extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    codex ? 'Codex' : 'Pi',
+                    agentLabel,
                     style: TextStyle(fontSize: 11, color: colors.muted2),
                   ),
                   const SizedBox(width: 10),

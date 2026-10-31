@@ -231,6 +231,13 @@ export function rpcSpawnArgs(
   ];
 }
 
+/** Which out-of-process host entrypoint runs an agent adapter. */
+export function hostEntryForAgent(agent: WorkspaceAgent | undefined): string | null {
+  if (agent === "codex") return "codex-session.js";
+  if (agent === "deepseek") return "deepseek-session.js";
+  return null;
+}
+
 export class RpcChild extends EventEmitter {
   private child: ChildProcess | null = null;
   private _state: DaemonState = "stopped";
@@ -276,8 +283,8 @@ export class RpcChild extends EventEmitter {
     this._busy = false;
     this._state = "starting";
 
-    const isCodex = this.opts.agent === "codex";
-    const piTarget = isCodex
+    const externalHost = this.opts.agent === "codex" || this.opts.agent === "deepseek";
+    const piTarget = externalHost
       ? { command: process.execPath, prefixArgs: [] }
       : resolvePiSpawn(this.opts.piBin ?? "pi");
     // Name the (single) daemon session after the daemon's configured identity,
@@ -289,8 +296,9 @@ export class RpcChild extends EventEmitter {
     this.forceFreshSessionOnNextSpawn = false;
     // On Windows `prefixArgs` carries pi's cli.js (we spawn node directly); on
     // POSIX it's empty and `command` is `pi` itself.
-    const args = isCodex
-      ? [join(dirname(this.opts.extensionPath), "bin", "codex-session.js")]
+    const hostEntry = hostEntryForAgent(this.opts.agent);
+    const args = hostEntry
+      ? [join(dirname(this.opts.extensionPath), "bin", hostEntry)]
       : [...piTarget.prefixArgs, ...rpcSpawnArgs(this.opts.extensionPath, sessionName, useContinue)];
     const env: NodeJS.ProcessEnv = {
       ...process.env,

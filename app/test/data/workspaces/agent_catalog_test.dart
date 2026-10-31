@@ -45,6 +45,16 @@ void main() {
         matchesLegacyWorkspaceAgent('Codex · project', WorkspaceAgent.codex),
         true,
       );
+      expect(matchesLegacyWorkspaceAgent('DeepSeek · project', future), false);
+      expect(
+        matchesLegacyWorkspaceAgent(
+          'DeepSeek · project',
+          WorkspaceAgent.deepseek,
+        ),
+        true,
+      );
+      expect(workspaceSessionTitle('DeepSeek · project'), 'project');
+      expect(workspaceAgentLabelForRoom('DeepSeek · project'), 'DeepSeek');
     },
   );
 }

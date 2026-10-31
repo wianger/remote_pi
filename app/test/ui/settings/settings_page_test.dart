@@ -45,40 +45,107 @@ class _Channel implements IChannel {
   Future<void> close() async {}
 }
 
-void main() {
-  testWidgets('settings no longer duplicates pairing management', (
-    tester,
-  ) async {
-    final storage = _Storage();
-    final prefs = Preferences(_SecureStorage());
-    final conn = ConnectionManager(
+class _SettingsFixture {
+  _SettingsFixture()
+    : storage = _Storage(),
+      prefs = Preferences(_SecureStorage()) {
+    conn = ConnectionManager(
       storage: storage,
       factory: (_, _) async => _Channel(),
     );
-    final vm = SettingsViewModel(storage, prefs, conn);
+    vm = SettingsViewModel(storage, prefs, conn);
+  }
 
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<SettingsViewModel>.value(value: vm),
-          ChangeNotifierProvider<Preferences>.value(value: prefs),
-        ],
-        child: MaterialApp(
-          theme: buildLightTheme(),
-          home: const SettingsPage(),
-        ),
-      ),
+  final _Storage storage;
+  final Preferences prefs;
+  late final ConnectionManager conn;
+  late final SettingsViewModel vm;
+
+  Widget build() {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<SettingsViewModel>.value(value: vm),
+        ChangeNotifierProvider<Preferences>.value(value: prefs),
+      ],
+      child: MaterialApp(theme: buildLightTheme(), home: const SettingsPage()),
     );
-    await tester.pump();
+  }
 
-    expect(find.text('Pairings'), findsNothing);
-    expect(find.text('Add new pairing'), findsNothing);
-    expect(find.text('RELAY'), findsOneWidget);
-    expect(find.text('About'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
+  void dispose() {
     vm.dispose();
     conn.dispose();
     prefs.dispose();
+  }
+}
+
+Future<_SettingsFixture> _pumpSettings(WidgetTester tester) async {
+  final fixture = _SettingsFixture();
+  await tester.pumpWidget(fixture.build());
+  await tester.pump();
+  return fixture;
+}
+
+Future<void> _disposeSettings(
+  WidgetTester tester,
+  _SettingsFixture fixture,
+) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  fixture.dispose();
+  await tester.pump();
+}
+
+void main() {
+  testWidgets('settings home exposes one entry per section', (tester) async {
+    final fixture = await _pumpSettings(tester);
+
+    expect(find.text('Pairings'), findsNothing);
+    expect(find.text('Add new pairing'), findsNothing);
+    expect(find.byKey(const Key('settings-relay')), findsOneWidget);
+    expect(find.byKey(const Key('settings-display')), findsOneWidget);
+    expect(find.byKey(const Key('settings-about')), findsOneWidget);
+
+    expect(find.byKey(const Key('relay-url')), findsNothing);
+    expect(find.byKey(const Key('theme-selector')), findsNothing);
+    expect(find.byKey(const Key('font-scale-selector')), findsNothing);
+    expect(find.byKey(const Key('hide-tool-calls')), findsNothing);
+
+    await _disposeSettings(tester, fixture);
+  });
+
+  testWidgets('relay details open from the single relay entry', (tester) async {
+    final fixture = await _pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('settings-relay')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Relay'), findsWidgets);
+    expect(find.byKey(const Key('relay-url')), findsOneWidget);
+    expect(find.byKey(const Key('relay-save')), findsOneWidget);
+    expect(find.byKey(const Key('relay-use-default')), findsOneWidget);
+    expect(find.byKey(const Key('theme-selector')), findsNothing);
+
+    await _disposeSettings(tester, fixture);
+  });
+
+  testWidgets('display details open from the single display entry', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final fixture = await _pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('settings-display')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Display and conversation'), findsWidgets);
+    expect(find.byKey(const Key('theme-selector')), findsOneWidget);
+    expect(find.byKey(const Key('font-scale-selector')), findsOneWidget);
+    expect(find.byKey(const Key('hide-tool-calls')), findsOneWidget);
+    expect(find.byKey(const Key('relay-url')), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await _disposeSettings(tester, fixture);
   });
 }

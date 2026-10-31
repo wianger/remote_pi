@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RpcChild, busyTransition, resolvePiBin, resolvePiSpawn, _npmShimTarget, _managedPiTarget, rpcSpawnArgs, type RpcChildExitEvent } from "./rpc_child.js";
+import { RpcChild, busyTransition, hostEntryForAgent, resolvePiBin, resolvePiSpawn, _npmShimTarget, _managedPiTarget, rpcSpawnArgs, type RpcChildExitEvent } from "./rpc_child.js";
 
 /**
  * Regression for the orphaned-daemon bug: a deliberate `stop()` kills the
@@ -36,6 +36,12 @@ describe("rpcSpawnArgs", () => {
     expect(rpcSpawnArgs("/path/to/dist/index.js")).toContain("--approve");
     expect(rpcSpawnArgs("/path/to/dist/index.js", "PC", false)).toContain("--approve");
   });
+});
+
+test("external agent adapters use their own host entrypoints", () => {
+  expect(hostEntryForAgent("pi")).toBeNull();
+  expect(hostEntryForAgent("codex")).toBe("codex-session.js");
+  expect(hostEntryForAgent("deepseek")).toBe("deepseek-session.js");
 });
 
 describe("RpcChild — deliberate stop is not a crash", () => {

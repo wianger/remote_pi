@@ -288,7 +288,7 @@ export class Supervisor {
         cwd: entry.cwd,
         name,
         state: slot?.child.state ?? "stopped",
-        ...(entry.agent === "codex" ? { agent: entry.agent } : {}),
+        ...(entry.agent && entry.agent !== "pi" ? { agent: entry.agent } : {}),
       };
       if (slot) {
         if (slot.child.pid !== undefined) info.pid = slot.child.pid;
