@@ -2,11 +2,13 @@ import 'dart:convert';
 
 import 'package:app/domain/session_state.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Collapsed summary for consecutive completed tool calls. The shape follows
-/// the Claude mobile pattern: one quiet row, one sheet with every action.
+/// Collapsed summary for completed tool calls in one user turn. Text segments
+/// may separate the calls; the shape still follows the Claude mobile pattern
+/// with one quiet row and one sheet containing every action.
 class ToolRunGroup extends StatelessWidget {
   const ToolRunGroup({super.key, required this.tools});
 
@@ -72,75 +74,109 @@ class ToolRunGroup extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       showDragHandle: false,
-      backgroundColor: context.colors.surface,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .38),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(34)),
       ),
       builder: (sheetContext) {
         final colors = sheetContext.colors;
-        return SafeArea(
-          top: false,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(sheetContext).height * .82,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip: 'Close',
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                        icon: const Icon(LucideIcons.x, size: 20),
+        return BayaGlassSurface(
+          radius: 34,
+          elevated: false,
+          child: SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * .82,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: colors.border,
+                        borderRadius: BorderRadius.all(Radius.circular(2)),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _summary,
-                          style: sheetContext.typo.title.copyWith(fontSize: 18),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      itemCount: tools.length,
-                      separatorBuilder: (_, _) =>
-                          Divider(height: 1, indent: 42, color: colors.border),
-                      itemBuilder: (_, index) {
-                        final tool = tools[index];
-                        return ListTile(
-                          leading: Icon(
-                            _iconFor(tool),
-                            size: 19,
-                            color: colors.muted2,
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        SizedBox.square(
+                          dimension: 42,
+                          child: IconButton.filledTonal(
+                            tooltip: 'Close',
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(LucideIcons.x, size: 20),
                           ),
-                          title: Text(_labelFor(tool)),
-                          subtitle: Text(
-                            _preview(tool),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: sheetContext.typo.sansBody.copyWith(
-                              color: colors.muted,
-                              fontSize: 12,
+                        ),
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              _summary,
+                              style: sheetContext.typo.title.copyWith(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                          trailing: Icon(
-                            LucideIcons.chevronRight,
-                            size: 17,
-                            color: colors.muted,
-                          ),
-                          onTap: () => _showDetail(sheetContext, tool),
-                        );
-                      },
+                        ),
+                        const SizedBox(width: 42),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: Material(
+                        color: colors.surface.withValues(alpha: .62),
+                        borderRadius: BorderRadius.circular(24),
+                        clipBehavior: Clip.antiAlias,
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: tools.length,
+                          separatorBuilder: (_, _) => Divider(
+                            height: 1,
+                            indent: 48,
+                            color: colors.border.withValues(alpha: .7),
+                          ),
+                          itemBuilder: (_, index) {
+                            final tool = tools[index];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 5,
+                              ),
+                              leading: Icon(
+                                _iconFor(tool),
+                                size: 19,
+                                color: colors.muted2,
+                              ),
+                              title: Text(_labelFor(tool)),
+                              subtitle: Text(
+                                _preview(tool),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: sheetContext.typo.sansBody.copyWith(
+                                  color: colors.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: Icon(
+                                LucideIcons.chevronRight,
+                                size: 17,
+                                color: colors.muted,
+                              ),
+                              onTap: () => _showDetail(sheetContext, tool),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -214,32 +250,36 @@ class ToolRunGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final failed = tools.any((t) => t.status == ToolEventStatus.failed);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _open(context),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Row(
-            children: [
-              Icon(
-                failed ? LucideIcons.circleAlert : _icon,
-                size: 19,
-                color: failed ? colors.error : colors.muted2,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _summary,
-                  style: context.typo.sansBody.copyWith(
-                    color: failed ? colors.error : colors.muted2,
-                    fontSize: 13,
+    return BayaGlassSurface(
+      radius: 18,
+      elevated: false,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _open(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 13),
+            child: Row(
+              children: [
+                Icon(
+                  failed ? LucideIcons.circleAlert : _icon,
+                  size: 19,
+                  color: failed ? colors.error : colors.muted2,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _summary,
+                    style: context.typo.sansBody.copyWith(
+                      color: failed ? colors.error : colors.muted2,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
-              ),
-              Icon(LucideIcons.chevronRight, size: 16, color: colors.muted),
-            ],
+                Icon(LucideIcons.chevronRight, size: 16, color: colors.muted),
+              ],
+            ),
           ),
         ),
       ),

@@ -17,9 +17,11 @@ class PersistedRoom {
   final String? name;
   final String? cwd;
   final int startedAt;
+
   /// Local-only override for [name]. When non-null, takes precedence
   /// in UI (long-press rename).
   final String? localName;
+
   /// Plan 18 — last-known model the Pi-extension is running with.
   /// Persisted so the subtitle survives cold starts.
   final String? model;
@@ -65,9 +67,7 @@ class PersistedRoom {
     localName: identical(localName, _unset)
         ? this.localName
         : localName as String?,
-    model: identical(model, _unset)
-        ? this.model
-        : model as String?,
+    model: identical(model, _unset) ? this.model : model as String?,
   );
 }
 
@@ -88,12 +88,14 @@ class PeerRecord {
   // Local-only display label (Pi does not know about this). Renders in
   // place of [sessionName] when set; null = use sessionName everywhere.
   final String? nickname;
+
   /// Plan 17 fix — Pi-side room id (cwd-session) this pairing is bound
   /// to. Set from `PairOk.roomId` on pair, or discovered lazily via
   /// `subscribe_rooms` for legacy peers persisted before this fix.
   /// `null` = not yet discovered; outbound sends fall back to 'main'
   /// while ConnectionManager runs the discovery once.
   final String? roomId;
+
   /// Plan/27 Wave A — agent harness reported by the PC at pair time.
   /// Surfaced as the "via Pi coding agent" subtitle on the PiCard.
   /// `null` for PeerRecords saved before the field existed; consumers
@@ -153,15 +155,9 @@ class PeerRecord {
     sessionName: sessionName ?? this.sessionName,
     relayUrl: relayUrl,
     pairedAt: pairedAt,
-    nickname: identical(nickname, _unset)
-        ? this.nickname
-        : nickname as String?,
-    roomId: identical(roomId, _unset)
-        ? this.roomId
-        : roomId as String?,
-    harness: identical(harness, _unset)
-        ? this.harness
-        : harness as PiHarness?,
+    nickname: identical(nickname, _unset) ? this.nickname : nickname as String?,
+    roomId: identical(roomId, _unset) ? this.roomId : roomId as String?,
+    harness: identical(harness, _unset) ? this.harness : harness as PiHarness?,
   );
 
   @override
@@ -177,14 +173,14 @@ class PeerRecord {
 
   @override
   int get hashCode => Object.hash(
-        remoteEpk,
-        sessionName,
-        relayUrl,
-        pairedAt,
-        nickname,
-        roomId,
-        harness,
-      );
+    remoteEpk,
+    sessionName,
+    relayUrl,
+    pairedAt,
+    nickname,
+    roomId,
+    harness,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +249,10 @@ class PairingStorage extends ChangeNotifier {
   /// [savePeerSilent] for the rationale.
   Future<void> deletePeerSilent(String remoteEpk) => _erasePeer(remoteEpk);
 
+  /// Re-emit the peer set after a caller uses [deletePeerSilent] and handles
+  /// mesh publication itself.
+  void notifyPeersChanged() => notifyListeners();
+
   Future<void> _writePeer(PeerRecord record) async {
     await _store.write(
       key: _peerKey(record.remoteEpk),
@@ -271,9 +271,10 @@ class PairingStorage extends ChangeNotifier {
     final prefix = '$_kPeersService:';
     return all.entries
         .where((e) => e.key.startsWith(prefix))
-        .map((e) => PeerRecord.fromJson(
-          jsonDecode(e.value) as Map<String, dynamic>,
-        ))
+        .map(
+          (e) =>
+              PeerRecord.fromJson(jsonDecode(e.value) as Map<String, dynamic>),
+        )
         .toList();
   }
 

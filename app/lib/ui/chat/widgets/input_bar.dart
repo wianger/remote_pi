@@ -17,9 +17,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 // InputBar — bottom message composer.
 // - Disabled (grayed) when offline.
 // - During streaming, empty composer shows Stop; typed text sends steering.
-// - Plan/28 — quick actions (⚙) icon sits to the left of the attach
-//   button and is visible only while the field is empty (so it never
-//   competes with the send affordance).
+// - Plan/28 — the quiet model/thinking control stays available beside the
+//   attach button while a draft or image is present.
 // - Plan/29 — when [voice] is provided, the mic becomes hold-to-talk:
 //   long-press starts recording (a WhatsApp-style RecordingStrip replaces
 //   the row), slide left past the threshold cancels, release transcribes
@@ -931,23 +930,12 @@ class _ComposerActionButton extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    // Hold-to-talk mic (decision #4): long-press records, slide cancels,
-    // release transcribes. A plain tap surfaces the "hold to talk" hint.
-    if (_mode == _ComposerMode.sendAudio && voiceEnabled) {
-      return GestureDetector(
-        onTap: disabled ? null : onVoiceTap,
-        onLongPressStart: disabled ? null : (_) => onVoiceLongPressStart(),
-        onLongPressMoveUpdate: disabled ? null : onVoiceLongPressMoveUpdate,
-        onLongPressEnd: disabled ? null : (_) => onVoiceLongPressEnd(),
-        child: _button(context),
-      );
-    }
-
     final label = _mode == _ComposerMode.sendAudio
         ? 'Voice input'
         : _mode == _ComposerMode.cancel
         ? 'Stop response'
         : 'Send message';
+    final voiceMode = _mode == _ComposerMode.sendAudio && voiceEnabled;
     return Semantics(
       button: true,
       label: label,
@@ -958,7 +946,16 @@ class _ComposerActionButton extends StatelessWidget {
           key: _mode == _ComposerMode.sendAudio
               ? const Key('input-bar-voice')
               : const Key('input-bar-action'),
-          onTap: _resolveTap(),
+          onTap: voiceMode ? (disabled ? null : onVoiceTap) : _resolveTap(),
+          onLongPressStart: voiceMode && !disabled
+              ? (_) => onVoiceLongPressStart()
+              : null,
+          onLongPressMoveUpdate: voiceMode && !disabled
+              ? onVoiceLongPressMoveUpdate
+              : null,
+          onLongPressEnd: voiceMode && !disabled
+              ? (_) => onVoiceLongPressEnd()
+              : null,
           child: _button(context),
         ),
       ),
@@ -976,29 +973,86 @@ class _ComposerActionButton extends StatelessWidget {
           : const Duration(milliseconds: 200),
       width: 44,
       height: 44,
-      decoration: BoxDecoration(
-        color: visualEnabled
-            ? (_mode == _ComposerMode.sendAudio ? colors.text : colors.accent)
-            : colors.muted.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: AnimatedSwitcher(
-        duration: reduceMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        transitionBuilder: (child, anim) => reduceMotion
-            ? child
-            : FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(scale: anim, child: child),
-              ),
-        child: Icon(
-          _icon,
-          key: ValueKey(_mode),
-          color: visualEnabled
-              ? (_mode == _ComposerMode.sendAudio ? colors.bg : colors.onAccent)
-              : colors.muted,
-          size: 20,
+      child: Center(
+        child: AnimatedContainer(
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            gradient: visualEnabled
+                ? _mode == _ComposerMode.sendAudio
+                      ? LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colors.glassTint,
+                            colors.inputFill.withValues(alpha: 0.94),
+                          ],
+                        )
+                      : _mode == _ComposerMode.cancel
+                      ? LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            colors.error.withValues(alpha: 0.22),
+                            colors.error.withValues(alpha: 0.12),
+                          ],
+                        )
+                      : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [colors.accent, colors.accent],
+                        )
+                : LinearGradient(
+                    colors: [
+                      colors.glassTint.withValues(alpha: 0.52),
+                      colors.glassFill.withValues(alpha: 0.42),
+                    ],
+                  ),
+            borderRadius: BorderRadius.circular(19),
+            border: Border.all(
+              color: visualEnabled
+                  ? _mode == _ComposerMode.cancel
+                        ? colors.error.withValues(alpha: 0.48)
+                        : colors.glassHighlight
+                  : colors.glassEdge.withValues(alpha: 0.55),
+              width: 0.8,
+            ),
+            boxShadow: visualEnabled && !MediaQuery.highContrastOf(context)
+                ? [
+                    BoxShadow(
+                      color: colors.glassShadow,
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            transitionBuilder: (child, anim) => reduceMotion
+                ? child
+                : FadeTransition(
+                    opacity: anim,
+                    child: ScaleTransition(scale: anim, child: child),
+                  ),
+            child: Icon(
+              _icon,
+              key: ValueKey(_mode),
+              color: !visualEnabled
+                  ? colors.muted
+                  : _mode == _ComposerMode.sendAudio
+                  ? colors.text
+                  : _mode == _ComposerMode.cancel
+                  ? colors.error
+                  : colors.onAccent,
+              size: 19,
+            ),
+          ),
         ),
       ),
     );

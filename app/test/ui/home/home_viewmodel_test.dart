@@ -30,6 +30,11 @@ class _FakeStorage extends PairingStorage {
     peers = peers.where((p) => p.remoteEpk != epk).toList();
   }
 
+  @override
+  Future<void> deletePeerSilent(String epk) async {
+    peers = peers.where((p) => p.remoteEpk != epk).toList();
+  }
+
   // Rooms persistence is exercised when a RoomAnnounced lands on a real
   // ConnectionManager (_persistRoomsForPeer). Keep it in-memory so the
   // test never touches flutter_secure_storage (no binding in unit tests).
@@ -241,6 +246,38 @@ void main() {
 
       vm.dispose();
     });
+
+    test(
+      'deleteDevice removes the selected computer and cached rooms',
+      () async {
+        final storage = _FakeStorage([_peerA, _peerB]);
+        final prefs = Preferences(_FakeSecureStorage());
+        final conn = _conn(storage: storage);
+        final vm = HomeViewModel(storage, prefs, conn);
+        await Future<void>.delayed(Duration.zero);
+        final removed = vm.devices.entries.firstWhere(
+          (entry) => entry.value.remoteEpk == _peerA.remoteEpk,
+        );
+        await vm.selectDevice(removed.key);
+        await storage.saveRooms(_peerA.remoteEpk, const [
+          PersistedRoom(roomId: 'room-a', startedAt: 1),
+        ]);
+
+        await vm.deleteDevice(removed.key);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(storage.peers.map((peer) => peer.remoteEpk), [_peerB.remoteEpk]);
+        expect(await storage.loadRooms(_peerA.remoteEpk), isEmpty);
+        expect(prefs.selectedDeviceEpk, isNull);
+        expect((vm.state as HomeList).peers.map((peer) => peer.remoteEpk), [
+          _peerB.remoteEpk,
+        ]);
+
+        vm.dispose();
+        conn.dispose();
+        prefs.dispose();
+      },
+    );
 
     test('openSession writes selectedPeerEpk to Preferences', () async {
       final storage = _FakeStorage([_peerA, _peerB]);

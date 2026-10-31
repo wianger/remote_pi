@@ -24,6 +24,7 @@ class _FakeRepo implements IActionsRepository {
   /// failure path (error toast + sheet stays open).
   bool failCompact = false;
   bool failNewSession = false;
+  ModelsCatalogue catalogue = const ModelsCatalogue(models: [], current: null);
 
   @override
   ActiveRoomMeta get activeRoomMeta => const ActiveRoomMeta();
@@ -62,7 +63,7 @@ class _FakeRepo implements IActionsRepository {
 
   @override
   Future<ModelsCatalogue> listModels({bool forceRefresh = false}) async {
-    return const ModelsCatalogue(models: [], current: null);
+    return catalogue;
   }
 
   @override
@@ -75,10 +76,12 @@ Future<({_FakeRepo repo, List<int> resetCalls})> _openSheet(
   WidgetTester tester, {
   bool failCompact = false,
   bool failNewSession = false,
+  ModelsCatalogue catalogue = const ModelsCatalogue(models: [], current: null),
 }) async {
   final repo = _FakeRepo()
     ..failCompact = failCompact
-    ..failNewSession = failNewSession;
+    ..failNewSession = failNewSession
+    ..catalogue = catalogue;
   final vm = QuickActionsViewModel(repo);
   final resetCalls = <int>[];
 
@@ -130,6 +133,52 @@ void main() {
     await tester.tap(find.byKey(const Key('qa-thinking-medium')));
     await tester.pumpAndSettle();
     expect(s.repo.thinking, ThinkingLevel.medium);
+  });
+
+  testWidgets('model picker uses the Claude-style model and effort list', (
+    tester,
+  ) async {
+    const opus = WireModel(
+      id: 'opus',
+      provider: 'anthropic',
+      name: 'Opus 5.5',
+      reasoning: true,
+      contextWindow: 200000,
+    );
+    const haiku = WireModel(
+      id: 'haiku',
+      provider: 'anthropic',
+      name: 'Haiku 5.5',
+      reasoning: false,
+      contextWindow: 64000,
+    );
+    await _openSheet(
+      tester,
+      catalogue: const ModelsCatalogue(models: [opus, haiku], current: opus),
+    );
+    await tester.tap(find.byKey(const Key('qa-model-row')));
+    await tester.pumpAndSettle();
+
+    final picker = find.byKey(const Key('model-picker-sheet'));
+    expect(find.text('Select model'), findsOneWidget);
+    expect(
+      find.descendant(of: picker, matching: find.text('Opus 5.5')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: picker, matching: find.text('Haiku 5.5')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: picker, matching: find.text('Reasoning')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('model-picker-effort')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('model-picker-effort')));
+    await tester.pumpAndSettle();
+    expect(find.text('Reasoning effort'), findsOneWidget);
+    expect(find.text('Extra high'), findsOneWidget);
   });
 
   test('QuickActionsState equality covers idle + busy', () {

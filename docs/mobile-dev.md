@@ -312,3 +312,38 @@ completed tool calls collapse into one Claude-mobile-style summary row with a
 detail sheet; approval requests remain separate interactive cards. Context
 usage requests correlate a Pi conversation's daemon and interactive endpoints
 and reject late replies after switching to another conversation.
+
+## Mobile interaction and workspace polish (1.2.12 / build 20)
+
+The chat header and composer now float above the transcript instead of taking
+layout space. Any vertical transcript movement dismisses the keyboard, and a
+glass jump-to-latest action appears whenever the reader has left the bottom.
+The header uses a circular sidebar action, a transparent session title and
+status, and one compact context/menu control. The menu includes Rename, Info and
+Delete alongside the same actions available by long-pressing a session.
+
+Workspace switching now uses an independent glass bottom sheet instead of a
+popup clipped by the sidebar. Each row shows the logical workspace name with its
+current directory, the selected row has a clear check mark, and workspace
+creation remains a separate action. This keeps device selection visually
+distinct while allowing sessions inside one workspace to use unrelated
+directories.
+
+Device controls now separate switching, renaming and deletion into three
+explicit targets to reduce accidental taps. Device deletion clears pairing,
+rooms, local caches, preferences, mesh state and connection fallback for that
+phone. Pair and Settings are two circular glass actions; pairing controls are no
+longer duplicated in Settings. App updates, project links, licenses and
+contributor details remain grouped under About.
+
+The model selector follows the compact grouped-sheet hierarchy used by current
+mobile assistants, with model descriptions, a selected check mark, reasoning
+availability and a separate Effort sheet. Composer voice and model controls
+remain available while text exists. The circular voice and emphasized send
+actions retain 44 logical-pixel touch targets.
+
+Typing `/` opens built-in commands, prompt templates and installed agent skills.
+Compact and fresh-session actions live in that palette instead of permanent
+chat buttons. A user turn groups all of its completed tool calls into one
+Claude-mobile-style run row and detail sheet. Final assistant text contains one
+copy action rather than one per tool-separated segment.

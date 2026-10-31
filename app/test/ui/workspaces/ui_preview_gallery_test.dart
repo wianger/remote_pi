@@ -553,6 +553,19 @@ void main() {
               status: ToolEventStatus.completed,
             ),
             AssistantMsg(
+              id: 'activity-intermediate',
+              text:
+                  'The type check passed. Publishing the review findings now.',
+            ),
+            ToolEvent(
+              id: 'tool-review',
+              toolCallId: 'tool-review',
+              tool: 'message_agent',
+              args: {'prompt': 'Post review findings on PR 371'},
+              result: 'Review agent started.',
+              status: ToolEventStatus.completed,
+            ),
+            AssistantMsg(
               id: 'activity-answer',
               text: 'The project is ready. Choose a folder to continue.',
             ),
@@ -570,7 +583,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(chatKey),
-          matching: find.byKey(const ValueKey('tool-details-tool')),
+          matching: find.text('Ran a command, used a tool'),
         ),
       );
       await tester.pumpAndSettle();
@@ -607,7 +620,7 @@ void main() {
       await _save(tester, homeKey, '$output/home.png');
       await tester.tap(find.byTooltip('Sessions'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('device-selector')));
+      await tester.tap(find.byKey(const Key('device-switch')));
       await tester.pumpAndSettle();
       expect(find.text('Switch device'), findsOneWidget);
       await _save(tester, homeKey, '$output/device-picker.png');
@@ -753,6 +766,26 @@ void main() {
         lessThan(80),
         reason: 'Long history must remain virtualized.',
       );
+      expect(find.text('Message 3999 in a long conversation.'), findsOneWidget);
+      final messageList = find.byKey(const ValueKey('chat-message-scroll'));
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      final composerFocus = tester
+          .widget<EditableText>(find.byType(EditableText))
+          .focusNode;
+      expect(composerFocus.hasFocus, isTrue);
+      await tester.drag(messageList, const Offset(0, 320));
+      await tester.pumpAndSettle();
+      expect(composerFocus.hasFocus, isFalse);
+      final latestOpacity = tester.widget<AnimatedOpacity>(
+        find.ancestor(
+          of: find.byKey(const Key('jump-to-latest')),
+          matching: find.byType(AnimatedOpacity),
+        ),
+      );
+      expect(latestOpacity.opacity, 1);
+      await tester.tap(find.byKey(const Key('jump-to-latest')));
+      await tester.pumpAndSettle();
       expect(find.text('Message 3999 in a long conversation.'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

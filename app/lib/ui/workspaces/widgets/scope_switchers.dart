@@ -1,4 +1,5 @@
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -11,6 +12,7 @@ class DeviceSwitcher extends StatelessWidget {
     required this.onSelected,
     this.enabled = true,
     this.onRenameSelected,
+    this.onDeleteSelected,
   });
 
   final Map<String, String> devices;
@@ -18,6 +20,7 @@ class DeviceSwitcher extends StatelessWidget {
   final ValueChanged<String> onSelected;
   final bool enabled;
   final VoidCallback? onRenameSelected;
+  final VoidCallback? onDeleteSelected;
 
   Future<void> _pick(BuildContext context) async {
     final choice = await showModalBottomSheet<String>(
@@ -92,69 +95,111 @@ class DeviceSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Material(
-      color: colors.inputFill.withValues(alpha: .8),
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
+    final hasSelection = selected != null && devices.containsKey(selected);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: .58),
         borderRadius: BorderRadius.circular(22),
-        onTap: enabled && devices.isNotEmpty ? () => _pick(context) : null,
-        onLongPress: enabled && selected != null ? onRenameSelected : null,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: colors.selection,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  LucideIcons.monitor,
-                  size: 22,
-                  color: colors.accent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Device',
-                      style: context.typo.sansBody.copyWith(
-                        fontSize: 12,
-                        color: colors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      devices[selected] ?? 'Pair a device',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.typo.sansBody.copyWith(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (onRenameSelected != null && selected != null)
-                IconButton(
-                  tooltip: 'Rename device',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: enabled ? onRenameSelected : null,
-                  icon: Icon(
-                    LucideIcons.pencil,
-                    size: 16,
-                    color: colors.muted2,
+        border: Border.all(color: colors.glassEdge),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: colors.selection,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(LucideIcons.monitor, size: 22, color: colors.accent),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Device',
+                  style: context.typo.sansBody.copyWith(
+                    fontSize: 11,
+                    color: colors.muted,
                   ),
                 ),
-              Icon(LucideIcons.chevronsUpDown, size: 17, color: colors.muted2),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  devices[selected] ?? 'Pair a device',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.typo.sansBody.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          _DeviceActionButton(
+            key: const Key('device-switch'),
+            tooltip: 'Switch device',
+            icon: LucideIcons.chevronsUpDown,
+            onPressed: enabled && devices.isNotEmpty
+                ? () => _pick(context)
+                : null,
+          ),
+          _DeviceActionButton(
+            key: const Key('device-rename'),
+            tooltip: 'Rename device',
+            icon: LucideIcons.pencil,
+            onPressed: enabled && hasSelection ? onRenameSelected : null,
+          ),
+          _DeviceActionButton(
+            key: const Key('device-delete'),
+            tooltip: 'Delete device',
+            icon: LucideIcons.trash2,
+            danger: true,
+            onPressed: enabled && hasSelection ? onDeleteSelected : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeviceActionButton extends StatelessWidget {
+  const _DeviceActionButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.danger = false,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox.square(
+        dimension: 34,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          onPressed: onPressed,
+          icon: Icon(
+            icon,
+            size: 16,
+            color: onPressed == null
+                ? colors.muted.withValues(alpha: .35)
+                : danger
+                ? colors.error
+                : colors.muted2,
           ),
         ),
       ),
@@ -162,7 +207,8 @@ class DeviceSwitcher extends StatelessWidget {
   }
 }
 
-/// Workspaces are directories within the device, presented as a flat path row.
+/// Workspaces are phone-side logical groups presented as a flat row. Sessions
+/// inside one group may come from unrelated folders.
 class WorkspaceSwitcher extends StatelessWidget {
   const WorkspaceSwitcher({
     super.key,
@@ -183,17 +229,151 @@ class WorkspaceSwitcher extends StatelessWidget {
   final ValueChanged<String> onSelected;
   final VoidCallback? onCreate;
 
-  String _name(String path) =>
-      path
+  String _name(String detail) =>
+      detail
           .split(RegExp(r'[/\\]'))
           .where((part) => part.isNotEmpty)
           .lastOrNull ??
-      path;
+      detail;
+
+  Future<void> _pick(BuildContext context) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .38),
+      isScrollControlled: true,
+      showDragHandle: false,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .72,
+      ),
+      builder: (sheetContext) {
+        final colors = sheetContext.colors;
+        return BayaGlassSurface(
+          radius: 34,
+          elevated: false,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colors.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 48,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Text(
+                          'Switch workspace',
+                          style: sheetContext.typo.title.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            tooltip: 'Close workspace picker',
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: Icon(
+                              LucideIcons.x,
+                              size: 20,
+                              color: colors.text,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Flexible(
+                    child: Material(
+                      color: colors.surface.withValues(alpha: .6),
+                      borderRadius: BorderRadius.circular(26),
+                      clipBehavior: Clip.antiAlias,
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: workspaces.length,
+                        separatorBuilder: (_, _) => Divider(
+                          height: 1,
+                          indent: 58,
+                          color: colors.border.withValues(alpha: .7),
+                        ),
+                        itemBuilder: (_, index) {
+                          final entry = workspaces.entries.elementAt(index);
+                          final selected = entry.key == this.selected;
+                          final label = labels[entry.key] ?? _name(entry.value);
+                          return ListTile(
+                            key: ValueKey('workspace-choice-${entry.key}'),
+                            selected: selected,
+                            selectedTileColor: colors.selection,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 7,
+                            ),
+                            leading: Icon(
+                              LucideIcons.layoutDashboard,
+                              size: 20,
+                              color: selected ? colors.accent : colors.muted2,
+                            ),
+                            title: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: sheetContext.typo.sansBody.copyWith(
+                                fontSize: 16,
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                            subtitle: Text(
+                              entry.value,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: sheetContext.typo.sansBody.copyWith(
+                                color: colors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            trailing: selected
+                                ? Icon(
+                                    LucideIcons.check,
+                                    size: 19,
+                                    color: colors.accent,
+                                  )
+                                : null,
+                            onTap: () =>
+                                Navigator.of(sheetContext).pop(entry.key),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (!context.mounted || choice == null) return;
+    onSelected(choice);
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final path = workspaces[selected];
+    final detail = workspaces[selected];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -210,106 +390,65 @@ class WorkspaceSwitcher extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: PopupMenuButton<String>(
-                tooltip: 'Switch workspace',
-                enabled: enabled && workspaces.isNotEmpty,
-                position: PopupMenuPosition.under,
-                onSelected: onSelected,
-                itemBuilder: (_) => [
-                  for (final entry in workspaces.entries)
-                    PopupMenuItem(
-                      value: entry.key,
-                      height: 68,
-                      child: Row(
-                        children: [
-                          Icon(
-                            LucideIcons.layoutDashboard,
-                            size: 18,
-                            color: colors.muted2,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  labels[entry.key] ?? _name(entry.value),
-                                  style: context.typo.sansBody.copyWith(
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                Text(
-                                  entry.value,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: context.typo.monoSmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (entry.key == selected) ...[
-                            const SizedBox(width: 8),
-                            Icon(
-                              LucideIcons.check,
-                              size: 16,
-                              color: colors.accent,
-                            ),
-                          ],
-                        ],
-                      ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  key: const Key('workspace-switch'),
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: enabled && workspaces.isNotEmpty
+                      ? () => _pick(context)
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
                     ),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        LucideIcons.layoutDashboard,
-                        size: 19,
-                        color: colors.muted2,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              path == null
-                                  ? hasDevice
-                                        ? 'No workspaces yet'
-                                        : 'Choose a device first'
-                                  : labels[selected] ?? _name(path),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: context.typo.sansBody.copyWith(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
+                    child: Row(
+                      children: [
+                        Icon(
+                          LucideIcons.layoutDashboard,
+                          size: 19,
+                          color: colors.muted2,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                detail == null
+                                    ? hasDevice
+                                          ? 'No workspaces yet'
+                                          : 'Choose a device first'
+                                    : labels[selected] ?? _name(detail),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: context.typo.sansBody.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            if (path != null)
-                              Tooltip(
-                                message: path,
-                                child: Text(
-                                  path,
+                              if (detail != null)
+                                Text(
+                                  detail,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: context.typo.monoSmall,
+                                  style: context.typo.sansBody.copyWith(
+                                    color: colors.muted,
+                                    fontSize: 11.5,
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        LucideIcons.chevronDown,
-                        size: 16,
-                        color: colors.muted2,
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Icon(
+                          LucideIcons.chevronDown,
+                          size: 16,
+                          color: colors.muted2,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

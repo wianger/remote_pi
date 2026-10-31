@@ -25,6 +25,68 @@ Future<String?> showDeviceRenameDialog(
   hintText: 'Name shown in this app',
 );
 
+Future<bool> showDeviceDeleteDialog(
+  BuildContext context, {
+  required String name,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) {
+      final colors = dialogContext.colors;
+      return AlertDialog(
+        title: Text('Delete $name?'),
+        content: Text(
+          'This removes the computer from this phone and clears its cached '
+          'sessions. The computer can be paired again from its Remote Pi '
+          'command.',
+          style: TextStyle(color: colors.muted2),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Delete', style: TextStyle(color: colors.error)),
+          ),
+        ],
+      );
+    },
+  );
+  return confirmed == true;
+}
+
+Future<bool> showSessionDeleteDialog(
+  BuildContext context, {
+  required String name,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete from phone?'),
+      content: Text(
+        'Remove "$name" and clear its cached messages on this phone? '
+        'Computer history and the running agent are kept.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(
+            'Delete',
+            style: TextStyle(color: dialogContext.colors.error),
+          ),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
 Future<String?> showNameDialog(
   BuildContext context, {
   required String title,

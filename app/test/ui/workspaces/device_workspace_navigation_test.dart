@@ -84,8 +84,8 @@ void main() {
       );
       expect(find.text('Desktop one'), findsOneWidget);
       // Bottom actions stay pinned and tappable below the scroll area.
-      expect(find.text('Pair'), findsOneWidget);
-      expect(find.text('Settings'), findsOneWidget);
+      expect(find.byKey(const Key('sidebar-pair')), findsOneWidget);
+      expect(find.byKey(const Key('sidebar-settings')), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       vm.dispose();
       conn.dispose();
@@ -176,7 +176,7 @@ void main() {
 
       await choose('workspace-selector', 'notes');
       expect(find.text('Desktop notes'), findsOneWidget);
-      await choose('device-selector', 'Laptop');
+      await choose('device-switch', 'Laptop');
       expect(find.text('Laptop task'), findsOneWidget);
       expect(find.text('Desktop notes'), findsNothing);
       expect(vm.workspaces.length, 1);
@@ -184,11 +184,11 @@ void main() {
         vm.workspaces.keys.single,
         HomeViewModel.workspaceKey(laptop.remoteEpk, '/code/shared'),
       );
-      await choose('device-selector', 'Empty device');
+      await choose('device-switch', 'Empty device');
       expect(vm.workspaceItems, isEmpty);
       expect(vm.workspaces, isEmpty);
       expect(find.text('No workspaces yet'), findsOneWidget);
-      await choose('device-selector', 'PC');
+      await choose('device-switch', 'PC');
       expect(find.text('Desktop notes'), findsOneWidget);
       expect(find.text('Desktop one'), findsNothing);
       // Browsing never redirects the transport or changes the active chat.

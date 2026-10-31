@@ -4,6 +4,7 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/domain/value_objects/session_room.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
+import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
@@ -76,18 +77,33 @@ class ChatPage extends StatelessWidget {
     final scaffold = Scaffold(
       backgroundColor: context.colors.bg,
       body: SafeArea(
-        child: Column(
+        bottom: false,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            _buildTopBar(context, state),
-            // Pairing revocation is the only banner kept — it's a hard
-            // failure (can't proceed without re-pairing), red, with an
-            // explicit action. Plain offline / Pi-gone / presence-off
-            // banners were removed: the AppBar status line already
-            // surfaces those, and stacking duplicates noise the surface.
+            Positioned.fill(child: _buildBody(context, state, vm)),
+            Positioned(
+              top: 8,
+              left: 12,
+              right: 12,
+              child: _buildTopBar(context, state),
+            ),
             if (state is ChatReady && state.pairingRevoked)
-              _RevokedBanner(onRePair: () => context.go('/pair')),
-            Expanded(child: _buildBody(context, state, vm)),
-            _buildInput(context, state, vm),
+              Positioned(
+                top: 78,
+                left: 12,
+                right: 12,
+                child: _RevokedBanner(onRePair: () => context.go('/pair')),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: _buildInput(context, state, vm),
+              ),
+            ),
           ],
         ),
       ),
@@ -151,130 +167,192 @@ class ChatPage extends StatelessWidget {
         : online
         ? 'Ready'
         : 'Offline';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: BayaGlassSurface(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 68),
-          child: Row(
-            children: [
-              if (SessionShell.menuOf(context) != null)
-                IconButton(
-                  tooltip: 'Sessions',
-                  onPressed: SessionShell.menuOf(context),
+    final menu = SessionShell.menuOf(context);
+    final leadingAction =
+        menu ??
+        (showBack
+            ? () => context.canPop() ? context.pop() : context.go('/home')
+            : null);
+    return SizedBox(
+      key: const ValueKey('chat-floating-header'),
+      height: 58,
+      child: Stack(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: BayaGlassSurface(
+              radius: 24,
+              padding: EdgeInsets.zero,
+              child: SizedBox.square(
+                dimension: 48,
+                child: IconButton(
+                  tooltip: menu != null ? 'Sessions' : 'Back',
+                  onPressed: leadingAction,
                   icon: Icon(
-                    LucideIcons.panelLeft,
+                    menu != null ? LucideIcons.menu : LucideIcons.chevronLeft,
                     size: 21,
                     color: colors.text,
                   ),
-                )
-              else if (showBack)
-                IconButton(
-                  tooltip: 'Back',
-                  icon: const Icon(LucideIcons.chevronLeft, size: 21),
-                  onPressed: () =>
-                      context.canPop() ? context.pop() : context.go('/home'),
-                )
-              else
-                const SizedBox(width: 12),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.typo.sansBody.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 64),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.25,
+                      color: colors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          device,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 10.5, color: colors.muted),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            device,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: colors.muted),
-                          ),
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: statusColor,
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: statusColor,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Flexible(
-                          child: Text(
-                            status,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: statusColor),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              ContextUsageButton(
-                key: ValueKey('${peer?.remoteEpk}:${peer?.roomId}'),
-                enabled: online && peer != null,
-                working: working,
-                messageCount: state is ChatReady ? state.messages.length : 0,
-              ),
-              PopupMenuButton<String>(
-                tooltip: 'Session actions',
-                icon: Icon(
-                  LucideIcons.ellipsis,
-                  size: 21,
-                  color: colors.muted2,
-                ),
-                onSelected: (value) async {
-                  final currentPeer = vm.activePeer;
-                  if (currentPeer == null) return;
-                  if (value == 'rename') {
-                    final name = await showSessionRenameDialog(
-                      context,
-                      currentName: displayName,
-                    );
-                    if (name != null) {
-                      await prefs.setSessionName(
-                        currentPeer.remoteEpk,
-                        vm.activeRoom?.roomId ?? 'main',
-                        name,
-                      );
-                    }
-                  } else if (value == 'info') {
-                    await showSessionInfoDialog(
-                      context,
-                      peer: currentPeer,
-                      room: vm.activeRoom,
-                      name: displayName,
-                    );
-                  }
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'rename', child: Text('Rename')),
-                  PopupMenuItem(value: 'info', child: Text('Info')),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        status,
+                        style: TextStyle(fontSize: 10.5, color: statusColor),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BayaGlassSurface(
+              radius: 24,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ContextUsageButton(
+                    key: ValueKey('${peer?.remoteEpk}:${peer?.roomId}'),
+                    enabled: online && peer != null,
+                    working: working,
+                    messageCount: state is ChatReady
+                        ? state.messages.length
+                        : 0,
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: 'Session actions',
+                    icon: Icon(
+                      LucideIcons.ellipsis,
+                      size: 21,
+                      color: colors.muted2,
+                    ),
+                    onSelected: (value) =>
+                        _handleSessionAction(context, vm, value, displayName),
+                    itemBuilder: (_) => [
+                      const PopupMenuItem(
+                        value: 'rename',
+                        child: Text('Rename'),
+                      ),
+                      const PopupMenuItem(value: 'info', child: Text('Info')),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(
+                              LucideIcons.trash2,
+                              size: 17,
+                              color: colors.error,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Delete',
+                              style: TextStyle(color: colors.error),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Future<void> _handleSessionAction(
+    BuildContext context,
+    ChatViewModel vm,
+    String value,
+    String displayName,
+  ) async {
+    final currentPeer = vm.activePeer;
+    if (currentPeer == null) return;
+    final roomId = vm.activeRoom?.roomId ?? 'main';
+    if (value == 'rename') {
+      final name = await showSessionRenameDialog(
+        context,
+        currentName: displayName,
+      );
+      if (name == null || !context.mounted) return;
+      await context.read<Preferences>().setSessionName(
+        currentPeer.remoteEpk,
+        roomId,
+        name,
+      );
+      return;
+    }
+    if (value == 'info') {
+      await showSessionInfoDialog(
+        context,
+        peer: currentPeer,
+        room: vm.activeRoom,
+        name: displayName,
+      );
+      return;
+    }
+    if (value != 'delete' || !context.mounted) return;
+    final confirmed = await showSessionDeleteDialog(context, name: displayName);
+    if (!confirmed || !context.mounted) return;
+    final home = context.read<HomeViewModel>();
+    for (final item in home.allItems) {
+      if (item.peer.remoteEpk == currentPeer.remoteEpk &&
+          item.room.roomId == roomId) {
+        await home.deleteSession(item);
+        if (!context.mounted) return;
+        context.read<SessionSelection>().clear();
+        context.go('/home');
+        return;
+      }
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not find this session to delete.')),
     );
   }
 
@@ -361,6 +439,7 @@ class ChatPage extends StatelessWidget {
           );
         }
         return _MessageList(
+          key: const ValueKey('chat-message-list'),
           messages: visible,
           streaming: streaming,
           onDecide: (id, decision) => vm.approveTool(id, decision),
@@ -395,6 +474,7 @@ class ChatPage extends StatelessWidget {
     final commandState = context.watch<AgentCommandsViewModel>().state;
 
     return InputBar(
+      key: const ValueKey('chat-floating-composer'),
       agentLabel:
           (vm.activeRoom?.name ?? initialTitle ?? '').startsWith('Codex · ')
           ? 'Codex'
@@ -584,104 +664,217 @@ Set<String> assistantCopyIdsForTurns(List<ChatMessage> messages) {
   return ids;
 }
 
-class _MessageList extends StatelessWidget {
+class _MessageList extends StatefulWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
   final void Function(String, ApproveDecision) onDecide;
 
   const _MessageList({
+    super.key,
     required this.messages,
     required this.streaming,
     required this.onDecide,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final items = <Object>[];
-    final toolRun = <ToolEvent>[];
-    void flushTools() {
-      if (toolRun.isEmpty) return;
-      items.add(
-        toolRun.length == 1
-            ? toolRun.single
-            : _ToolRun(List<ToolEvent>.unmodifiable(toolRun)),
-      );
-      toolRun.clear();
-    }
+  State<_MessageList> createState() => _MessageListState();
+}
 
-    for (final message in messages) {
+class _MessageListState extends State<_MessageList> {
+  static const _latestThreshold = 120.0;
+
+  final _controller = ScrollController();
+  bool _showLatest = false;
+  bool _keyboardDismissTriggered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final next =
+        _controller.hasClients && _controller.offset > _latestThreshold;
+    if (next == _showLatest) return;
+    setState(() => _showLatest = next);
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _keyboardDismissTriggered = false;
+    }
+    if (notification is ScrollUpdateNotification ||
+        notification is OverscrollNotification) {
+      if (!_keyboardDismissTriggered) {
+        _keyboardDismissTriggered = true;
+        FocusManager.instance.primaryFocus?.unfocus();
+      }
+    }
+    if (notification is ScrollEndNotification) {
+      _keyboardDismissTriggered = false;
+    }
+    return false;
+  }
+
+  Future<void> _jumpToLatest() async {
+    if (!_controller.hasClients) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    await _controller.animateTo(
+      0,
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  List<Object> _items() {
+    final toolsByTurn = <int, List<ToolEvent>>{};
+    var turn = -1;
+    for (final message in widget.messages) {
+      if (message is UserMsg) turn++;
       final needsApproval =
           message is ToolEvent &&
           message.status == ToolEventStatus.pending &&
           message.args is Map &&
           message.args['approval_required'] == true;
       if (message is ToolEvent && !needsApproval) {
-        toolRun.add(message);
-      } else {
-        flushTools();
-        items.add(message);
+        toolsByTurn.putIfAbsent(turn, () => []).add(message);
       }
     }
-    flushTools();
 
+    final items = <Object>[];
+    final emittedTurns = <int>{};
+    turn = -1;
+    for (final message in widget.messages) {
+      if (message is UserMsg) {
+        turn++;
+        items.add(message);
+        continue;
+      }
+      final needsApproval =
+          message is ToolEvent &&
+          message.status == ToolEventStatus.pending &&
+          message.args is Map &&
+          message.args['approval_required'] == true;
+      if (message is ToolEvent && !needsApproval) {
+        final grouped = toolsByTurn[turn];
+        if (grouped != null && emittedTurns.add(turn)) {
+          items.add(_ToolRun(List<ToolEvent>.unmodifiable(grouped)));
+        }
+        continue;
+      }
+      items.add(message);
+    }
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items();
+    final streaming = widget.streaming;
     final itemCount = items.length + (streaming != null ? 1 : 0);
     // One copy action per assistant turn: tool calls can split a single reply
     // into several text segments, but only the final segment gets the button.
-    final copyIds = assistantCopyIdsForTurns(messages);
+    final copyIds = assistantCopyIdsForTurns(widget.messages);
 
-    // `reverse: true` anchors the viewport to the bottom (offset 0 = newest)
-    // and keeps it there as content arrives — no manual scroll-to-bottom is
-    // needed. The previous animateTo-on-every-rebuild fought this and caused
-    // overlapping animations (flicker / runaway scroll) during streaming.
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ListView.separated(
-        shrinkWrap: true,
-        reverse: true,
-        padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
-        itemCount: itemCount,
-        separatorBuilder: (context, idx) => const SizedBox(height: 24),
-        itemBuilder: (_, i) {
-          // Index 0 = bottom = newest. Stable keys are REQUIRED here: when the
-          // streaming bubble appears/disappears at index 0 every other item's
-          // index shifts by 1, and without keys Flutter re-matches elements by
-          // position — briefly painting the wrong message at a slot (the
-          // momentary C/B/A → B/C/A reorder). Keying by message id makes it
-          // match by identity instead.
-          if (streaming != null && i == 0) {
-            return KeyedSubtree(
-              key: const ValueKey('streaming'),
-              child: StreamingBubble(streaming!),
-            );
-          }
-          final itemIdx = items.length - 1 - (i - (streaming != null ? 1 : 0));
-          final item = items[itemIdx];
-          if (item is _ToolRun) {
-            return KeyedSubtree(
-              key: ValueKey('tool-run-${item.tools.first.id}'),
-              child: ToolRunGroup(tools: item.tools),
-            );
-          }
-          final msg = item as ChatMessage;
-          return KeyedSubtree(
-            key: ValueKey(msg.id),
-            child: switch (msg) {
-              UserMsg() => UserBubble(msg),
-              AssistantMsg() => AssistantBubble(
-                msg,
-                showCopy: copyIds.contains(msg.id),
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScrollNotification,
+      child: Stack(
+        children: [
+          Align(
+            alignment: Alignment.topCenter,
+            child: ListView.separated(
+              key: const ValueKey('chat-message-scroll'),
+              controller: _controller,
+              shrinkWrap: true,
+              reverse: true,
+              padding: const EdgeInsets.fromLTRB(22, 94, 22, 128),
+              itemCount: itemCount,
+              separatorBuilder: (context, idx) => const SizedBox(height: 24),
+              itemBuilder: (_, i) {
+                // `reverse: true` makes index 0 the newest row. Stable keys
+                // keep streaming insertion from rematching unrelated rows.
+                if (streaming != null && i == 0) {
+                  return KeyedSubtree(
+                    key: const ValueKey('streaming'),
+                    child: StreamingBubble(streaming),
+                  );
+                }
+                final itemIdx =
+                    items.length - 1 - (i - (streaming != null ? 1 : 0));
+                final item = items[itemIdx];
+                if (item is _ToolRun) {
+                  return KeyedSubtree(
+                    key: ValueKey('tool-run-${item.tools.first.id}'),
+                    child: ToolRunGroup(tools: item.tools),
+                  );
+                }
+                final msg = item as ChatMessage;
+                return KeyedSubtree(
+                  key: ValueKey(msg.id),
+                  child: switch (msg) {
+                    UserMsg() => UserBubble(msg),
+                    AssistantMsg() => AssistantBubble(
+                      msg,
+                      showCopy: copyIds.contains(msg.id),
+                    ),
+                    ThinkingMsg() => ThinkingBlock(
+                      text: msg.text,
+                      complete: msg.complete,
+                    ),
+                    ToolEvent() => ToolRequestCard(
+                      tool: msg,
+                      onDecide: widget.onDecide,
+                    ),
+                    CompactionMsg() => CompactionBubble(msg),
+                  },
+                );
+              },
+            ),
+          ),
+          Positioned(
+            right: 22,
+            bottom: 128,
+            child: IgnorePointer(
+              ignoring: !_showLatest,
+              child: AnimatedOpacity(
+                opacity: _showLatest ? 1 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: AnimatedScale(
+                  scale: _showLatest ? 1 : .82,
+                  duration: const Duration(milliseconds: 180),
+                  child: BayaGlassSurface(
+                    radius: 21,
+                    child: SizedBox.square(
+                      dimension: 42,
+                      child: IconButton(
+                        key: const Key('jump-to-latest'),
+                        tooltip: 'Jump to latest',
+                        onPressed: _jumpToLatest,
+                        icon: Icon(
+                          LucideIcons.arrowDown,
+                          size: 19,
+                          color: context.colors.text,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              ThinkingMsg() => ThinkingBlock(
-                text: msg.text,
-                complete: msg.complete,
-              ),
-              ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
-              CompactionMsg() => CompactionBubble(msg),
-            },
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_onScroll)
+      ..dispose();
+    super.dispose();
   }
 }
 

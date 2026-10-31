@@ -1,10 +1,7 @@
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/relay_config.dart';
-import 'package:app/pairing/storage.dart';
 import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/settings/states/settings_state.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
-import 'package:app/ui/settings/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -20,8 +17,6 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<SettingsViewModel>();
-    final state = vm.state;
     final colors = context.colors;
 
     return Scaffold(
@@ -52,26 +47,6 @@ class SettingsPage extends StatelessWidget {
           Divider(color: colors.border, height: 1),
           const _DisplaySection(),
           Divider(color: colors.border, height: 1),
-          const _SectionHeader('Pairings'),
-          switch (state) {
-            SettingsLoading() => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Center(
-                child: CircularProgressIndicator(color: colors.accent),
-              ),
-            ),
-            SettingsNoPeer() => const _EmptyState(),
-            SettingsList(:final peers) => _PeerList(
-              peers: peers,
-              onRevoke: vm.revoke,
-            ),
-          },
-          // Plan-17 follow-up — entry point to pair an additional Pi.
-          // The flow itself lives at /pair and survives whatever
-          // peers/rooms already exist (PairingViewModel handles the
-          // add path the same way as the first pair).
-          const _AddPairingButton(),
-          Divider(color: colors.border, height: 1),
           ListTile(
             leading: const Icon(LucideIcons.info, size: 20),
             title: const Text('About'),
@@ -80,35 +55,6 @@ class SettingsPage extends StatelessWidget {
             onTap: () => context.push('/about'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AddPairingButton extends StatelessWidget {
-  const _AddPairingButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-      child: OutlinedButton.icon(
-        onPressed: () => context.push('/pair'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: colors.accent,
-          side: BorderSide(color: colors.border),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(6)),
-          ),
-          minimumSize: const Size.fromHeight(0),
-        ),
-        icon: const Icon(LucideIcons.scanQrCode, size: 18),
-        label: Text(
-          'Add new pairing',
-          style: const TextStyle(fontFamily: kMonoFamily, fontSize: 13),
-        ),
       ),
     );
   }
@@ -365,72 +311,6 @@ class _SectionHeader extends StatelessWidget {
           letterSpacing: 1.4,
         ),
       ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.monitorSmartphone, color: colors.muted, size: 40),
-          const SizedBox(height: 12),
-          Text(
-            'No pairings yet',
-            style: TextStyle(color: colors.muted2, fontSize: 14),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Tap + to pair a new Mac.',
-            style: TextStyle(color: colors.muted, fontSize: 12),
-          ),
-          const SizedBox(height: 20),
-          FilledButton.icon(
-            onPressed: () => context.push('/pair'),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.accent,
-              foregroundColor: colors.onAccent,
-            ),
-            icon: const Icon(LucideIcons.scanQrCode, size: 18),
-            label: const Text('Scan QR'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PeerList extends StatelessWidget {
-  final List<PeerRecord> peers;
-  final Future<void> Function(String epk) onRevoke;
-
-  const _PeerList({required this.peers, required this.onRevoke});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (final peer in peers)
-          PeerListItem(
-            peer: peer,
-            onRevokeRequested: () async {
-              final confirmed = await showRevokeConfirmDialog(
-                context,
-                peer: peer,
-              );
-              if (!confirmed) return false;
-              await onRevoke(peer.remoteEpk);
-              return true;
-            },
-          ),
-      ],
     );
   }
 }

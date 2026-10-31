@@ -1,34 +1,32 @@
 import 'package:app/data/actions/actions_repository.dart';
 import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
+import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-/// Plan/28 Wave C — Model sub-picker pushed from the Quick Actions sheet.
-/// Lists every model the Pi reports as available, optionally filtered by
-/// provider. Tapping a row dispatches `model_set` via the parent
-/// [QuickActionsViewModel] and closes the sub-picker on success.
+/// Apple-style model chooser with a single calm list and an optional effort
+/// picker, matching the hierarchy used by Claude mobile.
 Future<void> showModelPickerSheet(
   BuildContext context, {
   required QuickActionsViewModel vm,
 }) {
   return showModalBottomSheet<void>(
     context: context,
-    backgroundColor: context.colors.bg,
-    barrierColor: Colors.black.withValues(alpha: 0.6),
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withValues(alpha: .34),
     isScrollControlled: true,
     showDragHandle: false,
+    sheetAnimationStyle: AnimationStyle.noAnimation,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(38)),
     ),
-    builder: (ctx) {
-      return ChangeNotifierProvider<QuickActionsViewModel>.value(
-        value: vm,
-        child: const _ModelPickerBody(),
-      );
-    },
+    builder: (ctx) => ChangeNotifierProvider<QuickActionsViewModel>.value(
+      value: vm,
+      child: const _ModelPickerBody(),
+    ),
   );
 }
 
@@ -41,7 +39,6 @@ class _ModelPickerBody extends StatefulWidget {
 
 class _ModelPickerBodyState extends State<_ModelPickerBody> {
   late Future<ModelsCatalogue> _future;
-  String? _providerFilter;
 
   @override
   void initState() {
@@ -50,14 +47,13 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
   }
 
   Future<ModelsCatalogue> _load({required bool forceRefresh}) {
-    final vm = context.read<QuickActionsViewModel>();
-    return vm.loadModels(forceRefresh: forceRefresh);
+    return context.read<QuickActionsViewModel>().loadModels(
+      forceRefresh: forceRefresh,
+    );
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _future = _load(forceRefresh: true);
-    });
+    setState(() => _future = _load(forceRefresh: true));
     await _future.catchError((Object _) => const ModelsCatalogue(models: []));
   }
 
@@ -65,118 +61,234 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
     final vm = context.read<QuickActionsViewModel>();
     try {
       await vm.setModel(model);
-      if (!mounted) return;
-      Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop();
     } catch (_) {
-      // Error is surfaced as a snackbar via the parent sheet's listener.
+      // The owning quick-actions sheet surfaces action errors.
+    }
+  }
+
+  Future<void> _showEffortPicker(ThinkingLevel? current) async {
+    final vm = context.read<QuickActionsViewModel>();
+    final picked = await showModalBottomSheet<ThinkingLevel>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      showDragHandle: false,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final colors = sheetContext.colors;
+        return BayaGlassSurface(
+          radius: 32,
+          elevated: false,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Reasoning effort',
+                    style: sheetContext.typo.title.copyWith(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Material(
+                    color: colors.surface.withValues(alpha: .62),
+                    borderRadius: BorderRadius.circular(24),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        for (final level in ThinkingLevel.values)
+                          ListTile(
+                            title: Text(_effortLabel(level)),
+                            trailing: level == current
+                                ? Icon(
+                                    LucideIcons.check,
+                                    size: 19,
+                                    color: colors.accent,
+                                  )
+                                : null,
+                            onTap: () => Navigator.of(sheetContext).pop(level),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    try {
+      await vm.setThinking(picked);
+    } catch (_) {
+      // The owning quick-actions sheet surfaces action errors.
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final vm = context.watch<QuickActionsViewModel>();
     final mq = MediaQuery.of(context);
-    final maxHeight = mq.size.height * 0.78;
     return SafeArea(
       top: false,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Padding(
-          padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 10),
-              _DragHandle(),
-              const SizedBox(height: 8),
-              _Header(onRefresh: _refresh),
-              Divider(color: colors.border, height: 1, thickness: 1),
-              Flexible(
-                child: FutureBuilder<ModelsCatalogue>(
-                  future: _future,
-                  builder: (ctx, snap) {
-                    if (snap.connectionState != ConnectionState.done) {
-                      return const _LoadingState();
-                    }
-                    if (snap.hasError) {
-                      return _ErrorState(
-                        message: snap.error is ActionFailure
-                            ? (snap.error as ActionFailure).message
-                            : 'Failed to load models',
-                        onRetry: _refresh,
-                      );
-                    }
-                    final cat = snap.data!;
-                    if (cat.models.isEmpty) {
-                      return const _EmptyState();
-                    }
-                    return _ProviderTabs(
-                      catalogue: cat,
-                      selectedProvider: _providerFilter,
-                      onProviderTap: (p) =>
-                          setState(() => _providerFilter = p),
-                      onModelPick: _onPick,
-                    );
-                  },
+      child: Padding(
+        padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: mq.size.height * .82),
+          child: BayaGlassSurface(
+            key: const Key('model-picker-sheet'),
+            radius: 38,
+            elevated: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.colors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                _Header(onRefresh: _refresh),
+                Flexible(
+                  child: FutureBuilder<ModelsCatalogue>(
+                    future: _future,
+                    builder: (ctx, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return const _LoadingState();
+                      }
+                      if (snap.hasError) {
+                        return _ErrorState(
+                          message: snap.error is ActionFailure
+                              ? (snap.error as ActionFailure).message
+                              : 'Failed to load models',
+                          onRetry: _refresh,
+                        );
+                      }
+                      final catalogue = snap.data!;
+                      if (catalogue.models.isEmpty) return const _EmptyState();
+                      final current = vm.currentThinking;
+                      final selected = catalogue.current;
+                      return ListView(
+                        padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+                        children: [
+                          _ModelList(
+                            models: catalogue.models,
+                            selected: selected,
+                            onPick: _onPick,
+                          ),
+                          const SizedBox(height: 10),
+                          Material(
+                            color: context.colors.surface.withValues(
+                              alpha: .62,
+                            ),
+                            borderRadius: BorderRadius.circular(22),
+                            clipBehavior: Clip.antiAlias,
+                            child: ListTile(
+                              key: const Key('model-picker-effort'),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 5,
+                              ),
+                              title: const Text('Effort'),
+                              subtitle: Text(
+                                current == null
+                                    ? 'Not reported'
+                                    : _effortLabel(current),
+                              ),
+                              trailing: Icon(
+                                LucideIcons.chevronRight,
+                                size: 18,
+                                color: context.colors.muted,
+                              ),
+                              onTap: () => _showEffortPicker(current),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-
-class _DragHandle extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 4,
-      decoration: BoxDecoration(
-        color: context.colors.border,
-        borderRadius: BorderRadius.circular(2),
-      ),
-    );
-  }
+  static String _effortLabel(ThinkingLevel level) => switch (level) {
+    ThinkingLevel.off => 'Off',
+    ThinkingLevel.minimal => 'Minimal',
+    ThinkingLevel.low => 'Low',
+    ThinkingLevel.medium => 'Medium',
+    ThinkingLevel.high => 'High',
+    ThinkingLevel.xhigh => 'Extra high',
+  };
 }
 
 class _Header extends StatelessWidget {
-  final VoidCallback onRefresh;
   const _Header({required this.onRefresh});
+
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 8, 10),
-      child: Row(
+    return SizedBox(
+      height: 62,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          IconButton(
-            icon: Icon(LucideIcons.arrowLeft, size: 18, color: colors.muted),
-            onPressed: () => Navigator.of(context).pop(),
-            tooltip: 'Back',
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              'Choose a model',
-              style: TextStyle(
-                fontFamily: kMonoFamily,
-                fontSize: 13,
-                color: colors.text,
-                fontWeight: FontWeight.w500,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: BayaGlassSurface(
+                radius: 22,
+                elevated: false,
+                child: SizedBox.square(
+                  dimension: 44,
+                  child: IconButton(
+                    tooltip: 'Close model picker',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(LucideIcons.x, size: 21, color: colors.text),
+                  ),
+                ),
               ),
             ),
           ),
-          IconButton(
-            key: const Key('model-picker-refresh'),
-            icon: Icon(LucideIcons.refreshCw, size: 18, color: colors.muted),
-            onPressed: onRefresh,
-            tooltip: 'Refresh',
+          Text(
+            'Select model',
+            style: context.typo.sansBody.copyWith(
+              fontSize: 21,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -.35,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: IconButton(
+                key: const Key('model-picker-refresh'),
+                tooltip: 'Refresh models',
+                onPressed: onRefresh,
+                icon: Icon(
+                  LucideIcons.refreshCw,
+                  size: 18,
+                  color: colors.muted,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -184,126 +296,58 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _ProviderTabs extends StatelessWidget {
-  final ModelsCatalogue catalogue;
-  final String? selectedProvider;
-  final ValueChanged<String?> onProviderTap;
-  final ValueChanged<WireModel> onModelPick;
-  const _ProviderTabs({
-    required this.catalogue,
-    required this.selectedProvider,
-    required this.onProviderTap,
-    required this.onModelPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final providers = <String>{
-      for (final m in catalogue.models) m.provider,
-    }.toList()
-      ..sort();
-    final filtered = selectedProvider == null
-        ? catalogue.models
-        : catalogue.models
-            .where((m) => m.provider == selectedProvider)
-            .toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (providers.length > 1)
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                _Chip(
-                  label: 'all',
-                  selected: selectedProvider == null,
-                  onTap: () => onProviderTap(null),
-                ),
-                const SizedBox(width: 6),
-                for (final p in providers) ...[
-                  _Chip(
-                    label: p,
-                    selected: selectedProvider == p,
-                    onTap: () => onProviderTap(p),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-              ],
-            ),
-          ),
-        Flexible(
-          child: ListView.separated(
-            padding: const EdgeInsets.only(bottom: 18),
-            shrinkWrap: true,
-            itemCount: filtered.length,
-            separatorBuilder: (_, _) =>
-                Divider(color: colors.border, height: 1, thickness: 1),
-            itemBuilder: (_, i) {
-              final m = filtered[i];
-              final isCurrent = catalogue.current?.id == m.id &&
-                  catalogue.current?.provider == m.provider;
-              return _ModelTile(
-                model: m,
-                current: isCurrent,
-                onTap: () => onModelPick(m),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _Chip({
-    required this.label,
+class _ModelList extends StatelessWidget {
+  const _ModelList({
+    required this.models,
     required this.selected,
-    required this.onTap,
+    required this.onPick,
   });
+
+  final List<WireModel> models;
+  final WireModel? selected;
+  final ValueChanged<WireModel> onPick;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: selected ? colors.accent : colors.border,
-          ),
-          color: selected ? colors.accent.withValues(alpha: 0.12) : colors.bg,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 11,
-            color: selected ? colors.accent : colors.muted,
-          ),
-        ),
+    return Material(
+      color: colors.surface.withValues(alpha: .62),
+      borderRadius: BorderRadius.circular(26),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var index = 0; index < models.length; index++) ...[
+            _ModelTile(
+              model: models[index],
+              current:
+                  selected?.id == models[index].id &&
+                  selected?.provider == models[index].provider,
+              onTap: () => onPick(models[index]),
+            ),
+            if (index != models.length - 1)
+              Divider(
+                height: 1,
+                indent: 18,
+                endIndent: 18,
+                color: colors.border.withValues(alpha: .72),
+              ),
+          ],
+        ],
       ),
     );
   }
 }
 
 class _ModelTile extends StatelessWidget {
-  final WireModel model;
-  final bool current;
-  final VoidCallback onTap;
   const _ModelTile({
     required this.model,
     required this.current,
     required this.onTap,
   });
+
+  final WireModel model;
+  final bool current;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -311,7 +355,7 @@ class _ModelTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(18, 15, 16, 14),
         child: Row(
           children: [
             Expanded(
@@ -323,106 +367,95 @@ class _ModelTile extends StatelessWidget {
                       Flexible(
                         child: Text(
                           model.name,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: kMonoFamily,
-                            fontSize: 13,
-                            color: current ? colors.accent : colors.text,
+                          style: context.typo.sansBody.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                       if (model.reasoning) ...[
-                        const SizedBox(width: 6),
-                        const _Badge(label: 'reasoning'),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.accent.withValues(alpha: .1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Reasoning',
+                            style: context.typo.sansBody.copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: colors.muted2,
+                            ),
+                          ),
+                        ),
                       ],
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     _subtitle(model),
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 10,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 12,
                       color: colors.muted,
+                      height: 1.25,
                     ),
                   ),
                 ],
               ),
             ),
-            if (current)
-              Icon(LucideIcons.check, color: colors.accent, size: 18),
+            if (current) ...[
+              const SizedBox(width: 12),
+              Icon(LucideIcons.check, size: 20, color: colors.accent),
+            ],
           ],
         ),
       ),
     );
   }
 
-  static String _subtitle(WireModel m) {
-    final ctx = m.contextWindow;
-    if (ctx <= 0) return m.provider;
-    final humanized = ctx >= 1000 ? '${(ctx / 1000).round()}k' : '$ctx';
-    return '${m.provider} · ctx $humanized';
-  }
-}
-
-class _Badge extends StatelessWidget {
-  final String label;
-  const _Badge({required this.label});
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: colors.accent.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: kMonoFamily,
-          fontSize: 9,
-          color: colors.accent,
-        ),
-      ),
-    );
+  static String _subtitle(WireModel model) {
+    final pieces = <String>[
+      model.provider,
+      if (model.contextWindow > 0)
+        '${(model.contextWindow / 1000).round()}k context',
+      if (model.vision) 'vision',
+    ];
+    return pieces.join(' · ');
   }
 }
 
 class _LoadingState extends StatelessWidget {
   const _LoadingState();
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 120,
-      child: Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 1.6,
-            color: context.colors.accent,
-          ),
-        ),
-      ),
+    return const SizedBox(
+      height: 160,
+      child: Center(child: CircularProgressIndicator()),
     );
   }
 }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 120,
+      height: 160,
       child: Center(
         child: Text(
           'No models available',
-          style: TextStyle(
-            fontFamily: kMonoFamily,
-            fontSize: 12,
-            color: context.colors.muted,
-          ),
+          style: TextStyle(fontSize: 13, color: context.colors.muted),
         ),
       ),
     );
@@ -430,39 +463,26 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
   final String message;
   final VoidCallback onRetry;
-  const _ErrorState({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 12,
-              color: colors.error,
-            ),
+            style: TextStyle(color: colors.error, fontSize: 13),
           ),
           const SizedBox(height: 14),
-          OutlinedButton(
-            onPressed: onRetry,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colors.accent,
-              side: BorderSide(color: colors.border),
-            ),
-            child: const Text(
-              'Retry',
-              style: TextStyle(fontFamily: kMonoFamily, fontSize: 12),
-            ),
-          ),
+          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );

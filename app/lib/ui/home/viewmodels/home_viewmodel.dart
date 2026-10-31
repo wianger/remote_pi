@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:app/data/mesh/mesh_sync_service.dart';
 import 'package:app/data/sync/sync_service.dart';
 
 import 'package:app/data/preferences/preferences.dart';
@@ -25,14 +26,20 @@ class HomeViewModel extends ViewModel<HomeState> {
   final SyncService? _sync;
   final Preferences _prefs;
   final ConnectionManager _conn;
+  final MeshSyncService? _meshSync;
   StreamSubscription<Map<String, PresenceState>>? _presenceSub;
   StreamSubscription<Map<String, List<RoomInfo>>>? _roomsSub;
   StreamSubscription<ConnectionStatus>? _statusSub;
   bool _relayConnected = false;
   bool _disposed = false;
 
-  HomeViewModel(this._storage, this._prefs, this._conn, [this._sync])
-    : super(const HomeLoading()) {
+  HomeViewModel(
+    this._storage,
+    this._prefs,
+    this._conn, [
+    this._sync,
+    this._meshSync,
+  ]) : super(const HomeLoading()) {
     _relayConnected = _conn.status is StatusOnline;
     _load();
     _presenceSub = _conn.presenceStream.listen(_onPresence);
@@ -203,6 +210,69 @@ class HomeViewModel extends ViewModel<HomeState> {
     }
     if (target == null) return;
     await _storage.savePeer(target.copyWith(nickname: trimmed));
+  }
+
+  /// Remove a paired computer and its phone-local session cache.
+  ///
+  /// Device management lives in the sidebar. The mesh publish mirrors the
+  /// revoke flow used by Settings so a deleted peer cannot be rehydrated from
+  /// a stale membership row on the relay.
+  Future<void> deleteDevice(String epk) async {
+    final key = toStandardB64(epk);
+    final target = devices[key];
+    if (target == null) return;
+
+    final activeEpk = _conn.activePeer?.remoteEpk;
+    final wasActive =
+        activeEpk != null && toStandardB64(activeEpk) == key ||
+        _prefs.selectedPeerEpk != null &&
+            toStandardB64(_prefs.selectedPeerEpk!) == key;
+
+    if (_prefs.selectedDeviceEpk == key) {
+      await _prefs.setSelectedDevice(null);
+    }
+    if (_prefs.selectedPeerEpk != null &&
+        toStandardB64(_prefs.selectedPeerEpk!) == key) {
+      await _prefs.setSelectedRoom();
+    }
+
+    if (_sync != null) {
+      for (final item in allItems.where(
+        (item) => toStandardB64(item.peer.remoteEpk) == key,
+      )) {
+        try {
+          await _sync.removeCachedSession(
+            item.peer.remoteEpk,
+            item.room.roomId,
+          );
+        } catch (_) {
+          // Removing the pairing must still succeed if a local cache entry is
+          // already gone or temporarily unavailable.
+        }
+      }
+    }
+    await _storage.deleteRooms(target.remoteEpk);
+    await _storage.deletePeerSilent(target.remoteEpk);
+
+    final remaining = await _storage.listPeers();
+    if (_meshSync != null) {
+      // ignore: unawaited_futures
+      _meshSync.publish(allowEmpty: remaining.isEmpty);
+    }
+    _conn.subscribeToPeers(remaining.map((peer) => peer.remoteEpk).toList());
+    if (wasActive) {
+      await _conn.disconnect();
+      if (remaining.isNotEmpty) {
+        final fallback = remaining.first;
+        await _prefs.setSelectedPeerEpk(fallback.remoteEpk);
+        // ignore: unawaited_futures
+        _conn.boot(preferredEpk: fallback.remoteEpk);
+      }
+    }
+    if (remaining.isEmpty) {
+      await _prefs.setOnboardingCompleted(false);
+    }
+    _storage.notifyPeersChanged();
   }
 
   /// Workspace id → the secondary line shown in the workspace picker.

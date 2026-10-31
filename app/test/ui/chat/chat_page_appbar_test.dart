@@ -160,6 +160,23 @@ void main() {
       // "Ready" immediately instead of flashing offline/reconnecting.
       expect(find.text('Ready'), findsOneWidget);
 
+      // Header and composer are independent overlays over the transcript,
+      // rather than two rows that can be mistaken for floating controls.
+      expect(find.byKey(const Key('chat-floating-header')), findsOneWidget);
+      expect(find.byKey(const Key('chat-floating-composer')), findsOneWidget);
+      expect(
+        tester.getRect(find.byKey(const Key('chat-floating-header'))).bottom,
+        lessThan(
+          tester.getRect(find.byKey(const Key('chat-floating-composer'))).top,
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Session actions'));
+      await tester.pumpAndSettle();
+      expect(find.text('Rename'), findsOneWidget);
+      expect(find.text('Info'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+
       // Unmount + dispose in-body (the framework's pending-timer check runs
       // before addTearDown; conn's watchdog must be cancelled here).
       await tester.pumpWidget(const SizedBox());

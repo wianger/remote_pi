@@ -411,8 +411,8 @@ class Preferences extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSelectedDevice(String epk) =>
-      _updateNavigation(toStandardB64(epk));
+  Future<void> setSelectedDevice(String? epk) =>
+      _updateNavigation(epk == null ? null : toStandardB64(epk));
 
   Future<void> setSelectedWorkspace(String value) {
     final separator = value.indexOf(':');
@@ -426,10 +426,10 @@ class Preferences extends ChangeNotifier {
     );
   }
 
-  Future<void> _updateNavigation(String epk, {String? workspace}) {
+  Future<void> _updateNavigation(String? epk, {String? workspace}) {
     final pending = _navigationWrites.then((_) async {
       final remembered = Map<String, String>.of(_workspacesByDevice);
-      if (workspace != null) remembered[epk] = workspace;
+      if (epk != null && workspace != null) remembered[epk] = workspace;
       if (_selectedDeviceEpk == epk &&
           mapEquals(remembered, _workspacesByDevice)) {
         return;
@@ -442,7 +442,7 @@ class Preferences extends ChangeNotifier {
       );
       _selectedDeviceEpk = epk;
       _workspacesByDevice = remembered;
-      _selectedWorkspace = remembered[epk];
+      _selectedWorkspace = epk == null ? null : remembered[epk];
       notifyListeners();
     });
     _navigationWrites = pending.catchError((Object _) {});

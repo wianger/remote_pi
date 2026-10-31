@@ -98,11 +98,13 @@ class AppColors extends ThemeExtension<AppColors> {
 
   // Functional chrome uses these tokens; prose and code use opaque surfaces.
   bool get _isDark => bg.computeLuminance() < 0.2;
-  Color get glassFill => inputFill.withValues(alpha: _isDark ? 0.91 : 0.89);
-  Color get glassTint => surface.withValues(alpha: _isDark ? 0.94 : 0.90);
-  Color get glassEdge => text.withValues(alpha: _isDark ? 0.18 : 0.10);
+  Color get glassFill => inputFill.withValues(alpha: _isDark ? 0.72 : 0.68);
+  Color get glassTint => surface.withValues(alpha: _isDark ? 0.62 : 0.54);
+  Color get glassEdge => text.withValues(alpha: _isDark ? 0.24 : 0.16);
+  Color get glassHighlight =>
+      const Color(0xFFFFFFFF).withValues(alpha: _isDark ? 0.10 : 0.42);
   Color get glassShadow =>
-      const Color(0xFF000000).withValues(alpha: _isDark ? 0.16 : 0.06);
+      const Color(0xFF000000).withValues(alpha: _isDark ? 0.24 : 0.09);
   Color get selection => accent.withValues(alpha: _isDark ? 0.13 : 0.09);
 
   /// Graphite dark palette. Gold is reserved for the bird and small details.

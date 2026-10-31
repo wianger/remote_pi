@@ -5,6 +5,7 @@ import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
+import 'package:app/ui/workspaces/widgets/scope_switchers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,50 @@ import 'package:provider/provider.dart';
 import '../../support/phone_controls.dart';
 
 void main() {
+  testWidgets('device switch, rename and delete use separate tap targets', (
+    tester,
+  ) async {
+    String? switched;
+    var renameCalls = 0;
+    var deleteCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildLightTheme(),
+        home: Scaffold(
+          body: DeviceSwitcher(
+            devices: const {
+              'computer-a': 'Computer A',
+              'computer-b': 'Computer B',
+            },
+            selected: 'computer-a',
+            onSelected: (value) => switched = value,
+            onRenameSelected: () => renameCalls++,
+            onDeleteSelected: () => deleteCalls++,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Computer A'));
+    expect(switched, isNull);
+    expect(renameCalls, 0);
+    expect(deleteCalls, 0);
+
+    await tester.tap(find.byKey(const Key('device-rename')));
+    expect(renameCalls, 1);
+    expect(deleteCalls, 0);
+
+    await tester.tap(find.byKey(const Key('device-delete')));
+    expect(deleteCalls, 1);
+
+    await tester.tap(find.byKey(const Key('device-switch')));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch device'), findsOneWidget);
+    await tester.tap(find.text('Computer B'));
+    await tester.pumpAndSettle();
+    expect(switched, 'computer-b');
+  });
+
   testWidgets(
     'workspace control replaces status chips and delete persists across room refresh',
     (tester) async {

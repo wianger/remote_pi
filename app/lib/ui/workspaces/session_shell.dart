@@ -52,26 +52,11 @@ Future<void> _deleteFromPhone(BuildContext context, HomeItem item) async {
   final vm = context.read<HomeViewModel>();
   final selection = context.read<SessionSelection>();
   final wasSelected = selection.matches(item.peer.remoteEpk, item.room.roomId);
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Delete from phone?'),
-      content: Text(
-        'Remove "${item.displayName}" and clear its cached messages on this phone? Computer history and the running agent are kept.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
+  final confirmed = await showSessionDeleteDialog(
+    context,
+    name: item.displayName,
   );
-  if (!context.mounted || confirmed != true) return;
+  if (!context.mounted || !confirmed) return;
   try {
     await vm.deleteSession(item);
     if (!context.mounted) return;
@@ -348,6 +333,30 @@ class _SessionSidebarState extends State<SessionSidebar> {
     }
   }
 
+  Future<void> _deleteSelectedDevice(HomeViewModel vm) async {
+    final epk = vm.selectedDevice;
+    if (epk == null) return;
+    final peer = vm.devices[epk];
+    if (peer == null) return;
+    final name = peer.nickname ?? peer.sessionName;
+    final confirmed = await showDeviceDeleteDialog(context, name: name);
+    if (!mounted || !confirmed) return;
+    try {
+      await vm.deleteDevice(epk);
+      if (!mounted) return;
+      context.read<SessionSelection>().clear();
+      widget.close?.call();
+      context.go('/home');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not delete this device. Try again.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -405,6 +414,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               enabled: !_choosing,
                               onSelected: (value) =>
                                   _choose(() => vm.selectDevice(value)),
+                              onDeleteSelected: () => _deleteSelectedDevice(vm),
                               onRenameSelected: vm.selectedDevice == null
                                   ? null
                                   : () async {
@@ -561,59 +571,64 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 endIndent: 20,
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          widget.close?.call();
-                          context.push('/pair');
-                        },
-                        icon: Icon(
-                          LucideIcons.scanLine,
-                          size: 16,
-                          color: colors.accent,
-                        ),
-                        label: const Text(
-                          'Pair',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          side: BorderSide(color: colors.border),
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
+                    _SidebarCircleAction(
+                      key: const Key('sidebar-pair'),
+                      tooltip: 'Pair computer',
+                      icon: LucideIcons.scanLine,
+                      onPressed: () {
+                        widget.close?.call();
+                        context.push('/pair');
+                      },
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          widget.close?.call();
-                          context.push('/settings');
-                        },
-                        icon: Icon(
-                          LucideIcons.settings2,
-                          size: 16,
-                          color: colors.accent,
-                        ),
-                        label: const Text(
-                          'Settings',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                          side: BorderSide(color: colors.border),
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
+                    const SizedBox(width: 10),
+                    _SidebarCircleAction(
+                      key: const Key('sidebar-settings'),
+                      tooltip: 'Settings',
+                      icon: LucideIcons.settings2,
+                      onPressed: () {
+                        widget.close?.call();
+                        context.push('/settings');
+                      },
                     ),
                   ],
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarCircleAction extends StatelessWidget {
+  const _SidebarCircleAction({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return BayaGlassSurface(
+      radius: 23,
+      padding: EdgeInsets.zero,
+      child: SizedBox.square(
+        dimension: 46,
+        child: IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 19, color: colors.accent),
         ),
       ),
     );

@@ -29,17 +29,44 @@ class BayaGlassSurface extends StatelessWidget {
         gradient: highContrast
             ? null
             : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [colors.glassFill, colors.glassTint],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0, 0.48, 1],
+                colors: [
+                  colors.glassFill,
+                  colors.glassTint,
+                  colors.glassFill.withValues(alpha: colors.glassFill.a * .92),
+                ],
               ),
         borderRadius: corners,
         border: Border.all(
           color: highContrast ? colors.muted2 : colors.glassEdge,
-          width: highContrast ? 1.2 : 0.75,
+          width: highContrast ? 1.2 : 0.9,
         ),
       ),
-      child: Padding(padding: padding, child: child),
+      child: Stack(
+        children: [
+          if (!highContrast)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: corners,
+                    gradient: RadialGradient(
+                      center: const Alignment(-0.8, -1),
+                      radius: 1.2,
+                      colors: [
+                        colors.glassHighlight,
+                        colors.glassHighlight.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Padding(padding: padding, child: child),
+        ],
+      ),
     );
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -48,8 +75,9 @@ class BayaGlassSurface extends StatelessWidget {
             ? [
                 BoxShadow(
                   color: colors.glassShadow,
-                  blurRadius: 22,
-                  offset: const Offset(0, 6),
+                  blurRadius: 28,
+                  spreadRadius: 1,
+                  offset: const Offset(0, 8),
                 ),
               ]
             : null,
@@ -59,7 +87,7 @@ class BayaGlassSurface extends StatelessWidget {
         child: highContrast
             ? surface
             : BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
                 child: surface,
               ),
       ),

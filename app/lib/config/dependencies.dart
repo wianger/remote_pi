@@ -174,6 +174,7 @@ Future<void> setupDependencies() async {
       _injector.get<Preferences>(),
       _injector.get<ConnectionManager>(),
       _injector.get<SyncService>(),
+      _injector.get<MeshSyncService>(),
     ),
   );
   _injector.addViewModel<SettingsViewModel>(
