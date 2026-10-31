@@ -730,6 +730,7 @@ class _SessionRow extends StatelessWidget {
         ? colors.success
         : colors.muted;
     final tile = ListTile(
+      key: ValueKey('session-row-${item.peer.remoteEpk}-${item.room.roomId}'),
       selected: selected,
       selectedTileColor: colors.selection,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
@@ -820,19 +821,58 @@ class _SessionRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: onDelete == null
           ? tile
-          : GestureDetector(
-              key: ValueKey(
-                'session-delete-${item.peer.remoteEpk}-${item.room.roomId}',
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: Dismissible(
+                key: ValueKey(
+                  'session-delete-${item.peer.remoteEpk}-${item.room.roomId}',
+                ),
+                direction: DismissDirection.startToEnd,
+                dismissThresholds: const {DismissDirection.startToEnd: .34},
+                background: const _SessionDeleteBackground(),
+                confirmDismiss: (_) async {
+                  await onDelete!();
+                  // The ViewModel owns the actual removal and the dialog may
+                  // be cancelled. Keep the row in place until that state
+                  // changes.
+                  return false;
+                },
+                child: tile,
               ),
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragEnd: (details) {
-                // Sessions delete with a right swipe. The confirmation sheet
-                // is shown after the gesture completes, so a normal tap still
-                // opens the session and the whole row remains easy to hit.
-                if ((details.primaryVelocity ?? 0) > 0) onDelete!();
-              },
-              child: tile,
             ),
+    );
+  }
+}
+
+class _SessionDeleteBackground extends StatelessWidget {
+  const _SessionDeleteBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return ColoredBox(
+      color: colors.error.withValues(alpha: .16),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.trash2, size: 18, color: colors.error),
+              const SizedBox(width: 8),
+              Text(
+                'Delete',
+                style: context.typo.sansBody.copyWith(
+                  color: colors.error,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

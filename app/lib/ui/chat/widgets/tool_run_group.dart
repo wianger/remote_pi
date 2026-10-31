@@ -118,6 +118,10 @@ class ToolRunGroup extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
+    if (tools.length == 1) {
+      await _showDetail(context, tools.single);
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,

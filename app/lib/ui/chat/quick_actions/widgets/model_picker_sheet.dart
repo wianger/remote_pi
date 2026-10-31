@@ -119,7 +119,11 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
       child: Padding(
         padding: EdgeInsets.only(bottom: mq.viewInsets.bottom),
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: mq.size.height * .82),
+          // The first page only contains Model and Effort. Keep it compact;
+          // the model/effort detail lists retain the full scrollable height.
+          constraints: BoxConstraints(
+            maxHeight: detail ? mq.size.height * .82 : 220,
+          ),
           child: BayaGlassSurface(
             key: const Key('model-picker-sheet'),
             radius: 38,
@@ -127,16 +131,16 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Container(
-                  width: 38,
-                  height: 4,
+                  width: 36,
+                  height: 3,
                   decoration: BoxDecoration(
                     color: context.colors.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 _Header(
                   title: _editingModel
                       ? 'Select model'
@@ -197,7 +201,7 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
                             }
                             // Level 1: Model + Effort summary rows.
                             return ListView(
-                              padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                               children: [
                                 _PickerRow(
                                   key: const Key('model-picker-model'),
@@ -206,7 +210,7 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
                                   onTap: () =>
                                       setState(() => _editingModel = true),
                                 ),
-                                const SizedBox(height: 10),
+                                const SizedBox(height: 6),
                                 _PickerRow(
                                   key: const Key('model-picker-effort'),
                                   label: 'Effort',
@@ -245,12 +249,13 @@ class _Header extends StatelessWidget {
   final String title;
   final VoidCallback? onRefresh;
   final VoidCallback? onBack;
+  static const double _height = 48;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return SizedBox(
-      height: 62,
+      height: _height,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -262,7 +267,7 @@ class _Header extends StatelessWidget {
                 radius: 22,
                 elevated: false,
                 child: SizedBox.square(
-                  dimension: 44,
+                  dimension: 38,
                   child: IconButton(
                     key: const Key('model-picker-close'),
                     tooltip: onBack == null
@@ -271,7 +276,7 @@ class _Header extends StatelessWidget {
                     onPressed: onBack ?? () => Navigator.of(context).pop(),
                     icon: Icon(
                       onBack == null ? LucideIcons.x : LucideIcons.chevronLeft,
-                      size: 21,
+                      size: 19,
                       color: colors.text,
                     ),
                   ),
@@ -282,7 +287,7 @@ class _Header extends StatelessWidget {
           Text(
             title,
             style: context.typo.sansBody.copyWith(
-              fontSize: 21,
+              fontSize: 19,
               fontWeight: FontWeight.w600,
               letterSpacing: -.35,
             ),
@@ -297,7 +302,7 @@ class _Header extends StatelessWidget {
                 onPressed: onRefresh,
                 icon: Icon(
                   LucideIcons.refreshCw,
-                  size: 18,
+                  size: 17,
                   color: onRefresh == null
                       ? colors.muted.withValues(alpha: .35)
                       : colors.muted,
@@ -333,11 +338,11 @@ class _PickerRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 1),
         title: Text(
           label,
           style: context.typo.sansBody.copyWith(
-            fontSize: 16,
+            fontSize: 14.5,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -346,7 +351,7 @@ class _PickerRow extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: context.typo.sansBody.copyWith(
-            fontSize: 12.5,
+            fontSize: 11.5,
             color: colors.muted,
           ),
         ),

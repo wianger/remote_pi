@@ -114,11 +114,41 @@ void main() {
     );
     expect(find.text('Ran a command, used a tool'), findsOneWidget);
     // The collapsed row now names what ran instead of only counting calls.
-    expect(find.text('Post review findings on PR 371  ·  +1 more'), findsOneWidget);
+    expect(
+      find.text('Post review findings on PR 371  ·  +1 more'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Ran a command, used a tool'));
     await tester.pumpAndSettle();
     expect(find.text('Ran'), findsOneWidget);
     expect(find.text('Messaged agent'), findsOneWidget);
     expect(find.text('Post review findings on PR 371'), findsOneWidget);
+  });
+
+  testWidgets('a single tool opens its final detail without an extra chooser', (
+    tester,
+  ) async {
+    const tool = ToolEvent(
+      id: 'tool-1',
+      toolCallId: 'cmd-1',
+      tool: 'command',
+      args: {'command': 'git status'},
+      result: 'working tree clean',
+      status: ToolEventStatus.completed,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildLightTheme(),
+        home: const Scaffold(body: ToolRunGroup(tools: [tool])),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('tool-run-group')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('COMMAND'), findsOneWidget);
+    expect(find.text('git status'), findsOneWidget);
+    expect(find.text('RESULT'), findsOneWidget);
+    expect(find.text('working tree clean'), findsOneWidget);
   });
 }

@@ -132,9 +132,10 @@ Building these changes does not change the active official Pi installation.
 
 ## Bundled fonts
 
-The Android UI uses Geist for controls, input and the wordmark, Source Serif 4
-for assistant prose, and Geist Mono for code, commands and paths. This is an
-open approximation of the Claude-like typography. All fonts are bundled under
+The Android UI uses Geist for controls and input, Nunito for the Baya wordmark,
+Source Serif 4 for assistant prose, and Geist Mono for code, commands and
+paths. This is an open approximation of the Claude-like typography. All fonts
+are bundled under
 SIL OFL 1.1, including original copyright notices; no runtime font fetch is
 required. CJK falls back to the device's installed sans fonts. Weight, italics,
 font size preferences and light/dark colors remain supported. The license
@@ -558,3 +559,17 @@ names the first call it made (`git status  ·  +2 more`) instead of only
 counting calls. The composer's model control is a filled pill with a CPU icon
 and caret so it reads as the switcher next to `+`, and the mic and send buttons
 are matching 44px circles in every state.
+
+## Compact interactions (1.2.23 / build 32)
+
+The chat overflow actions open from the root navigator as a safe-area bottom
+sheet instead of clipping against the upper-right trigger. Single tool calls
+open their command and result detail directly; consecutive calls still share a
+summary sheet, while calls separated by text remain independent. Thinking uses
+the same tighter inter-item rhythm and a hairline guide instead of a heavy
+border.
+
+The model switcher is a compact two-row Model / Effort sheet until a detail
+list is opened. Voice, send and stop glyphs use Lucide 300 weights. The Baya
+wordmark now uses the bundled Nunito rounded face, and session swipe-to-delete
+restores a full Dismissible slide with a labelled delete background.

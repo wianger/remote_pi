@@ -236,7 +236,20 @@ void main() {
       // Rename stays on the pencil; deletion moved to a right-swipe on the
       // whole session row (no more long-press menu).
       expect(find.byTooltip('Rename session'), findsOneWidget);
-      await tester.drag(find.text('Beta task'), const Offset(400, 0));
+      final betaDelete = find.byKey(
+        ValueKey('session-delete-${peer.remoteEpk}-beta'),
+      );
+      expect(betaDelete, findsOneWidget);
+      final betaRow = find.byKey(
+        ValueKey('session-row-${peer.remoteEpk}-beta'),
+      );
+      await tester.ensureVisible(betaRow);
+      await tester.pumpAndSettle();
+      final betaCenter = tester.getCenter(betaRow);
+      await tester.dragFrom(
+        Offset(betaCenter.dx - 70, betaCenter.dy),
+        const Offset(260, 0),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Delete from phone?'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
@@ -255,7 +268,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Renamed Beta'), findsOneWidget);
 
-      await tester.drag(find.text('Renamed Beta'), const Offset(400, 0));
+      final renamedBeta = find.byKey(
+        ValueKey('session-row-${peer.remoteEpk}-beta'),
+      );
+      await tester.ensureVisible(renamedBeta);
+      await tester.pumpAndSettle();
+      final renamedCenter = tester.getCenter(renamedBeta);
+      await tester.dragFrom(
+        Offset(renamedCenter.dx - 70, renamedCenter.dy),
+        const Offset(260, 0),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Delete from phone?'), findsOneWidget);
       await tester.tap(

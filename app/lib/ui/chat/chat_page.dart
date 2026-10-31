@@ -277,6 +277,9 @@ class ChatPage extends StatelessWidget {
     final colors = context.colors;
     final action = await showModalBottomSheet<String>(
       context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      useSafeArea: true,
       showDragHandle: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: .38),
@@ -918,7 +921,9 @@ class _MessageListState extends State<_MessageList> {
                 bool isTool(int i) =>
                     i >= 0 &&
                     i < allItems.length &&
-                    (allItems[i] is ToolRunItem || allItems[i] is ToolEvent);
+                    (allItems[i] is ToolRunItem ||
+                        allItems[i] is ToolEvent ||
+                        allItems[i] is ThinkingMsg);
                 // reverse:true => displayed index 0 is allItems.last.
                 // Separator at display idx is between display[idx] and display[idx+1],
                 // i.e. allItems[last-idx] and allItems[last-idx-1].

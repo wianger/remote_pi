@@ -15,8 +15,8 @@ void main() {
         ),
       ),
     );
-    expect(find.byIcon(LucideIcons.arrowUp600), findsOneWidget);
-    expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.arrowUp300), findsOneWidget);
+    expect(find.byIcon(LucideIcons.mic300), findsOneWidget);
     await tester.tap(find.byKey(const Key('input-bar-action')));
     await tester.pumpAndSettle();
     expect(sent, isEmpty);
@@ -29,6 +29,6 @@ void main() {
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
       isEmpty,
     );
-    expect(find.byIcon(LucideIcons.arrowUp600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.arrowUp300), findsOneWidget);
   });
 }

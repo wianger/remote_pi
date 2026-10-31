@@ -6,6 +6,7 @@ import 'package:app/ui/core/themes/app_colors.dart';
 const String kSansFamily = 'Geist';
 const String kReadingFamily = 'Source Serif 4';
 const String kMonoFamily = 'Geist Mono';
+const String kWordmarkFamily = 'Nunito';
 
 /// CJK and other scripts use the device's installed sans fonts. Do not send
 /// Chinese text through a platform serif fallback when reading Latin prose.
@@ -15,7 +16,7 @@ const List<String> kFontFallback = [
   'sans-serif',
 ];
 
-/// The wordmark shares the bundled interface face and works fully offline.
+/// General branded labels use the bundled interface face.
 TextStyle brandTextStyle({
   required double fontSize,
   FontWeight fontWeight = FontWeight.w700,
@@ -34,20 +35,20 @@ TextStyle brandTextStyle({
   );
 }
 
-/// Display face for the app wordmark. The serif carries the brand better than
-/// an italic sans, and it is bundled, so it renders identically offline.
+/// Display face for the app wordmark. Nunito's rounded English forms keep the
+/// compact Baya mark friendly while remaining fully bundled and offline.
 TextStyle brandDisplayTextStyle({
   required double fontSize,
   FontWeight fontWeight = FontWeight.w600,
   Color? color,
 }) {
   return TextStyle(
-    fontFamily: kReadingFamily,
+    fontFamily: kWordmarkFamily,
     fontFamilyFallback: kFontFallback,
     fontSize: fontSize,
     fontWeight: fontWeight,
     color: color,
-    letterSpacing: 0.2,
+    letterSpacing: -.2,
     height: 1.1,
   );
 }

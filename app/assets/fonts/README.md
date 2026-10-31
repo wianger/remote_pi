@@ -7,7 +7,8 @@ the Claude-like typographic hierarchy, not Anthropic's proprietary fonts.
 
 | Role | Family | Upstream |
 | --- | --- | --- |
-| Interface, input, wordmark | Geist | https://github.com/vercel/geist-font |
+| Interface and input | Geist | https://github.com/vercel/geist-font |
+| App wordmark | Nunito | https://github.com/google/fonts/tree/main/ofl/nunito |
 | Assistant prose | Source Serif 4 | https://github.com/adobe-fonts/source-serif |
 | Code, commands, file paths | Geist Mono | https://github.com/vercel/geist-font |
 

@@ -70,7 +70,7 @@ void main() {
 
   Future<TestGesture> startHold(WidgetTester tester) async {
     final gesture = await tester.startGesture(
-      tester.getCenter(find.byIcon(LucideIcons.mic600)),
+      tester.getCenter(find.byIcon(LucideIcons.mic300)),
     );
     // Exceed kLongPressTimeout (500ms) so onLongPressStart fires.
     await tester.pump(const Duration(milliseconds: 700));
@@ -84,7 +84,7 @@ void main() {
     tester,
   ) async {
     await pumpBar(tester);
-    expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.mic300), findsOneWidget);
   });
 
   testWidgets('hold shows the recording strip; release fills the field', (
@@ -102,7 +102,7 @@ void main() {
     expect(find.byKey(const Key('recording-strip')), findsNothing);
     expect(find.text('hello from voice'), findsOneWidget);
     // Field now has text → action button is the send affordance.
-    expect(find.byIcon(LucideIcons.arrowUp600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.arrowUp300), findsOneWidget);
   });
 
   testWidgets('voice stays available while typing and appends the transcript', (
@@ -111,7 +111,7 @@ void main() {
     await pumpBar(tester);
     await tester.enterText(find.byType(TextField), 'draft');
     await tester.pump();
-    expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.mic300), findsOneWidget);
 
     final gesture = await startHold(tester);
     await gesture.up();
@@ -139,12 +139,12 @@ void main() {
 
     expect(find.byKey(const Key('recording-strip')), findsNothing);
     expect(find.text('hello from voice'), findsNothing);
-    expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.mic300), findsOneWidget);
   });
 
   testWidgets('a plain tap nudges with the hold-to-talk hint', (tester) async {
     await pumpBar(tester);
-    await tester.tap(find.byIcon(LucideIcons.mic600));
+    await tester.tap(find.byIcon(LucideIcons.mic300));
     await tester.pump();
     expect(hints, [VoiceHint.holdToTalk]);
   });
@@ -155,7 +155,7 @@ void main() {
     // Resolve availability (mirrors the first interaction's init).
     await vm.ensureInit();
     await tester.pump();
-    expect(find.byIcon(LucideIcons.mic600), findsNothing);
+    expect(find.byIcon(LucideIcons.mic300), findsNothing);
   });
 
   testWidgets(
@@ -169,7 +169,7 @@ void main() {
       await pumpBar(tester);
 
       final gesture = await tester.startGesture(
-        tester.getCenter(find.byIcon(LucideIcons.mic600)),
+        tester.getCenter(find.byIcon(LucideIcons.mic300)),
       );
       await tester.pump(const Duration(milliseconds: 700)); // onLongPressStart
       await tester.pump();
@@ -188,7 +188,7 @@ void main() {
       // The recording that started behind the prompt is discarded: no phantom
       // strip, mic back, field empty.
       expect(find.byKey(const Key('recording-strip')), findsNothing);
-      expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+      expect(find.byIcon(LucideIcons.mic300), findsOneWidget);
       expect(find.text('hello from voice'), findsNothing);
     },
   );
@@ -202,7 +202,7 @@ void main() {
 
     expect(hints, contains(VoiceHint.permissionDenied));
     // Mic stays visible (#10) and no strip is shown.
-    expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+    expect(find.byIcon(LucideIcons.mic300), findsOneWidget);
     expect(find.byKey(const Key('recording-strip')), findsNothing);
 
     await gesture.up();

@@ -176,6 +176,14 @@ void main() {
       expect(find.text('Rename'), findsOneWidget);
       expect(find.text('Info'), findsOneWidget);
       expect(find.text('Delete'), findsOneWidget);
+      // The action list is a root bottom sheet, not a menu anchored to the
+      // upper-right action button.
+      final screenHeight =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      expect(
+        tester.getBottomLeft(find.text('Delete')).dy,
+        greaterThan(screenHeight * .6),
+      );
 
       // Unmount + dispose in-body (the framework's pending-timer check runs
       // before addTearDown; conn's watchdog must be cancelled here).

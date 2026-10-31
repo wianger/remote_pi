@@ -634,7 +634,7 @@ class _InlineStopButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(19),
           border: Border.all(color: colors.error.withValues(alpha: 0.55)),
         ),
-        child: Icon(LucideIcons.square600, color: colors.error, size: 17),
+        child: Icon(LucideIcons.square300, color: colors.error, size: 17),
       ),
     );
   }
@@ -919,11 +919,11 @@ class _ComposerActionButton extends StatelessWidget {
   IconData get _icon {
     switch (_mode) {
       case _ComposerMode.cancel:
-        return LucideIcons.square600;
+        return LucideIcons.square300;
       case _ComposerMode.sendText:
-        return LucideIcons.arrowUp600;
+        return LucideIcons.arrowUp300;
       case _ComposerMode.sendAudio:
-        return LucideIcons.mic600;
+        return LucideIcons.mic300;
     }
   }
 
@@ -1051,8 +1051,8 @@ class _ComposerActionButton extends StatelessWidget {
               _icon,
               key: ValueKey(_mode),
               color: foreground,
-              // Keep the familiar icon glyph for accessibility/test stability,
-              // but reduce its visual weight by giving it more breathing room.
+              // Lucide 300 matches the hairline weight used by native mobile
+              // composer controls without making the glyph visually weak.
               size: 19,
             ),
           ),

@@ -162,6 +162,7 @@ void main() {
     final picker = find.byKey(const Key('model-picker-sheet'));
     // Level 1: the Model + Effort summary rows.
     expect(picker, findsOneWidget);
+    expect(tester.getSize(picker).height, lessThan(240));
     expect(
       find.descendant(of: picker, matching: find.text('Opus 5.5')),
       findsOneWidget,

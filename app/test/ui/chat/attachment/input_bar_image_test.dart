@@ -130,7 +130,7 @@ void main() {
 
     expect(find.byKey(const Key('attach-preview')), findsOneWidget);
     expect(
-      find.byIcon(LucideIcons.arrowUp600),
+      find.byIcon(LucideIcons.arrowUp300),
       findsOneWidget,
     ); // send-mode (#6)
     // Attach button greys out while an image is attached (one max, #4).
@@ -173,7 +173,7 @@ void main() {
       await vm.pickFromGallery();
       await tester.pumpAndSettle(); // let the send icon's switcher settle
 
-      await tester.tap(find.byIcon(LucideIcons.arrowUp600));
+      await tester.tap(find.byIcon(LucideIcons.arrowUp300));
       await tester.pump();
 
       expect(sentText, '');

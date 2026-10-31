@@ -589,7 +589,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(chatKey),
-          matching: find.byKey(const ValueKey('tool-details-tool-review')),
+          matching: find.byKey(const ValueKey('tool-run-tool-review')),
         ),
       );
       await tester.pumpAndSettle();

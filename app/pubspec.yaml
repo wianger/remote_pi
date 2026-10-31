@@ -16,7 +16,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.2.22+31
+version: 1.2.23+32
 
 environment:
   sdk: ^3.11.5
@@ -110,6 +110,7 @@ flutter:
   assets:
     - assets/fonts/Geist/OFL.txt
     - assets/fonts/GeistMono/OFL.txt
+    - assets/fonts/Nunito/OFL.txt
     - assets/fonts/SourceSerif4/OFL.txt
 
   # Unmodified upstream static fonts; sources and checksums in assets/fonts.
@@ -125,6 +126,10 @@ flutter:
           weight: 700
         - asset: assets/fonts/Geist/Geist-Italic.ttf
           style: italic
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito/Nunito-Variable.ttf
+          weight: 600
     - family: Source Serif 4
       fonts:
         - asset: assets/fonts/SourceSerif4/SourceSerif4-Regular.ttf

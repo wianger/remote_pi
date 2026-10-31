@@ -72,10 +72,15 @@ class _ThinkingBlockState extends State<ThinkingBlock> {
         ),
         if (expanded)
           Container(
-            margin: const EdgeInsets.only(left: 9, top: 4, bottom: 8),
-            padding: const EdgeInsets.only(left: 17),
+            margin: const EdgeInsets.only(left: 7, top: 3, bottom: 6),
+            padding: const EdgeInsets.only(left: 13),
             decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: colors.border, width: 2)),
+              border: Border(
+                left: BorderSide(
+                  color: colors.border.withValues(alpha: .82),
+                  width: .8,
+                ),
+              ),
             ),
             child: SelectableText(
               widget.text,
