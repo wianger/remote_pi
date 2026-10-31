@@ -198,9 +198,9 @@ class DeviceSwitcher extends StatelessWidget {
 }
 
 /// Workspaces are phone-side logical groups. Sessions inside one group may
-/// come from unrelated folders, so this is a lightweight nested control under
-/// the device card — deliberately quieter than [DeviceSwitcher] so the two are
-/// easy to tell apart in the sidebar.
+/// come from unrelated folders. The card mirrors [DeviceSwitcher]'s geometry so
+/// the two read as sibling scopes; the icon, the small-caps label and the
+/// subtitle keep them distinguishable.
 class WorkspaceSwitcher extends StatelessWidget {
   const WorkspaceSwitcher({
     super.key,
@@ -420,6 +420,7 @@ class WorkspaceSwitcher extends StatelessWidget {
         key: const Key('workspace-switch'),
         onTap: canOpen ? () => _pick(context) : null,
         child: Padding(
+          // Same geometry as DeviceSwitcher so the two cards line up.
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             children: [
@@ -432,7 +433,7 @@ class WorkspaceSwitcher extends StatelessWidget {
                 ),
                 child: Icon(
                   LucideIcons.layoutDashboard,
-                  size: 21,
+                  size: 22,
                   color: canOpen ? colors.accent : colors.muted,
                 ),
               ),

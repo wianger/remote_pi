@@ -17,6 +17,7 @@ class Preferences extends ChangeNotifier {
   final FlutterSecureStorage _store;
   bool _hideToolCalls = false;
   Set<String> _hiddenSessions = {};
+  Set<String> _hiddenWorkspaces = {};
   Map<String, String> _sessionNames = {};
   Map<String, String> _sessionWorkspaces = {};
   Map<String, String> _workspaceNames = {};
@@ -34,6 +35,11 @@ class Preferences extends ChangeNotifier {
     : _store = store ?? const FlutterSecureStorage();
 
   static const _kHiddenSessionsKey = 'prefs.hidden_sessions';
+
+  /// Workspaces removed from the phone. Deleting a user-created workspace also
+  /// clears its name; folder-derived workspaces cannot be renamed away, so they
+  /// are recorded here instead.
+  static const _kHiddenWorkspacesKey = 'prefs.hidden_workspaces';
   static const _kSessionNamesKey = 'prefs.session_names';
   static const _kSessionWorkspacesKey = 'prefs.session_workspaces';
   static const _kWorkspaceNamesKey = 'prefs.workspace_names';
@@ -159,6 +165,22 @@ class Preferences extends ChangeNotifier {
       _hiddenSessions = hidden;
       changed = true;
     }
+    final hiddenWorkspacesRaw = await _store.read(key: _kHiddenWorkspacesKey);
+    Set<String> hiddenWorkspaces = {};
+    try {
+      final decoded = hiddenWorkspacesRaw == null
+          ? null
+          : jsonDecode(hiddenWorkspacesRaw);
+      if (decoded is List) {
+        hiddenWorkspaces = decoded.whereType<String>().toSet();
+      }
+    } on FormatException {
+      /* Invalid preference, fall back to showing the workspace. */
+    }
+    if (!setEquals(hiddenWorkspaces, _hiddenWorkspaces)) {
+      _hiddenWorkspaces = hiddenWorkspaces;
+      changed = true;
+    }
     final workspace = await _store.read(key: _kSelectedWorkspaceKey);
     if (workspace != _selectedWorkspace) {
       _selectedWorkspace = workspace;
@@ -276,6 +298,41 @@ class Preferences extends ChangeNotifier {
 
   bool isSessionHidden(String epk, String room) =>
       _hiddenSessions.contains(_conversationKey(epk, room));
+
+  /// True when this workspace was removed from the phone.
+  bool isWorkspaceHidden(String key) => _hiddenWorkspaces.contains(key);
+
+  /// Hide a workspace from the sidebar without touching its sessions. Used for
+  /// folder-derived workspaces, which reappear as soon as a session in that
+  /// folder exists again unless they are recorded here.
+  Future<void> hideWorkspace(String key) async {
+    if (!_hiddenWorkspaces.add(key)) return;
+    try {
+      await _store.write(
+        key: _kHiddenWorkspacesKey,
+        value: jsonEncode(_hiddenWorkspaces.toList()),
+      );
+    } catch (_) {
+      _hiddenWorkspaces.remove(key);
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  Future<void> restoreWorkspace(String key) async {
+    if (!_hiddenWorkspaces.remove(key)) return;
+    try {
+      await _store.write(
+        key: _kHiddenWorkspacesKey,
+        value: jsonEncode(_hiddenWorkspaces.toList()),
+      );
+    } catch (_) {
+      _hiddenWorkspaces.add(key);
+      rethrow;
+    }
+    notifyListeners();
+  }
+
   String? get selectedWorkspace => _selectedWorkspace;
   String? get selectedDeviceEpk => _selectedDeviceEpk;
   String? workspaceForDevice(String epk) =>
@@ -399,17 +456,24 @@ class Preferences extends ChangeNotifier {
   /// Delete a logical workspace without deleting its sessions or their
   /// computer history. Sessions that belonged to the workspace fall back to
   /// their folder-derived groups, and a stale remembered selection is removed.
+  ///
+  /// Workspaces the user did not create by hand have no name to remove, so
+  /// every deleted key is also recorded as hidden — otherwise a folder-derived
+  /// workspace would reappear on the next refresh.
   Future<void> deleteWorkspace(String key) async {
-    if (!_workspaceNames.containsKey(key)) return;
+    final wasNamed = _workspaceNames.containsKey(key);
+    if (!wasNamed && _hiddenWorkspaces.contains(key)) return;
     final deviceEnd = key.indexOf(':');
     final device = deviceEnd < 1 ? null : key.substring(0, deviceEnd);
     final beforeNames = Map<String, String>.of(_workspaceNames);
     final beforeSessionWorkspaces = Map<String, String>.of(_sessionWorkspaces);
+    final beforeHidden = Set<String>.of(_hiddenWorkspaces);
     final beforeByDevice = Map<String, String>.of(_workspacesByDevice);
     final beforeSelectedDevice = _selectedDeviceEpk;
     final beforeSelectedWorkspace = _selectedWorkspace;
 
     _workspaceNames.remove(key);
+    _hiddenWorkspaces.add(key);
     _sessionWorkspaces.removeWhere((_, workspace) => workspace == key);
     final remembered = Map<String, String>.of(_workspacesByDevice);
     if (device != null) {
@@ -427,6 +491,10 @@ class Preferences extends ChangeNotifier {
       await _store.write(
         key: _kWorkspaceNamesKey,
         value: jsonEncode(_workspaceNames),
+      );
+      await _store.write(
+        key: _kHiddenWorkspacesKey,
+        value: jsonEncode(_hiddenWorkspaces.toList()),
       );
       await _store.write(
         key: _kSessionWorkspacesKey,
@@ -449,6 +517,9 @@ class Preferences extends ChangeNotifier {
       _sessionWorkspaces
         ..clear()
         ..addAll(beforeSessionWorkspaces);
+      _hiddenWorkspaces
+        ..clear()
+        ..addAll(beforeHidden);
       _workspacesByDevice
         ..clear()
         ..addAll(beforeByDevice);

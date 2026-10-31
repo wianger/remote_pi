@@ -173,6 +173,9 @@ class HomeViewModel extends ViewModel<HomeState> {
 
   bool isCustomWorkspace(String key) => _prefs.isCustomWorkspace(key);
 
+  /// Deleting is offered for every workspace, not just hand-created ones: a
+  /// folder-derived workspace carries a local hidden flag instead of a name to
+  /// remove.
   Future<void> deleteWorkspace(String key) => _prefs.deleteWorkspace(key);
 
   /// Rename a phone-side workspace. The key is stable, so sessions assigned to
@@ -298,6 +301,9 @@ class HomeViewModel extends ViewModel<HomeState> {
       final key = workspaceKeyFor(item);
       if (key != null) result.putIfAbsent(key, () => item.room.cwd ?? '');
     }
+    // A workspace removed from the phone stays gone even when a session in its
+    // folder is announced again.
+    result.removeWhere((key, _) => _prefs.isWorkspaceHidden(key));
     for (final key in result.keys.toList()) {
       final items = _itemsInWorkspace(key);
       final folders = items

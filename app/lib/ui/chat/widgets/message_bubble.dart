@@ -1,8 +1,9 @@
+import 'dart:async';
+
 import 'package:app/domain/session_state.dart';
 import 'package:app/ui/chat/widgets/agent_markdown.dart';
 import 'package:app/ui/chat/widgets/image_bubble.dart';
 import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -226,40 +227,61 @@ class AssistantBubble extends StatelessWidget {
 /// Inline copy footer shown under the last assistant segment of a turn.
 /// Rendered as a labelled row instead of a lone floating icon so the action
 /// reads as belonging to the reply above it.
-class _CopyRow extends StatelessWidget {
+class _CopyRow extends StatefulWidget {
   const _CopyRow({required this.text});
 
   final String text;
 
   @override
+  State<_CopyRow> createState() => _CopyRowState();
+}
+
+class _CopyRowState extends State<_CopyRow> {
+  bool _copied = false;
+  Timer? _reset;
+
+  @override
+  void dispose() {
+    _reset?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.text));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    _reset?.cancel();
+    _reset = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final tint = _copied ? colors.accent : colors.muted2;
     return Align(
       alignment: Alignment.centerLeft,
       child: InkWell(
         key: const Key('assistant-copy'),
         borderRadius: BorderRadius.circular(8),
-        onTap: () async {
-          await Clipboard.setData(ClipboardData(text: text));
-          if (!context.mounted) return;
-          showBayaNotice(
-            context,
-            title: 'Response copied',
-            message: 'The agent reply is on your clipboard.',
-          );
-        },
+        onTap: _copy,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(LucideIcons.copy, size: 13, color: colors.muted2),
+              Icon(
+                _copied ? LucideIcons.check : LucideIcons.copy,
+                size: 13,
+                color: tint,
+              ),
               const SizedBox(width: 5),
               Text(
-                'Copy',
+                _copied ? 'Copied' : 'Copy',
                 style: context.typo.sansBody.copyWith(
                   fontSize: 12,
-                  color: colors.muted2,
+                  color: tint,
                 ),
               ),
             ],

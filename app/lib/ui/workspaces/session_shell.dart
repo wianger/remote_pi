@@ -355,7 +355,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
 
   Future<bool> _deleteWorkspace(HomeViewModel vm, String key) async {
     final name = vm.workspaceLabel(key);
-    if (name == null || !vm.isCustomWorkspace(key)) return false;
+    if (name == null) return false;
     final confirmed = await showWorkspaceDeleteDialog(context, name: name);
     if (!mounted || !confirmed) return false;
     try {
@@ -440,14 +440,10 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                       Expanded(
                                         child: Text(
                                           kAppName,
-                                          style:
-                                              brandTextStyle(
-                                                fontSize: 25,
-                                                color: colors.text,
-                                              ).copyWith(
-                                                fontStyle: FontStyle.italic,
-                                                letterSpacing: -0.4,
-                                              ),
+                                          style: brandDisplayTextStyle(
+                                            fontSize: 27,
+                                            color: colors.text,
+                                          ),
                                         ),
                                       ),
                                       _SidebarCircleAction(
@@ -483,7 +479,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                           ),
                           const SizedBox(height: 14),
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: WorkspaceSwitcher(
                               key: const Key('workspace-selector'),
                               workspaces: workspaces,
@@ -499,7 +495,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               onCreate: () => showCreateWorkspace(context),
                               onRename: (key, currentName) =>
                                   _renameWorkspace(vm, key, currentName),
-                              canDelete: vm.isCustomWorkspace,
                               onDelete: (key) => _deleteWorkspace(vm, key),
                             ),
                           ),
@@ -576,16 +571,12 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         ],
                       ),
               ),
-              Divider(
-                color: colors.border.withValues(alpha: 0.6),
-                height: 1,
-                indent: 20,
-                endIndent: 20,
-              ),
-              // Claude-style footer: settings on the left, one primary pill
-              // for starting a session.
+              const Spacer(),
+              // Footer: settings circle on the left, the primary New session
+              // pill bottom-right. No divider above it — the pill itself
+              // separates the footer from the session list.
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
                 child: Row(
                   children: [
                     _SidebarCircleAction(
@@ -597,7 +588,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         context.push('/settings');
                       },
                     ),
-                    const SizedBox(width: 12),
+                    const Spacer(),
                     FilledButton.icon(
                       key: const Key('sidebar-new-session'),
                       onPressed: vm.selectedWorkspace == null
@@ -613,7 +604,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                       ),
                     ),
-                    const Spacer(),
                   ],
                 ),
               ),
@@ -728,7 +718,7 @@ class _SessionRow extends StatelessWidget {
   final bool selected, online, working;
   final VoidCallback? onTap;
   final VoidCallback? onRename;
-  final VoidCallback? onDelete;
+  final Future<void> Function()? onDelete;
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -830,50 +820,19 @@ class _SessionRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: onDelete == null
           ? tile
-          : Dismissible(
+          : GestureDetector(
               key: ValueKey(
                 'session-delete-${item.peer.remoteEpk}-${item.room.roomId}',
               ),
-              direction: DismissDirection.startToEnd,
-              confirmDismiss: (_) async {
-                onDelete!();
-                return false;
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) {
+                // Sessions delete with a right swipe. The confirmation sheet
+                // is shown after the gesture completes, so a normal tap still
+                // opens the session and the whole row remains easy to hit.
+                if ((details.primaryVelocity ?? 0) > 0) onDelete!();
               },
-              background: const _SessionDeleteBackground(),
               child: tile,
             ),
-    );
-  }
-}
-
-class _SessionDeleteBackground extends StatelessWidget {
-  const _SessionDeleteBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.only(left: 18),
-      decoration: BoxDecoration(
-        color: colors.error.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.trash2, size: 18, color: colors.error),
-          const SizedBox(width: 7),
-          Text(
-            'Delete',
-            style: context.typo.sansBody.copyWith(
-              color: colors.error,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -34,6 +34,24 @@ TextStyle brandTextStyle({
   );
 }
 
+/// Display face for the app wordmark. The serif carries the brand better than
+/// an italic sans, and it is bundled, so it renders identically offline.
+TextStyle brandDisplayTextStyle({
+  required double fontSize,
+  FontWeight fontWeight = FontWeight.w600,
+  Color? color,
+}) {
+  return TextStyle(
+    fontFamily: kReadingFamily,
+    fontFamilyFallback: kFontFallback,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    color: color,
+    letterSpacing: 0.2,
+    height: 1.1,
+  );
+}
+
 /// Typographic styles for the app, themed per brightness (colors baked in so
 /// the common case — `context.typo.mono` — is correct without a `.copyWith`).
 ///

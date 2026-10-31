@@ -246,41 +246,19 @@ class ChatPage extends StatelessWidget {
                         ? state.messages.length
                         : 0,
                   ),
-                  PopupMenuButton<String>(
+                  // The whole button becomes the sheet itself: tapping it
+                  // opens the action list over the chat instead of dropping a
+                  // small anchored menu that covers the context ring.
+                  IconButton(
+                    key: const Key('chat-actions'),
                     tooltip: 'Session actions',
-                    position: PopupMenuPosition.under,
-                    offset: const Offset(0, 6),
+                    onPressed: () =>
+                        _openSessionActions(context, vm, displayName),
                     icon: Icon(
                       LucideIcons.ellipsis,
                       size: 21,
                       color: colors.muted2,
                     ),
-                    onSelected: (value) =>
-                        _handleSessionAction(context, vm, value, displayName),
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: 'rename',
-                        child: Text('Rename'),
-                      ),
-                      const PopupMenuItem(value: 'info', child: Text('Info')),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(
-                              LucideIcons.trash2,
-                              size: 17,
-                              color: colors.error,
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Delete',
-                              style: TextStyle(color: colors.error),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -289,6 +267,65 @@ class ChatPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _openSessionActions(
+    BuildContext context,
+    ChatViewModel vm,
+    String displayName,
+  ) async {
+    final colors = context.colors;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .38),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        top: false,
+        child: BayaGlassSurface(
+          radius: 30,
+          elevated: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: colors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _SessionActionTile(
+                  icon: LucideIcons.pencil,
+                  label: 'Rename',
+                  value: 'rename',
+                ),
+                _SessionActionTile(
+                  icon: LucideIcons.info,
+                  label: 'Info',
+                  value: 'info',
+                ),
+                _SessionActionTile(
+                  icon: LucideIcons.trash2,
+                  label: 'Delete',
+                  value: 'delete',
+                  destructive: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    await _handleSessionAction(context, vm, action, displayName);
   }
 
   Future<void> _handleSessionAction(
@@ -854,9 +891,13 @@ class _MessageListState extends State<_MessageList> {
     // first measurement so the list never starts fully under the composer.
     final composerH = _ComposerHeight.of(context);
     // 24 = visual gap between last bubble and the jump button.
-    final bottomPad = (composerH > 0 ? composerH + 24 : 168).clamp(120, 420).toDouble();
+    final bottomPad = (composerH > 0 ? composerH + 24 : 168)
+        .clamp(120, 420)
+        .toDouble();
     // The jump button is centred 16 above the top of the composer.
-    final jumpBottom = (composerH > 0 ? composerH + 16 : 150).clamp(80, 400).toDouble();
+    final jumpBottom = (composerH > 0 ? composerH + 16 : 150)
+        .clamp(80, 400)
+        .toDouble();
 
     return NotificationListener<ScrollNotification>(
       onNotification: _onScrollNotification,
@@ -871,7 +912,21 @@ class _MessageListState extends State<_MessageList> {
               reverse: true,
               padding: EdgeInsets.fromLTRB(22, 94, 22, bottomPad),
               itemCount: itemCount,
-              separatorBuilder: (context, idx) => const SizedBox(height: 24),
+              separatorBuilder: (context, idx) {
+                // Tight gap when adjacent to a tool-run card; normal gap otherwise.
+                final allItems = _items();
+                bool isTool(int i) =>
+                    i >= 0 &&
+                    i < allItems.length &&
+                    (allItems[i] is ToolRunItem || allItems[i] is ToolEvent);
+                // reverse:true => displayed index 0 is allItems.last.
+                // Separator at display idx is between display[idx] and display[idx+1],
+                // i.e. allItems[last-idx] and allItems[last-idx-1].
+                final aIdx = allItems.length - 1 - idx;
+                final bIdx = allItems.length - 2 - idx;
+                final tight = isTool(aIdx) || isTool(bIdx);
+                return SizedBox(height: tight ? 6 : 16);
+              },
               itemBuilder: (_, i) {
                 // `reverse: true` makes index 0 the newest row. Stable keys
                 // keep streaming insertion from rematching unrelated rows.
@@ -888,6 +943,12 @@ class _MessageListState extends State<_MessageList> {
                   return KeyedSubtree(
                     key: ValueKey('tool-run-${item.tools.first.id}'),
                     child: ToolRunGroup(tools: item.tools),
+                  );
+                }
+                if (item is ToolEvent) {
+                  return KeyedSubtree(
+                    key: ValueKey('tool-run-${item.toolCallId}'),
+                    child: ToolRunGroup(tools: [item]),
                   );
                 }
                 final msg = item as ChatMessage;
@@ -958,6 +1019,51 @@ class _MessageListState extends State<_MessageList> {
       ..removeListener(_onScroll)
       ..dispose();
     super.dispose();
+  }
+}
+
+/// One row inside the session-action sheet opened from the chat header.
+class _SessionActionTile extends StatelessWidget {
+  const _SessionActionTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final tint = destructive ? colors.error : colors.text;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey('session-action-$value'),
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => Navigator.of(context).pop(value),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+          child: Row(
+            children: [
+              Icon(icon, size: 19, color: tint),
+              const SizedBox(width: 14),
+              Text(
+                label,
+                style: context.typo.sansBody.copyWith(
+                  fontSize: 16,
+                  color: tint,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

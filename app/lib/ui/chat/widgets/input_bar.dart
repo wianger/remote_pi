@@ -634,7 +634,7 @@ class _InlineStopButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(19),
           border: Border.all(color: colors.error.withValues(alpha: 0.55)),
         ),
-        child: Icon(LucideIcons.square600, color: colors.error, size: 18),
+        child: Icon(LucideIcons.square600, color: colors.error, size: 17),
       ),
     );
   }
@@ -843,16 +843,10 @@ class _QuickActionsButtonState extends State<_QuickActionsButton>
               key: const Key('input-bar-quick-actions'),
               onTap: widget.onPressed,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                padding: const EdgeInsets.fromLTRB(11, 7, 8, 7),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      LucideIcons.cpu,
-                      size: 14,
-                      color: context.colors.muted2,
-                    ),
-                    const SizedBox(width: 6),
                     Flexible(
                       child: Text(
                         widget.label,
@@ -1057,7 +1051,9 @@ class _ComposerActionButton extends StatelessWidget {
               _icon,
               key: ValueKey(_mode),
               color: foreground,
-              size: 21,
+              // Keep the familiar icon glyph for accessibility/test stability,
+              // but reduce its visual weight by giving it more breathing room.
+              size: 19,
             ),
           ),
         ),

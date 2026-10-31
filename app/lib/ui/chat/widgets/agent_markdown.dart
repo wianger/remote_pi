@@ -5,6 +5,7 @@ import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:gpt_markdown/custom_widgets/unordered_ordered_list.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -25,21 +26,31 @@ class AgentMarkdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typo = context.typo;
-    final base = typo.reading;
-    // Keep the reading face for prose but tame the default heading scale, which
-    // is far too large for a phone transcript.
+    final base = typo.reading.copyWith(
+      fontSize: typo.reading.fontSize ?? 16,
+      height: 1.5,
+      letterSpacing: -0.05,
+    );
+    // Keep the reading face for prose while matching Apple's compact, calm
+    // transcript rhythm. Headings are deliberately restrained on a phone.
     final mdTheme = GptMarkdownThemeData(
       brightness: Theme.of(context).brightness,
       highlightColor: colors.codeBg,
       linkColor: colors.accent,
       linkHoverColor: colors.accent,
       hrLineColor: colors.border,
+      hrLineThickness: .6,
+      hrLinePadding: const EdgeInsets.symmetric(vertical: 10),
       autoAddDividerLineAfterH1: false,
-      h1: base.copyWith(fontSize: 21, fontWeight: FontWeight.w700, height: 1.3),
+      h1: base.copyWith(
+        fontSize: 21,
+        fontWeight: FontWeight.w700,
+        height: 1.25,
+      ),
       h2: base.copyWith(
         fontSize: 18.5,
         fontWeight: FontWeight.w700,
-        height: 1.3,
+        height: 1.28,
       ),
       h3: base.copyWith(
         fontSize: 16.5,
@@ -49,12 +60,17 @@ class AgentMarkdown extends StatelessWidget {
       h4: base.copyWith(
         fontSize: 15.5,
         fontWeight: FontWeight.w600,
-        height: 1.3,
+        height: 1.35,
       ),
-      h5: base.copyWith(fontSize: 14.5, fontWeight: FontWeight.w600),
+      h5: base.copyWith(
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+        height: 1.4,
+      ),
       h6: base.copyWith(
         fontSize: 14,
         fontWeight: FontWeight.w600,
+        height: 1.4,
         color: colors.muted2,
       ),
     );
@@ -74,6 +90,22 @@ class AgentMarkdown extends StatelessWidget {
       // Fenced ``` blocks — dark card + copy button.
       codeBuilder: (context, name, code, closed) =>
           _CodeBlock(language: name, code: code),
+      // The package defaults to generous list indents. Apple's transcript
+      // style keeps bullets compact and aligns their text with the prose.
+      unOrderedListBuilder: (context, child, config) => UnorderedListView(
+        spacing: 5,
+        padding: 8,
+        bulletSize: 4,
+        bulletColor: colors.muted2,
+        child: child,
+      ),
+      orderedListBuilder: (context, no, child, config) => OrderedListView(
+        no: no,
+        spacing: 8,
+        padding: 4,
+        style: base.copyWith(fontSize: 14.5, color: colors.muted2),
+        child: child,
+      ),
     );
     final themed = GptMarkdownTheme(gptThemeData: mdTheme, child: markdown);
     return selectable ? SelectionArea(child: themed) : themed;
