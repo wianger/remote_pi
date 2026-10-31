@@ -408,6 +408,14 @@ then stop it and verify that `dsh` is on the same `PATH` as the supervised Remot
 Pi host. The current DeepSeek package requires Node.js 24.9 or newer. A custom
 executable can be selected with the `REMOTE_PI_DSH_BIN` environment variable.
 
+The DeepSeek Harness *desktop* app bundles the same ACP host at
+`%LOCALAPPDATA%\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd`
+(macOS and Linux equivalents are probed too). That path is not added to `PATH`
+by the installer, so the agent catalogue used to report DeepSeek as unavailable
+even when the desktop app was installed and signed in. `dsh_executable.ts` now
+resolves the override first, then `PATH`, then the per-platform bundle, and the
+catalogue treats the adapter as available when either probe succeeds.
+
 DeepSeek workspaces use their own daemon id, room name (`DeepSeek · folder`) and
 stored ACP session id, so Pi, Codex and DeepSeek can run in the same directory.
 Remote Pi maps ACP text and thought chunks, tool lifecycle updates, one-shot
@@ -494,3 +502,34 @@ Tool cards are collapsed by default. A collapsed card shows the activity label,
 a one-line preview of the command or path, and its status; tapping it reveals
 the command block, output and outcome. Real approvals still open automatically
 so the Allow/Deny decision stays visible.
+
+## FClash-style notices and chat polish (1.2.20 / build 29)
+
+Update prompts, save/attach/voice failures and model-switch errors now all use
+one centred confirm modal (`showBayaNotice`) instead of inline banners and
+SnackBars, matching the FlClash update dialog in the reference screenshot. The
+silent startup check still runs from `UpdateBanner`, but it renders nothing
+inline and raises the modal only when a newer build exists; `Check for updates`
+in About and Settings uses the same presentation, with a GitHub Releases action
+when the APK download fails.
+
+In the transcript, the composer no longer covers the latest message or the
+jump-to-latest control: bottom padding grew to 168, and the button is a centred
+positioned overlay above the composer. The chat overflow menu opens anchored
+under its trigger so it stops covering the context ring. Chat text drops to
+15.5/1.55 and `AgentMarkdown` wraps `GptMarkdown` in a theme with smaller
+headings, no divider after H1, accented links, 13px inline code and tighter
+block spacing. About keeps Project and the author homepage and drops the Release
+and License rows.
+
+The Workspace control in the sidebar is now a full-width card with the same
+icon-tile, label and chevron structure as Device, so both scopes read as
+siblings; swipe-to-delete and rename still work through the existing sheet
+actions, and both switcher sheets dropped their X close button. The sidebar
+`New session` pill hugs its label instead of stretching, and the Baya wordmark
+is italic. The New session page replaces the Computer dropdown with per-host
+cards that show live status and selection.
+
+The model control opens a two-level Claude-style picker: level one lists the
+current Model and Effort with their values, and tapping either drills into the
+full list, with the header switching from a close action to a back chevron.

@@ -64,8 +64,8 @@ class AppTypography extends ThemeExtension<AppTypography> {
   TextStyle get reading => sansBody.copyWith(
     fontFamily: kReadingFamily,
     fontFamilyFallback: kFontFallback,
-    fontSize: 17,
-    height: 1.65,
+    fontSize: 15.5,
+    height: 1.55,
     letterSpacing: 0,
   );
 

@@ -1,5 +1,6 @@
 import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:app/ui/update/states/update_banner_state.dart';
 import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -11,13 +12,36 @@ class UpdateSettingsSection extends StatelessWidget {
   Future<void> _download(BuildContext context) async {
     final opened = await context.read<UpdateBannerViewModel>().download();
     if (!context.mounted || opened) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Could not open the download. Open GitHub Releases instead.',
-        ),
-      ),
+    await showBayaNotice(
+      context,
+      title: 'Could not start the download',
+      message: 'Open GitHub Releases instead.',
+      secondaryLabel: 'GitHub Releases',
+      onSecondary: () => context.read<UpdateBannerViewModel>().openReleases(),
     );
+  }
+
+  Future<void> _check(BuildContext context) async {
+    final vm = context.read<UpdateBannerViewModel>();
+    await vm.checkManually();
+    if (!context.mounted) return;
+    switch (vm.state) {
+      case UpdateCheckCurrent():
+        await showBayaNotice(
+          context,
+          title: 'Check for updates',
+          message: 'The app is already up to date.',
+        );
+      case UpdateCheckFailed():
+        await showBayaNotice(
+          context,
+          title: 'Check for updates',
+          message: 'Could not check GitHub. Check your connection.',
+        );
+      default:
+        // A newer build is rendered inline below with its own download action.
+        break;
+    }
   }
 
   @override
@@ -41,7 +65,9 @@ class UpdateSettingsSection extends StatelessWidget {
           const SizedBox(height: 12),
           OutlinedButton.icon(
             key: const Key('check-github-updates'),
-            onPressed: state is UpdateCheckInProgress ? null : vm.checkManually,
+            onPressed: state is UpdateCheckInProgress
+                ? null
+                : () => _check(context),
             icon: state is UpdateCheckInProgress
                 ? const SizedBox(
                     width: 16,
@@ -55,9 +81,6 @@ class UpdateSettingsSection extends StatelessWidget {
                   : 'Check for updates',
             ),
           ),
-          if (state is UpdateCheckCurrent)
-            const Text('You are using the latest development release.'),
-          if (state is UpdateCheckFailed) Text(state.message),
           if (state is UpdateBannerVisible) ...[
             const SizedBox(height: 12),
             Text(

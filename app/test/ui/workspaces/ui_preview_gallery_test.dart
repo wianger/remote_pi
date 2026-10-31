@@ -630,7 +630,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Switch device'), findsOneWidget);
       await _save(tester, homeKey, '$output/device-picker.png');
-      await tester.tap(find.byTooltip('Close switcher'));
+      // The switcher sheets no longer carry a close button; dismiss the sheet
+      // by tapping the barrier above it.
+      await tester.tapAt(const Offset(200, 40));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('workspace-selector')));
       await tester.pumpAndSettle();

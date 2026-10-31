@@ -1,3 +1,4 @@
+import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/workspaces/states/new_session_state.dart';
@@ -127,39 +128,15 @@ class _NewSessionPageState extends State<NewSessionPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Computer',
-            style: context.typo.sansBody.copyWith(
-              color: colors.muted,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          _FieldLabel(context: context, label: 'Computer'),
           const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: state.host.id,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(LucideIcons.monitor),
-            ),
-            items: state.hosts
-                .map(
-                  (host) => DropdownMenuItem(
-                    value: host.id,
-                    child: Text(
-                      '${host.label}${host.online ? '' : ' · offline'}',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: locked
-                ? null
-                : (id) {
-                    if (id != null) vm.selectHost(id);
-                  },
+          _HostCard(
+            hosts: state.hosts,
+            selected: state.host,
+            enabled: !locked,
+            onSelected: vm.selectHost,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           AgentPickerField(
             agents: directory?.agents ?? const [],
             selected: directory?.agents.isNotEmpty == true ? state.agent : null,
@@ -335,6 +312,163 @@ class _NewSessionPageState extends State<NewSessionPage> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel({required this.context, required this.label});
+
+  final BuildContext context;
+  final String label;
+
+  @override
+  Widget build(BuildContext outer) => Padding(
+    padding: const EdgeInsets.only(left: 4),
+    child: Text(
+      label,
+      style: context.typo.sansBody.copyWith(
+        color: context.colors.muted,
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
+    ),
+  );
+}
+
+/// Computer chooser for the New session page: one full-width card per paired
+/// machine with its live status, replacing the bare dropdown.
+class _HostCard extends StatelessWidget {
+  const _HostCard({
+    required this.hosts,
+    required this.selected,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final List<WorkspaceHost> hosts;
+  final WorkspaceHost selected;
+  final bool enabled;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Material(
+      color: colors.surface.withValues(alpha: .58),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: colors.glassEdge),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var index = 0; index < hosts.length; index++) ...[
+            _HostRow(
+              host: hosts[index],
+              selected: hosts[index].id == selected.id,
+              enabled: enabled,
+              onTap: () => onSelected(hosts[index].id),
+            ),
+            if (index != hosts.length - 1)
+              Divider(
+                height: 1,
+                indent: 58,
+                color: colors.border.withValues(alpha: .7),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HostRow extends StatelessWidget {
+  const _HostRow({
+    required this.host,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final WorkspaceHost host;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final statusColor = host.online ? colors.success : colors.muted;
+    final dim = enabled ? 1.0 : .5;
+    return InkWell(
+      key: ValueKey('new-session-host-${host.id}'),
+      onTap: enabled ? onTap : null,
+      child: Opacity(
+        opacity: dim,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: colors.selection,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  LucideIcons.monitor,
+                  size: 19,
+                  color: selected ? colors.accent : colors.muted2,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      host.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.typo.sansBody.copyWith(
+                        fontSize: 15,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          host.online ? 'Ready' : 'Offline',
+                          style: context.typo.sansBody.copyWith(
+                            fontSize: 12,
+                            color: statusColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                Icon(LucideIcons.check, size: 19, color: colors.accent),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

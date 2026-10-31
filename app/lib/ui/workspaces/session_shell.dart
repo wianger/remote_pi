@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:app/ui/home/states/home_state.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/workspaces/session_dialogs.dart';
@@ -40,10 +41,9 @@ Future<void> _openSession(
     );
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open this session. Try again.'),
-        ),
+      await showBayaError(
+        context,
+        message: 'Could not open this session. Try again.',
       );
     }
   }
@@ -67,10 +67,9 @@ Future<void> _deleteFromPhone(BuildContext context, HomeItem item) async {
     }
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not remove this session. Try again.'),
-        ),
+      await showBayaError(
+        context,
+        message: 'Could not remove this session. Try again.',
       );
     }
   }
@@ -87,9 +86,7 @@ Future<void> _renameSession(BuildContext context, HomeItem item) async {
     await vm.renameSession(item, name);
   } catch (_) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not rename this session.')),
-      );
+      await showBayaError(context, message: 'Could not rename this session.');
     }
   }
 }
@@ -98,9 +95,11 @@ Future<void> showCreateWorkspace(BuildContext context) async {
   final vm = context.read<HomeViewModel>();
   final device = vm.selectedDevice;
   if (device == null) {
-    ScaffoldMessenger.of(
+    await showBayaNotice(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Pair a device first.')));
+      title: 'No device selected',
+      message: 'Pair a computer first, then create a workspace.',
+    );
     return;
   }
   final name = TextEditingController();
@@ -171,9 +170,11 @@ Future<void> _startSession(BuildContext context, {VoidCallback? close}) async {
   final vm = context.read<HomeViewModel>();
   final workspace = vm.selectedWorkspace;
   if (workspace == null) {
-    ScaffoldMessenger.of(
+    await showBayaNotice(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Create a workspace first.')));
+      title: 'No workspace yet',
+      message: 'Create a workspace before starting a session.',
+    );
     return;
   }
   close?.call();
@@ -286,10 +287,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
       setState(() => _query = '');
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not save your selection. Try again.'),
-          ),
+        await showBayaError(
+          context,
+          message: 'Could not save your selection. Try again.',
         );
       }
     } finally {
@@ -320,9 +320,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
       return true;
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not rename this device.')),
-        );
+        await showBayaError(context, message: 'Could not rename this device.');
       }
       return false;
     }
@@ -347,10 +345,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
       return true;
     } catch (_) {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not delete this device. Try again.'),
-        ),
+      await showBayaError(
+        context,
+        message: 'Could not delete this device. Try again.',
       );
       return false;
     }
@@ -366,10 +363,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
       return true;
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not delete this workspace. Try again.'),
-          ),
+        await showBayaError(
+          context,
+          message: 'Could not delete this workspace. Try again.',
         );
       }
       return false;
@@ -391,8 +387,9 @@ class _SessionSidebarState extends State<SessionSidebar> {
       return true;
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not rename this workspace.')),
+        await showBayaError(
+          context,
+          message: 'Could not rename this workspace.',
         );
       }
       return false;
@@ -443,10 +440,14 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                       Expanded(
                                         child: Text(
                                           kAppName,
-                                          style: brandTextStyle(
-                                            fontSize: 22,
-                                            color: colors.text,
-                                          ),
+                                          style:
+                                              brandTextStyle(
+                                                fontSize: 25,
+                                                color: colors.text,
+                                              ).copyWith(
+                                                fontStyle: FontStyle.italic,
+                                                letterSpacing: -0.4,
+                                              ),
                                         ),
                                       ),
                                       _SidebarCircleAction(
@@ -597,25 +598,22 @@ class _SessionSidebarState extends State<SessionSidebar> {
                       },
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        key: const Key('sidebar-new-session'),
-                        onPressed: vm.selectedWorkspace == null
-                            ? null
-                            : () => _startSession(
-                                context,
-                                close: widget.close,
-                              ),
-                        icon: const Icon(LucideIcons.plus, size: 18),
-                        label: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('New session'),
-                        ),
-                        style: FilledButton.styleFrom(
-                          shape: const StadiumBorder(),
-                        ),
+                    FilledButton.icon(
+                      key: const Key('sidebar-new-session'),
+                      onPressed: vm.selectedWorkspace == null
+                          ? null
+                          : () => _startSession(context, close: widget.close),
+                      icon: const Icon(LucideIcons.plus, size: 18),
+                      label: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text('New session'),
+                      ),
+                      style: FilledButton.styleFrom(
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                       ),
                     ),
+                    const Spacer(),
                   ],
                 ),
               ),

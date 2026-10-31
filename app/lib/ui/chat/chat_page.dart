@@ -8,6 +8,7 @@ import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/workspaces/session_dialogs.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
@@ -267,6 +268,8 @@ class ChatPage extends StatelessWidget {
                   ),
                   PopupMenuButton<String>(
                     tooltip: 'Session actions',
+                    position: PopupMenuPosition.under,
+                    offset: const Offset(0, 6),
                     icon: Icon(
                       LucideIcons.ellipsis,
                       size: 21,
@@ -353,8 +356,9 @@ class ChatPage extends StatelessWidget {
         return;
       }
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not find this session to delete.')),
+    await showBayaError(
+      context,
+      message: 'Could not find this session to delete.',
     );
   }
 
@@ -548,14 +552,12 @@ class ChatPage extends StatelessWidget {
     );
   }
 
-  /// Open the Camera/Gallery sheet and drive the picker. Captures the
-  /// messenger up front so a permission-denied hint can deep-link to Settings
-  /// after the async pick.
+  /// Open the Camera/Gallery sheet and drive the picker. Hints deep-link to
+  /// Settings after the async pick through the shared notice dialog.
   static Future<void> _openAttach(
     BuildContext context,
     AttachmentViewModel vm,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     final source = await showAttachSheet(context);
     if (source == null) return;
     AttachHint? hint;
@@ -568,68 +570,49 @@ class ChatPage extends StatelessWidget {
     }
     await Future<void>.delayed(Duration.zero); // flush the hint microtask
     await sub.cancel();
-    if (hint != null) _handleAttachHint(messenger, hint!);
+    if (hint == null || !context.mounted) return;
+    await _handleAttachHint(context, hint!);
   }
 
-  static void _handleAttachHint(
-    ScaffoldMessengerState messenger,
+  static Future<void> _handleAttachHint(
+    BuildContext context,
     AttachHint hint,
-  ) {
-    messenger.hideCurrentSnackBar();
+  ) async {
     switch (hint) {
       case AttachHint.cameraPermissionDenied:
-        messenger.showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Camera access is off — enable it in Settings to attach a photo.',
-            ),
-            duration: const Duration(seconds: 5),
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: AppSettings.openAppSettings,
-            ),
-          ),
+        await showBayaNotice(
+          context,
+          title: 'Camera access is off',
+          message: 'Enable it in Settings to attach a photo.',
+          confirmLabel: 'Open Settings',
+          onConfirm: AppSettings.openAppSettings,
         );
       case AttachHint.pickFailed:
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text("Couldn't attach that image."),
-            duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
+        await showBayaNotice(
+          context,
+          title: "Couldn't attach that image",
+          message: 'Try picking it again from the camera or gallery.',
         );
     }
   }
 
-  /// Surfaces the InputBar's voice hints (decision #10 permission path +
-  /// the "hold to talk" nudge) as snackbars. Captures the messenger up front
-  /// so the settings deep-link is safe across the async permission round-trip.
+  /// Surfaces the InputBar's voice hints (decision #10 permission path + the
+  /// "hold to talk" nudge) through the shared notice dialog.
   static void _handleVoiceHint(BuildContext context, VoiceHint hint) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
     switch (hint) {
       case VoiceHint.holdToTalk:
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Hold the mic to talk'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showBayaNotice(
+          context,
+          title: 'Hold the mic to talk',
+          message: 'Release to transcribe into the composer.',
         );
       case VoiceHint.permissionDenied:
-        messenger.showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Microphone access is off — enable it in Settings to dictate.',
-            ),
-            duration: const Duration(seconds: 5),
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: AppSettings.openAppSettings,
-            ),
-          ),
+        showBayaNotice(
+          context,
+          title: 'Microphone access is off',
+          message: 'Enable it in Settings to dictate.',
+          confirmLabel: 'Open Settings',
+          onConfirm: AppSettings.openAppSettings,
         );
     }
   }
@@ -808,7 +791,7 @@ class _MessageListState extends State<_MessageList> {
               controller: _controller,
               shrinkWrap: true,
               reverse: true,
-              padding: const EdgeInsets.fromLTRB(22, 94, 22, 128),
+              padding: const EdgeInsets.fromLTRB(22, 94, 22, 168),
               itemCount: itemCount,
               separatorBuilder: (context, idx) => const SizedBox(height: 24),
               itemBuilder: (_, i) {
@@ -853,28 +836,33 @@ class _MessageListState extends State<_MessageList> {
             ),
           ),
           Positioned(
-            right: 22,
-            bottom: 128,
-            child: IgnorePointer(
-              ignoring: !_showLatest,
-              child: AnimatedOpacity(
-                opacity: _showLatest ? 1 : 0,
-                duration: const Duration(milliseconds: 180),
-                child: AnimatedScale(
-                  scale: _showLatest ? 1 : .82,
+            left: 0,
+            right: 0,
+            // Sits just above the floating composer (142 tall on a 412-wide
+            // phone) so the centred jump button never overlaps the input.
+            bottom: 150,
+            child: Center(
+              child: IgnorePointer(
+                ignoring: !_showLatest,
+                child: AnimatedOpacity(
+                  opacity: _showLatest ? 1 : 0,
                   duration: const Duration(milliseconds: 180),
-                  child: BayaGlassSurface(
-                    radius: 21,
-                    child: SizedBox.square(
-                      dimension: 42,
-                      child: IconButton(
-                        key: const Key('jump-to-latest'),
-                        tooltip: 'Jump to latest',
-                        onPressed: _jumpToLatest,
-                        icon: Icon(
-                          LucideIcons.arrowDown,
-                          size: 19,
-                          color: context.colors.text,
+                  child: AnimatedScale(
+                    scale: _showLatest ? 1 : .82,
+                    duration: const Duration(milliseconds: 180),
+                    child: BayaGlassSurface(
+                      radius: 21,
+                      child: SizedBox.square(
+                        dimension: 42,
+                        child: IconButton(
+                          key: const Key('jump-to-latest'),
+                          tooltip: 'Jump to latest',
+                          onPressed: _jumpToLatest,
+                          icon: Icon(
+                            LucideIcons.arrowDown,
+                            size: 19,
+                            color: context.colors.text,
+                          ),
                         ),
                       ),
                     ),

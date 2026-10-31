@@ -4,6 +4,7 @@ import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -13,16 +14,18 @@ import 'package:provider/provider.dart';
 /// the Claude-style model list.
 Future<void> showStandaloneModelPicker(BuildContext context) {
   final vm = injector.get<QuickActionsViewModel>();
-  final messenger = ScaffoldMessenger.of(context);
+  final errorContext = context;
   return showModelPickerSheet(
     context,
     vm: vm,
-    onError: (message) => messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text(message, style: const TextStyle(fontSize: 12)),
-      ),
-    ),
+    onError: (message) {
+      if (!errorContext.mounted) return;
+      showBayaNotice(
+        errorContext,
+        title: 'Model change failed',
+        message: message,
+      );
+    },
   );
 }
 
@@ -62,6 +65,11 @@ class _ModelPickerBody extends StatefulWidget {
 class _ModelPickerBodyState extends State<_ModelPickerBody> {
   late Future<ModelsCatalogue> _future;
 
+  /// Claude-style two-level picker: the first sheet lists the current Model and
+  /// Effort as summary rows; tapping either pushes the detail list.
+  bool _editingModel = false;
+  bool _editingEffort = false;
+
   @override
   void initState() {
     super.initState();
@@ -91,64 +99,11 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
     }
   }
 
-  Future<void> _showEffortPicker(ThinkingLevel? current) async {
+  Future<void> _onPickEffort(ThinkingLevel level) async {
     final vm = context.read<QuickActionsViewModel>();
-    final picked = await showModalBottomSheet<ThinkingLevel>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      showDragHandle: false,
-      isScrollControlled: true,
-      builder: (sheetContext) {
-        final colors = sheetContext.colors;
-        return BayaGlassSurface(
-          radius: 32,
-          elevated: false,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Reasoning effort',
-                    style: sheetContext.typo.title.copyWith(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Material(
-                    color: colors.surface.withValues(alpha: .62),
-                    borderRadius: BorderRadius.circular(24),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      children: [
-                        for (final level in ThinkingLevel.values)
-                          ListTile(
-                            title: Text(_effortLabel(level)),
-                            trailing: level == current
-                                ? Icon(
-                                    LucideIcons.check,
-                                    size: 19,
-                                    color: colors.accent,
-                                  )
-                                : null,
-                            onTap: () => Navigator.of(sheetContext).pop(level),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
     try {
-      await vm.setThinking(picked);
+      await vm.setThinking(level);
+      if (mounted) setState(() => _editingEffort = false);
     } catch (_) {
       widget.onError?.call('Could not change reasoning effort. Try again.');
     }
@@ -157,6 +112,7 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<QuickActionsViewModel>();
+    final detail = _editingModel || _editingEffort;
     final mq = MediaQuery.of(context);
     return SafeArea(
       top: false,
@@ -181,65 +137,89 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _Header(onRefresh: _refresh),
+                _Header(
+                  title: _editingModel
+                      ? 'Select model'
+                      : _editingEffort
+                      ? 'Reasoning effort'
+                      : 'Model',
+                  onRefresh: _editingModel || !detail ? _refresh : null,
+                  onBack: _editingEffort || _editingModel
+                      ? () => setState(() {
+                          _editingModel = false;
+                          _editingEffort = false;
+                        })
+                      : null,
+                ),
                 Flexible(
-                  child: FutureBuilder<ModelsCatalogue>(
-                    future: _future,
-                    builder: (ctx, snap) {
-                      if (snap.connectionState != ConnectionState.done) {
-                        return const _LoadingState();
-                      }
-                      if (snap.hasError) {
-                        return _ErrorState(
-                          message: snap.error is ActionFailure
-                              ? (snap.error as ActionFailure).message
-                              : 'Failed to load models',
-                          onRetry: _refresh,
-                        );
-                      }
-                      final catalogue = snap.data!;
-                      if (catalogue.models.isEmpty) return const _EmptyState();
-                      final current = vm.currentThinking;
-                      final selected = catalogue.current;
-                      return ListView(
-                        padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
-                        children: [
-                          _ModelList(
-                            models: catalogue.models,
-                            selected: selected,
-                            onPick: _onPick,
-                          ),
-                          const SizedBox(height: 10),
-                          Material(
-                            color: context.colors.surface.withValues(
-                              alpha: .62,
-                            ),
-                            borderRadius: BorderRadius.circular(22),
-                            clipBehavior: Clip.antiAlias,
-                            child: ListTile(
-                              key: const Key('model-picker-effort'),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 5,
-                              ),
-                              title: const Text('Effort'),
-                              subtitle: Text(
-                                current == null
-                                    ? 'Not reported'
-                                    : _effortLabel(current),
-                              ),
-                              trailing: Icon(
-                                LucideIcons.chevronRight,
-                                size: 18,
-                                color: context.colors.muted,
-                              ),
-                              onTap: () => _showEffortPicker(current),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                  child: _editingEffort
+                      ? _EffortList(
+                          current: vm.currentThinking,
+                          onPick: _onPickEffort,
+                        )
+                      : FutureBuilder<ModelsCatalogue>(
+                          future: _future,
+                          builder: (ctx, snap) {
+                            if (snap.connectionState != ConnectionState.done) {
+                              return const _LoadingState();
+                            }
+                            if (snap.hasError) {
+                              return _ErrorState(
+                                message: snap.error is ActionFailure
+                                    ? (snap.error as ActionFailure).message
+                                    : 'Failed to load models',
+                                onRetry: _refresh,
+                              );
+                            }
+                            final catalogue = snap.data!;
+                            if (catalogue.models.isEmpty) {
+                              return const _EmptyState();
+                            }
+                            final current = vm.currentThinking;
+                            final selected = catalogue.current;
+                            // Level 2: the full model list.
+                            if (_editingModel) {
+                              return ListView(
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  4,
+                                  18,
+                                  20,
+                                ),
+                                children: [
+                                  _ModelList(
+                                    models: catalogue.models,
+                                    selected: selected,
+                                    onPick: _onPick,
+                                  ),
+                                ],
+                              );
+                            }
+                            // Level 1: Model + Effort summary rows.
+                            return ListView(
+                              padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+                              children: [
+                                _PickerRow(
+                                  key: const Key('model-picker-model'),
+                                  label: 'Model',
+                                  value: selected?.name ?? 'Not reported',
+                                  onTap: () =>
+                                      setState(() => _editingModel = true),
+                                ),
+                                const SizedBox(height: 10),
+                                _PickerRow(
+                                  key: const Key('model-picker-effort'),
+                                  label: 'Effort',
+                                  value: current == null
+                                      ? 'Not reported'
+                                      : _effortLabel(current),
+                                  onTap: () =>
+                                      setState(() => _editingEffort = true),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
@@ -260,9 +240,11 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onRefresh});
+  const _Header({required this.title, this.onRefresh, this.onBack});
 
-  final VoidCallback onRefresh;
+  final String title;
+  final VoidCallback? onRefresh;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -282,16 +264,23 @@ class _Header extends StatelessWidget {
                 child: SizedBox.square(
                   dimension: 44,
                   child: IconButton(
-                    tooltip: 'Close model picker',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(LucideIcons.x, size: 21, color: colors.text),
+                    key: const Key('model-picker-close'),
+                    tooltip: onBack == null
+                        ? 'Close model picker'
+                        : 'Back to model summary',
+                    onPressed: onBack ?? () => Navigator.of(context).pop(),
+                    icon: Icon(
+                      onBack == null ? LucideIcons.x : LucideIcons.chevronLeft,
+                      size: 21,
+                      color: colors.text,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
           Text(
-            'Select model',
+            title,
             style: context.typo.sansBody.copyWith(
               fontSize: 21,
               fontWeight: FontWeight.w600,
@@ -309,13 +298,115 @@ class _Header extends StatelessWidget {
                 icon: Icon(
                   LucideIcons.refreshCw,
                   size: 18,
-                  color: colors.muted,
+                  color: onRefresh == null
+                      ? colors.muted.withValues(alpha: .35)
+                      : colors.muted,
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Level-1 summary row: a label with the current value and a chevron into the
+/// detail list, matching Claude's Model/Effort hierarchy.
+class _PickerRow extends StatelessWidget {
+  const _PickerRow({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Material(
+      color: colors.surface.withValues(alpha: .62),
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
+        title: Text(
+          label,
+          style: context.typo.sansBody.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        subtitle: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.typo.sansBody.copyWith(
+            fontSize: 12.5,
+            color: colors.muted,
+          ),
+        ),
+        trailing: Icon(LucideIcons.chevronRight, size: 18, color: colors.muted),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Level-2 effort list.
+class _EffortList extends StatelessWidget {
+  const _EffortList({required this.current, required this.onPick});
+
+  final ThinkingLevel? current;
+  final ValueChanged<ThinkingLevel> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+      children: [
+        Material(
+          color: colors.surface.withValues(alpha: .62),
+          borderRadius: BorderRadius.circular(22),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (
+                var index = 0;
+                index < ThinkingLevel.values.length;
+                index++
+              ) ...[
+                ListTile(
+                  key: ValueKey(
+                    'model-picker-effort-${_ModelPickerBodyState._effortLabel(ThinkingLevel.values[index])}',
+                  ),
+                  title: Text(
+                    _ModelPickerBodyState._effortLabel(
+                      ThinkingLevel.values[index],
+                    ),
+                  ),
+                  trailing: ThinkingLevel.values[index] == current
+                      ? Icon(LucideIcons.check, size: 19, color: colors.accent)
+                      : null,
+                  onTap: () => onPick(ThinkingLevel.values[index]),
+                ),
+                if (index != ThinkingLevel.values.length - 1)
+                  Divider(
+                    height: 1,
+                    indent: 18,
+                    endIndent: 18,
+                    color: colors.border.withValues(alpha: .72),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

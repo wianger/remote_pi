@@ -2,6 +2,7 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/ui/chat/widgets/agent_markdown.dart';
 import 'package:app/ui/chat/widgets/image_bubble.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -228,8 +229,10 @@ class AssistantBubble extends StatelessWidget {
                 onPressed: () async {
                   await Clipboard.setData(ClipboardData(text: message.text));
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Response copied')),
+                  showBayaNotice(
+                    context,
+                    title: 'Response copied',
+                    message: 'The agent reply is on your clipboard.',
                   );
                 },
               ),

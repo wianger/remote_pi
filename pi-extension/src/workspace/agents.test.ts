@@ -4,7 +4,10 @@ import { availableAgents } from "./directories.js";
 import { openWorkspace } from "./service.js";
 
 test("catalog reports availability and the reason for an unavailable adapter", async () => {
-  const catalog = await availableAgents(async (command) => command === "pi" ? "/bin/pi" : null);
+  const catalog = await availableAgents(
+    async (command) => command === "pi" ? "/bin/pi" : null,
+    async () => false,
+  );
   expect(new Set(workspaceAgents.map((agent) => agent.id)).size).toBe(workspaceAgents.length);
   expect(catalog).toContainEqual(expect.objectContaining({ id: "pi", available: true }));
   expect(catalog).toContainEqual(expect.objectContaining({ id: "codex", available: false, reason: expect.stringContaining("not installed") }));
@@ -15,6 +18,7 @@ test("catalog reports availability and the reason for an unavailable adapter", a
 test("catalog discovers DeepSeek Harness through the dsh executable", async () => {
   const catalog = await availableAgents(
     async (command) => command === "dsh" ? "/bin/dsh" : null,
+    async () => false,
   );
   expect(catalog).toContainEqual(
     expect.objectContaining({
@@ -22,6 +26,18 @@ test("catalog discovers DeepSeek Harness through the dsh executable", async () =
       name: "DeepSeek",
       available: true,
     }),
+  );
+});
+
+test("catalog finds DeepSeek Harness inside the desktop bundle", async () => {
+  // The official desktop app never puts `dsh` on PATH; the catalog probe must
+  // still report DeepSeek as available when the bundled CLI exists.
+  const catalog = await availableAgents(
+    async () => null,
+    async () => true,
+  );
+  expect(catalog).toContainEqual(
+    expect.objectContaining({ id: "deepseek", available: true }),
   );
 });
 
@@ -35,7 +51,7 @@ test("DeepSeek catalog honors a custom harness executable", async () => {
       return command === "C:\\tools\\custom-dsh.exe"
         ? "C:\\tools\\custom-dsh.exe"
         : null;
-    });
+    }, async () => false);
     expect(commands).toContain("C:\\tools\\custom-dsh.exe");
     expect(catalog).toContainEqual(
       expect.objectContaining({ id: "deepseek", available: true }),

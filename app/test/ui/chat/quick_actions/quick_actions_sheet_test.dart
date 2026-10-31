@@ -160,6 +160,19 @@ void main() {
     await tester.pumpAndSettle();
 
     final picker = find.byKey(const Key('model-picker-sheet'));
+    // Level 1: the Model + Effort summary rows.
+    expect(picker, findsOneWidget);
+    expect(
+      find.descendant(of: picker, matching: find.text('Opus 5.5')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('model-picker-model')), findsOneWidget);
+    expect(find.byKey(const Key('model-picker-effort')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('model-picker-model')));
+    await tester.pumpAndSettle();
+
+    // Level 2: the full model list.
     expect(find.text('Select model'), findsOneWidget);
     expect(
       find.descendant(of: picker, matching: find.text('Opus 5.5')),
@@ -173,8 +186,9 @@ void main() {
       find.descendant(of: picker, matching: find.text('Reasoning')),
       findsOneWidget,
     );
-    expect(find.byKey(const Key('model-picker-effort')), findsOneWidget);
 
+    await tester.tap(find.byKey(const Key('model-picker-close')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('model-picker-effort')));
     await tester.pumpAndSettle();
     expect(find.text('Reasoning effort'), findsOneWidget);

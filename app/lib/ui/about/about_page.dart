@@ -1,13 +1,13 @@
 import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:app/ui/update/states/update_banner_state.dart';
 import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 /// About follows the same hierarchy as FlClash: identity, version, update
 /// action, then project resources. Settings keeps only configuration.
@@ -18,24 +18,53 @@ class AboutPage extends StatelessWidget {
   static final _releases = Uri.parse(
     'https://github.com/wianger/remote_pi/releases',
   );
+  static final _homepage = Uri.parse('https://github.com/wianger');
 
   Future<void> _open(BuildContext context, Uri uri) async {
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!context.mounted || ok) return;
-    ScaffoldMessenger.of(
+    final opened = await context.read<UpdateBannerViewModel>().openUrl(
+      uri.toString(),
+    );
+    if (!context.mounted || opened) return;
+    await showBayaNotice(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Could not open the link.')));
+      title: 'Could not open the link',
+      message: 'Check your connection and try again.',
+    );
+  }
+
+  Future<void> _check(BuildContext context) async {
+    final vm = context.read<UpdateBannerViewModel>();
+    await vm.checkManually();
+    if (!context.mounted) return;
+    switch (vm.state) {
+      case UpdateCheckCurrent():
+        await showBayaNotice(
+          context,
+          title: 'Check for updates',
+          message: 'The app is already up to date.',
+        );
+      case UpdateCheckFailed():
+        await showBayaNotice(
+          context,
+          title: 'Check for updates',
+          message: 'Could not check GitHub. Check your connection.',
+        );
+      case UpdateBannerVisible():
+        await _download(context);
+      default:
+        break;
+    }
   }
 
   Future<void> _download(BuildContext context) async {
     final opened = await context.read<UpdateBannerViewModel>().download();
     if (!context.mounted || opened) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Could not open the download. Open GitHub Releases instead.',
-        ),
-      ),
+    await showBayaNotice(
+      context,
+      title: 'Could not start the download',
+      message: 'Open GitHub Releases instead.',
+      secondaryLabel: 'GitHub Releases',
+      onSecondary: () => _open(context, _releases),
     );
   }
 
@@ -113,7 +142,7 @@ class AboutPage extends StatelessWidget {
                     key: const Key('check-github-updates'),
                     onPressed: updateState is UpdateCheckInProgress
                         ? null
-                        : vm.checkManually,
+                        : () => _check(context),
                     icon: updateState is UpdateCheckInProgress
                         ? const SizedBox(
                             width: 16,
@@ -135,28 +164,6 @@ class AboutPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (updateState is UpdateCheckCurrent) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    'You are using the latest development release.',
-                    textAlign: TextAlign.center,
-                    style: context.typo.sansBody.copyWith(
-                      color: colors.muted,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-                if (updateState is UpdateCheckFailed) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    updateState.message,
-                    textAlign: TextAlign.center,
-                    style: context.typo.sansBody.copyWith(
-                      color: colors.error,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
                 if (updateState is UpdateBannerVisible) ...[
                   const SizedBox(height: 16),
                   BayaGlassSurface(
@@ -224,23 +231,6 @@ class AboutPage extends StatelessWidget {
                         subtitle: 'github.com/wianger/remote_pi',
                         onTap: () => _open(context, _project),
                       ),
-                      Divider(height: 1, color: colors.border),
-                      _LinkTile(
-                        icon: LucideIcons.tag,
-                        title: 'Releases',
-                        subtitle: 'Android development builds',
-                        onTap: () => _open(context, _releases),
-                      ),
-                      Divider(height: 1, color: colors.border),
-                      _LinkTile(
-                        icon: LucideIcons.fileText,
-                        title: 'Open-source licenses',
-                        subtitle: 'Fonts and package notices',
-                        onTap: () => showLicensePage(
-                          context: context,
-                          applicationName: kAppName,
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -256,10 +246,11 @@ class AboutPage extends StatelessWidget {
                   ),
                 ),
                 BayaGlassSurface(
-                  child: ListTile(
-                    leading: const AppMark(size: 42, tile: true),
-                    title: const Text('wianger'),
-                    subtitle: const Text('Remote Pi development'),
+                  child: _LinkTile(
+                    icon: LucideIcons.user,
+                    title: 'wianger',
+                    subtitle: 'github.com/wianger',
+                    onTap: () => _open(context, _homepage),
                   ),
                 ),
               ],

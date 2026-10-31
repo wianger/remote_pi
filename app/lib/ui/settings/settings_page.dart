@@ -2,6 +2,7 @@ import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/relay_config.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -144,19 +145,14 @@ class _RelaySettingsPageState extends State<RelaySettingsPage> {
 
   Future<void> _save() async {
     final vm = context.read<SettingsViewModel>();
-    final messenger = ScaffoldMessenger.of(context);
     final err = await vm.saveRelayUrl(_ctrl.text);
     if (!mounted) return;
     setState(() => _error = err);
     if (err == null) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Relay updated',
-            style: TextStyle(fontFamily: kMonoFamily),
-          ),
-          duration: Duration(seconds: 2),
-        ),
+      await showBayaNotice(
+        context,
+        title: 'Relay updated',
+        message: 'This device now uses the new relay URL.',
       );
     }
   }

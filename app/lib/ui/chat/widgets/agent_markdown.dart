@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
@@ -24,14 +25,48 @@ class AgentMarkdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final typo = context.typo;
+    final base = typo.reading;
+    // Keep the reading face for prose but tame the default heading scale, which
+    // is far too large for a phone transcript.
+    final mdTheme = GptMarkdownThemeData(
+      brightness: Theme.of(context).brightness,
+      highlightColor: colors.codeBg,
+      linkColor: colors.accent,
+      linkHoverColor: colors.accent,
+      hrLineColor: colors.border,
+      autoAddDividerLineAfterH1: false,
+      h1: base.copyWith(fontSize: 21, fontWeight: FontWeight.w700, height: 1.3),
+      h2: base.copyWith(
+        fontSize: 18.5,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+      ),
+      h3: base.copyWith(
+        fontSize: 16.5,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      h4: base.copyWith(
+        fontSize: 15.5,
+        fontWeight: FontWeight.w600,
+        height: 1.3,
+      ),
+      h5: base.copyWith(fontSize: 14.5, fontWeight: FontWeight.w600),
+      h6: base.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: colors.muted2,
+      ),
+    );
     final markdown = GptMarkdown(
       data,
-      style: typo.reading,
+      style: base,
       onLinkTap: (url, _) => _openLink(context, url),
       // Inline `code` — subtle highlight, keeps the baseline.
       highlightBuilder: (context, text, style) => Text(
         text,
         style: typo.mono.copyWith(
+          fontSize: 13,
           color: colors.highlight,
           backgroundColor: colors.codeBg,
         ),
@@ -40,20 +75,28 @@ class AgentMarkdown extends StatelessWidget {
       codeBuilder: (context, name, code, closed) =>
           _CodeBlock(language: name, code: code),
     );
-    return selectable ? SelectionArea(child: markdown) : markdown;
+    final themed = GptMarkdownTheme(gptThemeData: mdTheme, child: markdown);
+    return selectable ? SelectionArea(child: themed) : themed;
   }
 
   static Future<void> _openLink(BuildContext context, String url) async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
     final uri = Uri.tryParse(url);
     if (uri == null) return;
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!ok) {
-        messenger?.showSnackBar(SnackBar(content: Text("Couldn't open $url")));
-      }
+      if (ok || !context.mounted) return;
+      await showBayaNotice(
+        context,
+        title: 'Could not open the link',
+        message: url,
+      );
     } catch (_) {
-      messenger?.showSnackBar(SnackBar(content: Text("Couldn't open $url")));
+      if (!context.mounted) return;
+      await showBayaNotice(
+        context,
+        title: 'Could not open the link',
+        message: url,
+      );
     }
   }
 }

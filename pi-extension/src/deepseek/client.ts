@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { resolvePiSpawn } from "../daemon/rpc_child.js";
+import { resolveDeepSeekExecutable } from "../workspace/dsh_executable.js";
 
 export type JsonObject = Record<string, unknown>;
 export type RpcId = number | string;
@@ -42,13 +43,18 @@ export class DeepSeekClient extends EventEmitter<DeepSeekClientEvents> {
 
   constructor(
     private readonly cwd: string,
-    private readonly executable = process.env["REMOTE_PI_DSH_BIN"] || "dsh",
+    private executable = process.env["REMOTE_PI_DSH_BIN"]?.trim() || "dsh",
   ) {
     super();
   }
 
   async start(): Promise<DeepSeekStartResult> {
     if (this.child && this.started) return this.started;
+    // `dsh` may live inside the DeepSeek Harness desktop bundle rather than on
+    // PATH; resolve once so the spawned ACP host is the real executable.
+    if (!process.env["REMOTE_PI_DSH_BIN"]?.trim() && this.executable === "dsh") {
+      this.executable = await resolveDeepSeekExecutable();
+    }
     const target = resolvePiSpawn(this.executable);
     this.closing = false;
     const child = spawn(target.command, [...target.prefixArgs, "--profile", "acp"], {

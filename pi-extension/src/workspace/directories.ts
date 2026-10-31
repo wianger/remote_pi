@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, parse } from "node:path";
 import type { WorkspaceAgentInfo, WorkspaceDirectory } from "./types.js";
 import { workspaceAgents } from "./agents.js";
+import { hasDeepSeekHarness } from "./dsh_executable.js";
 
 const MAX_DIRECTORIES = 300;
 
@@ -24,12 +25,19 @@ export async function findExecutable(name: string): Promise<string | null> {
 
 export async function availableAgents(
   resolveExecutable: (command: string) => Promise<string | null> = findExecutable,
+  /**
+   * Fallback probe for the DeepSeek Harness desktop app, which ships its ACP
+   * CLI inside the install directory instead of putting `dsh` on PATH.
+   */
+  probeDeepSeekHarness: () => Promise<boolean> = hasDeepSeekHarness,
 ): Promise<WorkspaceAgentInfo[]> {
   return Promise.all(workspaceAgents.map(async ({ id, name, command, description }) => {
     const override = id === "deepseek"
       ? process.env["REMOTE_PI_DSH_BIN"]?.trim()
       : undefined;
-    const available = await resolveExecutable(override || command) !== null;
+    const onPath = await resolveExecutable(override || command) !== null;
+    const available = onPath ||
+      (id === "deepseek" && !override && await probeDeepSeekHarness());
     return { id, name, description, available,
       ...(!available ? { reason: `${name} is not installed on this computer.` } : {}) };
   }));
