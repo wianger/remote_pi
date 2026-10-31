@@ -584,10 +584,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // The two calls here are separated by assistant text, so each renders as
+      // its own inline card rather than one merged run.
       await tester.tap(
         find.descendant(
           of: find.byKey(chatKey),
-          matching: find.text('Ran a command, used a tool'),
+          matching: find.byKey(const ValueKey('tool-details-tool-review')),
         ),
       );
       await tester.pumpAndSettle();

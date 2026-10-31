@@ -25,6 +25,16 @@ Future<String?> showDeviceRenameDialog(
   hintText: 'Name shown in this app',
 );
 
+Future<String?> showWorkspaceRenameDialog(
+  BuildContext context, {
+  required String currentName,
+}) => showNameDialog(
+  context,
+  title: 'Rename workspace',
+  currentValue: currentName,
+  hintText: 'Name shown in this app',
+);
+
 Future<bool> showDeviceDeleteDialog(
   BuildContext context, {
   required String name,

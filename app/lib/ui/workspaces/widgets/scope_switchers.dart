@@ -1,9 +1,10 @@
 import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Devices are a top-level destination, presented as a prominent card and sheet.
+/// Devices are a top-level destination, presented as a prominent card and
+/// sheet. The whole card is tappable so switching never depends on hitting a
+/// small trailing icon.
 class DeviceSwitcher extends StatelessWidget {
   const DeviceSwitcher({
     super.key,
@@ -23,6 +24,8 @@ class DeviceSwitcher extends StatelessWidget {
   final VoidCallback? onAdd;
   final Future<bool> Function(String epk)? onRename;
   final Future<bool> Function(String epk)? onDelete;
+
+  bool get _canOpen => enabled && (devices.isNotEmpty || onAdd != null);
 
   Future<void> _pick(BuildContext context) async {
     final choice = await showModalBottomSheet<({bool add, String? device})>(
@@ -80,11 +83,9 @@ class DeviceSwitcher extends StatelessWidget {
                             color: sheetContext.colors.muted2,
                           ),
                           title: Text(entry.value),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (onRename != null)
-                                IconButton(
+                          trailing: onRename == null
+                              ? null
+                              : IconButton(
                                   key: ValueKey('device-rename-${entry.key}'),
                                   tooltip: 'Rename device',
                                   visualDensity: VisualDensity.compact,
@@ -104,14 +105,6 @@ class DeviceSwitcher extends StatelessWidget {
                                     color: sheetContext.colors.muted2,
                                   ),
                                 ),
-                              if (entry.key == selected)
-                                Icon(
-                                  LucideIcons.check,
-                                  size: 18,
-                                  color: sheetContext.colors.accent,
-                                ),
-                            ],
-                          ),
                           onTap: () => Navigator.pop(sheetContext, (
                             add: false,
                             device: entry.key,
@@ -137,93 +130,67 @@ class DeviceSwitcher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: .58),
+    return Material(
+      color: colors.surface.withValues(alpha: .58),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colors.glassEdge),
+        side: BorderSide(color: colors.glassEdge),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colors.selection,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(LucideIcons.monitor, size: 22, color: colors.accent),
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Device',
-                  style: context.typo.sansBody.copyWith(
-                    fontSize: 11,
-                    color: colors.muted,
-                  ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const Key('device-switch'),
+        onTap: _canOpen ? () => _pick(context) : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colors.selection,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  devices[selected] ?? 'Pair a device',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.typo.sansBody.copyWith(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Icon(
+                  LucideIcons.monitor,
+                  size: 22,
+                  color: colors.accent,
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4),
-          _DeviceActionButton(
-            key: const Key('device-switch'),
-            tooltip: 'Switch device',
-            icon: LucideIcons.chevronsUpDown,
-            onPressed: enabled && (devices.isNotEmpty || onAdd != null)
-                ? () => _pick(context)
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeviceActionButton extends StatelessWidget {
-  const _DeviceActionButton({
-    super.key,
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox.square(
-        dimension: 34,
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-          onPressed: onPressed,
-          icon: Icon(
-            icon,
-            size: 16,
-            color: onPressed == null
-                ? colors.muted.withValues(alpha: .35)
-                : colors.muted2,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'DEVICE',
+                      style: context.typo.monoSmall.copyWith(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1,
+                        color: colors.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      devices[selected] ?? 'Pair a device',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: context.typo.sansBody.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                LucideIcons.chevronDown,
+                size: 16,
+                color: _canOpen ? colors.muted2 : colors.muted,
+              ),
+            ],
           ),
         ),
       ),
@@ -231,8 +198,10 @@ class _DeviceActionButton extends StatelessWidget {
   }
 }
 
-/// Workspaces are phone-side logical groups presented as a flat row. Sessions
-/// inside one group may come from unrelated folders.
+/// Workspaces are phone-side logical groups. Sessions inside one group may
+/// come from unrelated folders, so this is a lightweight nested control under
+/// the device card — deliberately quieter than [DeviceSwitcher] so the two are
+/// easy to tell apart in the sidebar.
 class WorkspaceSwitcher extends StatelessWidget {
   const WorkspaceSwitcher({
     super.key,
@@ -242,6 +211,7 @@ class WorkspaceSwitcher extends StatelessWidget {
     required this.hasDevice,
     required this.onSelected,
     this.onCreate,
+    this.onRename,
     this.canDelete,
     this.onDelete,
     this.enabled = true,
@@ -254,6 +224,7 @@ class WorkspaceSwitcher extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String> onSelected;
   final VoidCallback? onCreate;
+  final Future<bool> Function(String key, String name)? onRename;
   final bool Function(String key)? canDelete;
   final Future<bool> Function(String key)? onDelete;
 
@@ -265,218 +236,166 @@ class WorkspaceSwitcher extends StatelessWidget {
       detail;
 
   Future<void> _pick(BuildContext context) async {
-    final choice = await showModalBottomSheet<({bool add, String? workspace})>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: .38),
-      isScrollControlled: true,
-      showDragHandle: false,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * .72,
-      ),
-      builder: (sheetContext) {
-        final colors = sheetContext.colors;
-        return BayaGlassSurface(
-          radius: 34,
-          elevated: false,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: colors.border,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 48,
-                    child: _SwitcherSheetHeader(
-                      title: 'Switch workspace',
-                      onClose: () => Navigator.of(sheetContext).pop(),
-                      onAdd: enabled && onCreate != null
-                          ? () => Navigator.of(
-                              sheetContext,
-                            ).pop((add: true, workspace: null))
-                          : null,
-                      addTooltip: 'New workspace',
-                      addKey: const Key('workspace-add'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Flexible(
-                    child: workspaces.isEmpty
-                        ? const _EmptyWorkspaceList()
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            itemCount: workspaces.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 9),
-                            itemBuilder: (_, index) {
-                              final entry = workspaces.entries.elementAt(index);
-                              final selected = entry.key == this.selected;
-                              final label =
-                                  labels[entry.key] ?? _name(entry.value);
-                              final deletable =
-                                  enabled &&
-                                  onDelete != null &&
-                                  (canDelete?.call(entry.key) ?? true);
-                              return Dismissible(
-                                key: ValueKey('workspace-row-${entry.key}'),
-                                direction: deletable
-                                    ? DismissDirection.endToStart
-                                    : DismissDirection.none,
-                                confirmDismiss: (_) => onDelete!(entry.key),
-                                onDismissed: (_) {
-                                  if (sheetContext.mounted) {
-                                    Navigator.of(sheetContext).pop();
-                                  }
-                                },
-                                background: const _SwipeDeleteBackground(),
-                                child: Material(
-                                  key: ValueKey(
-                                    'workspace-choice-${entry.key}',
-                                  ),
-                                  color: selected
-                                      ? colors.selection
-                                      : colors.surface.withValues(alpha: .48),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(22),
-                                    side: BorderSide(
-                                      color: selected
-                                          ? colors.accent.withValues(alpha: .32)
-                                          : colors.border.withValues(alpha: .7),
-                                    ),
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(22),
-                                    onTap: () => Navigator.of(
-                                      sheetContext,
-                                    ).pop((add: false, workspace: entry.key)),
-                                    child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        12,
-                                        11,
-                                        12,
-                                        11,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 40,
-                                            height: 40,
-                                            decoration: BoxDecoration(
-                                              color: selected
-                                                  ? colors.accent
-                                                  : colors.bg.withValues(
-                                                      alpha: .54,
-                                                    ),
-                                              borderRadius:
-                                                  BorderRadius.circular(13),
-                                              border: Border.all(
-                                                color: selected
-                                                    ? colors.accent
-                                                    : colors.border.withValues(
-                                                        alpha: .75,
-                                                      ),
-                                              ),
-                                            ),
-                                            child: Icon(
-                                              LucideIcons.layoutDashboard,
-                                              size: 19,
-                                              color: selected
-                                                  ? colors.onAccent
-                                                  : colors.muted2,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  label,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: sheetContext
-                                                      .typo
-                                                      .sansBody
-                                                      .copyWith(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                ),
-                                                const SizedBox(height: 3),
-                                                Text(
-                                                  entry.value,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: sheetContext
-                                                      .typo
-                                                      .sansBody
-                                                      .copyWith(
-                                                        color: colors.muted,
-                                                        fontSize: 11.5,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          AnimatedContainer(
-                                            duration: const Duration(
-                                              milliseconds: 160,
-                                            ),
-                                            width: 28,
-                                            height: 28,
-                                            decoration: BoxDecoration(
-                                              color: selected
-                                                  ? colors.accent
-                                                  : colors.surface.withValues(
-                                                      alpha: .7,
-                                                    ),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              selected
-                                                  ? LucideIcons.check
-                                                  : LucideIcons.chevronRight,
-                                              size: 16,
-                                              color: selected
-                                                  ? colors.onAccent
-                                                  : colors.muted2,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            ),
+    final choice =
+        await showModalBottomSheet<
+          ({bool add, String? workspace, String? rename})
+        >(
+          context: context,
+          showDragHandle: true,
+          isScrollControlled: true,
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * .72,
           ),
+          builder: (sheetContext) {
+            final colors = sheetContext.colors;
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: _SwitcherSheetHeader(
+                        title: 'Switch workspace',
+                        onClose: () => Navigator.of(sheetContext).pop(),
+                        onAdd: enabled && onCreate != null
+                            ? () => Navigator.of(
+                                sheetContext,
+                              ).pop((add: true, workspace: null, rename: null))
+                            : null,
+                        addTooltip: 'New workspace',
+                        addKey: const Key('workspace-add'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: workspaces.isEmpty
+                          ? const _EmptyWorkspaceList()
+                          : Material(
+                              color: colors.surface.withValues(alpha: .6),
+                              borderRadius: BorderRadius.circular(26),
+                              clipBehavior: Clip.antiAlias,
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: workspaces.length,
+                                separatorBuilder: (_, _) => Divider(
+                                  height: 1,
+                                  indent: 58,
+                                  color: colors.border.withValues(alpha: .7),
+                                ),
+                                itemBuilder: (_, index) {
+                                  final entry = workspaces.entries.elementAt(
+                                    index,
+                                  );
+                                  final isSelected = entry.key == selected;
+                                  final label =
+                                      labels[entry.key] ?? _name(entry.value);
+                                  final deletable =
+                                      enabled &&
+                                      onDelete != null &&
+                                      (canDelete?.call(entry.key) ?? true);
+                                  return Dismissible(
+                                    key: ValueKey('workspace-row-${entry.key}'),
+                                    direction: deletable
+                                        ? DismissDirection.endToStart
+                                        : DismissDirection.none,
+                                    confirmDismiss: (_) => onDelete!(entry.key),
+                                    onDismissed: (_) {
+                                      if (sheetContext.mounted) {
+                                        Navigator.of(sheetContext).pop();
+                                      }
+                                    },
+                                    background: const _SwipeDeleteBackground(),
+                                    child: ListTile(
+                                      key: ValueKey(
+                                        'workspace-choice-${entry.key}',
+                                      ),
+                                      selected: isSelected,
+                                      selectedTileColor: colors.selection,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 7,
+                                          ),
+                                      leading: Icon(
+                                        LucideIcons.layoutDashboard,
+                                        size: 20,
+                                        color: isSelected
+                                            ? colors.accent
+                                            : colors.muted2,
+                                      ),
+                                      title: Text(
+                                        label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: sheetContext.typo.sansBody
+                                            .copyWith(
+                                              fontSize: 16,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w500,
+                                            ),
+                                      ),
+                                      subtitle: Text(
+                                        entry.value,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: sheetContext.typo.sansBody
+                                            .copyWith(
+                                              color: colors.muted,
+                                              fontSize: 12,
+                                            ),
+                                      ),
+                                      trailing: enabled && onRename != null
+                                          ? IconButton(
+                                              key: ValueKey(
+                                                'workspace-rename-${entry.key}',
+                                              ),
+                                              tooltip: 'Rename workspace',
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              onPressed: () =>
+                                                  Navigator.of(
+                                                    sheetContext,
+                                                  ).pop((
+                                                    add: false,
+                                                    workspace: null,
+                                                    rename: entry.key,
+                                                  )),
+                                              icon: Icon(
+                                                LucideIcons.pencil,
+                                                size: 17,
+                                                color: colors.muted2,
+                                              ),
+                                            )
+                                          : null,
+                                      onTap: () =>
+                                          Navigator.of(sheetContext).pop((
+                                            add: false,
+                                            workspace: entry.key,
+                                            rename: null,
+                                          )),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
-      },
-    );
     if (!context.mounted || choice == null) return;
     if (choice.add) {
       onCreate?.call();
+      return;
+    }
+    if (choice.rename case final key?) {
+      final label = labels[key] ?? _name(workspaces[key] ?? key);
+      await onRename?.call(key, label);
       return;
     }
     if (choice.workspace case final workspace?) onSelected(workspace);
@@ -492,85 +411,55 @@ class WorkspaceSwitcher extends StatelessWidget {
               : 'Choose a device first'
         : labels[selected] ?? _name(detail);
     final canOpen = enabled && hasDevice;
-    return Material(
-      color: colors.surface.withValues(alpha: .50),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: colors.border.withValues(alpha: .72)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        key: const Key('workspace-switch'),
-        onTap: canOpen ? () => _pick(context) : null,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 9, 9, 9),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: colors.selection,
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(
+    return Padding(
+      padding: const EdgeInsets.only(left: 22),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('workspace-switch'),
+          borderRadius: BorderRadius.circular(18),
+          onTap: canOpen ? () => _pick(context) : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 7, 6, 7),
+            child: Row(
+              children: [
+                Icon(
                   LucideIcons.layoutDashboard,
-                  size: 17,
-                  color: canOpen ? colors.accent : colors.muted,
+                  size: 16,
+                  color: canOpen ? colors.muted2 : colors.muted,
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'WORKSPACE',
-                      style: context.typo.monoSmall.copyWith(
-                        color: colors.muted,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.typo.sansBody.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (detail != null)
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        detail,
+                        'Workspace',
+                        style: context.typo.sansBody.copyWith(
+                          fontSize: 11,
+                          color: colors.muted,
+                        ),
+                      ),
+                      Text(
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: context.typo.sansBody.copyWith(
-                          color: colors.muted,
-                          fontSize: 10.5,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: colors.bg.withValues(alpha: .44),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
+                const SizedBox(width: 8),
+                Icon(
                   LucideIcons.chevronDown,
                   size: 15,
                   color: canOpen ? colors.muted2 : colors.muted,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

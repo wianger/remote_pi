@@ -175,6 +175,13 @@ class HomeViewModel extends ViewModel<HomeState> {
 
   Future<void> deleteWorkspace(String key) => _prefs.deleteWorkspace(key);
 
+  /// Rename a phone-side workspace. The key is stable, so sessions assigned to
+  /// it keep their grouping.
+  Future<void> renameWorkspace(String key, String name) {
+    if (name.trim().isEmpty) return Future.value();
+    return _prefs.setWorkspaceName(key, name);
+  }
+
   Future<void> assignSessionToWorkspace(HomeItem item, String workspaceKey) =>
       _prefs.setSessionWorkspace(
         item.peer.remoteEpk,

@@ -84,7 +84,9 @@ void main() {
       );
       expect(find.text('Desktop one'), findsOneWidget);
       // Bottom actions stay pinned and tappable below the scroll area.
-      expect(find.byKey(const Key('sidebar-pair')), findsOneWidget);
+      // Pairing moved into the device sheet, so the sidebar keeps a single
+      // settings action.
+      expect(find.byKey(const Key('sidebar-pair')), findsNothing);
       expect(find.byKey(const Key('sidebar-settings')), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       vm.dispose();

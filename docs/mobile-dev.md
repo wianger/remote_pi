@@ -445,3 +445,29 @@ The Workspace sheet presents each logical workspace as its own rounded row with
 an icon tile, path and selection indicator. The active row uses a filled icon
 and check mark, and an explicit empty state appears when the selected computer
 has no workspaces. Spacing, rename and swipe-to-delete behavior are unchanged.
+
+## Sidebar and transcript polish (1.2.18 / build 27)
+
+The sidebar no longer renders through a blurred glass surface, which was
+darkening the drawer; it is now an opaque themed panel. The Workspace control
+is a quiet, indented row under the Device card again, so the two scopes read
+differently. Device and Workspace sheets use plain selection backgrounds with
+no check marks, and every row that can be renamed carries a pencil button.
+Pairing lives in the Device sheet's add action, so the sidebar footer keeps
+only the Settings circle. Sessions are renamed from their pencil and removed
+with a right-swipe, replacing the long-press menu.
+
+In the transcript, only *consecutive* tool calls collapse into one summary row;
+a call separated from the next by assistant text, thinking or a new user turn
+renders on its own. Single calls show their command and short output directly
+and keep long output behind a "Show full output" toggle. Only the final
+assistant segment of each turn shows the copy button, so a reply interleaved
+with tools no longer repeats it. "Jump to latest" keys off the distance
+scrolled back into history, so it appears as soon as the newest message leaves
+the viewport.
+
+The composer's model control opens the Claude-style model picker directly
+instead of the intermediate Session sheet, and the voice/send actions use a
+flat accent send button and a neutral circular mic button. Settings detail
+pages are pushed with the route's `SettingsViewModel` re-injected, fixing the
+Relay page failing to open.

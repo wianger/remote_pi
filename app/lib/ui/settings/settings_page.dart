@@ -16,10 +16,19 @@ class SettingsPage extends StatelessWidget {
 
   const SettingsPage({super.key, this.embedded = false});
 
-  void _openDetail(BuildContext context, Widget page) {
-    Navigator.of(
-      context,
-    ).push<void>(MaterialPageRoute<void>(builder: (_) => page));
+  /// Pushed detail routes are siblings of `/settings` in the navigator, so
+  /// they do NOT inherit the route-local `SettingsViewModel` provider. Re-inject
+  /// the same instance or the detail page throws when it reads the ViewModel.
+  void _openDetail(BuildContext context, Widget Function() page) {
+    final vm = context.read<SettingsViewModel>();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ChangeNotifierProvider<SettingsViewModel>.value(
+          value: vm,
+          child: page(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -64,7 +73,7 @@ class SettingsPage extends StatelessWidget {
                     title: 'Relay',
                     subtitle: vm.effectiveRelayUrl,
                     onTap: () =>
-                        _openDetail(context, const RelaySettingsPage()),
+                        _openDetail(context, () => const RelaySettingsPage()),
                   ),
                 ),
                 const SizedBox(height: 22),
@@ -76,7 +85,7 @@ class SettingsPage extends StatelessWidget {
                     title: 'Display and conversation',
                     subtitle: _displaySummary(prefs),
                     onTap: () =>
-                        _openDetail(context, const DisplaySettingsPage()),
+                        _openDetail(context, () => const DisplaySettingsPage()),
                   ),
                 ),
                 const SizedBox(height: 22),

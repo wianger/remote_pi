@@ -6,9 +6,10 @@ import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Collapsed summary for completed tool calls in one user turn. Text segments
-/// may separate the calls; the shape still follows the Claude mobile pattern
-/// with one quiet row and one sheet containing every action.
+/// Collapsed summary for a *run* of consecutive tool calls — text, thinking or
+/// a new user turn ends the run, so unrelated calls never get merged. Mirrors
+/// the Claude mobile pattern: one quiet row that opens a list of the actions,
+/// each of which expands into its command and result.
 class ToolRunGroup extends StatelessWidget {
   const ToolRunGroup({super.key, required this.tools});
 
@@ -35,38 +36,56 @@ class ToolRunGroup extends StatelessWidget {
     return 'Used ${others == 1 ? 'a tool' : '$others tools'}';
   }
 
-  String _preview(ToolEvent tool) {
-    final args = tool.args;
-    if (args is Map) {
-      for (final key in const [
-        'command',
-        'cmd',
-        'description',
-        'path',
-        'file_path',
-        'query',
-        'prompt',
-      ]) {
-        final value = args[key];
-        if (value is String && value.trim().isNotEmpty) return value.trim();
-      }
-    }
-    if (args is String && args.trim().isNotEmpty) return args.trim();
-    if (tool.error != null && tool.error!.isNotEmpty) return tool.error!;
-    return tool.status.name;
-  }
+  bool get _failed => tools.any((t) => t.status == ToolEventStatus.failed);
 
   IconData get _icon {
     final name = tools.first.tool.toLowerCase();
-    if (_isCommand(tools.first)) return LucideIcons.terminal;
-    if (name.contains('message') || name.contains('agent')) {
-      return LucideIcons.wrench;
-    }
+    if (tools.every(_isCommand)) return LucideIcons.terminal;
     if (name.contains('read')) return LucideIcons.fileText;
     if (name.contains('search') || name.contains('grep')) {
       return LucideIcons.search;
     }
     return LucideIcons.wrench;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return BayaGlassSurface(
+      radius: 18,
+      elevated: false,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('tool-run-group'),
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => _open(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 13),
+            child: Row(
+              children: [
+                Icon(
+                  _failed ? LucideIcons.circleAlert : _icon,
+                  size: 19,
+                  color: _failed ? colors.error : colors.muted2,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _summary,
+                    style: context.typo.sansBody.copyWith(
+                      color: _failed ? colors.error : colors.muted2,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Icon(LucideIcons.chevronRight, size: 16, color: colors.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _open(BuildContext context) async {
@@ -100,7 +119,7 @@ class ToolRunGroup extends StatelessWidget {
                       height: 4,
                       decoration: BoxDecoration(
                         color: colors.border,
-                        borderRadius: BorderRadius.all(Radius.circular(2)),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -145,6 +164,7 @@ class ToolRunGroup extends StatelessWidget {
                           itemBuilder: (_, index) {
                             final tool = tools[index];
                             return ListTile(
+                              key: ValueKey('tool-run-${tool.id}'),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 5,
@@ -210,79 +230,141 @@ class ToolRunGroup extends StatelessWidget {
     return tool.tool;
   }
 
+  /// Human-readable one-liner: prefer the call's own description, then the
+  /// command/path/query it operated on.
+  static String _preview(ToolEvent tool) {
+    final args = tool.args;
+    if (args is Map) {
+      for (final key in const [
+        'description',
+        'command',
+        'cmd',
+        'path',
+        'file_path',
+        'query',
+        'prompt',
+      ]) {
+        final value = args[key];
+        if (value is String && value.trim().isNotEmpty) return value.trim();
+      }
+    }
+    if (args is String && args.trim().isNotEmpty) return args.trim();
+    if (tool.error != null && tool.error!.isNotEmpty) return tool.error!;
+    return tool.status.name;
+  }
+
   Future<void> _showDetail(BuildContext context, ToolEvent tool) {
-    final args = tool.args is String
-        ? tool.args as String
-        : const JsonEncoder.withIndent('  ').convert(tool.args);
-    final result = tool.result is String
-        ? tool.result as String
-        : tool.result == null
-        ? ''
-        : const JsonEncoder.withIndent('  ').convert(tool.result);
-    return showDialog<void>(
+    final args = _pretty(tool.args);
+    final result = _pretty(tool.result);
+    return showModalBottomSheet<void>(
       context: context,
-      builder: (dialogContext) {
-        final colors = dialogContext.colors;
-        return AlertDialog(
-          title: Text(_labelFor(tool)),
-          content: SingleChildScrollView(
-            child: SelectableText(
-              [
-                args,
-                if (result.isNotEmpty) '\n$result',
-                if (tool.error != null) '\n${tool.error}',
-              ].join('\n'),
-              style: dialogContext.typo.monoSmall.copyWith(color: colors.text),
-            ),
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: context.colors.bg,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _labelFor(tool),
+                style: sheetContext.typo.title.copyWith(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    _DetailBlock(label: 'Command', body: args),
+                    if (result.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      _DetailBlock(label: 'Result', body: result),
+                    ],
+                    if (tool.error != null && tool.error!.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      _DetailBlock(
+                        label: 'Error',
+                        body: tool.error!,
+                        color: sheetContext.colors.error,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
+        ),
+      ),
     );
   }
+
+  static String _pretty(dynamic value) {
+    if (value == null) return '';
+    if (value is String) return value.trim();
+    if (value is Map && value['content'] is List) {
+      final text = (value['content'] as List)
+          .whereType<Map>()
+          .where((entry) => entry['text'] is String)
+          .map((entry) => entry['text'] as String)
+          .join('\n')
+          .trim();
+      if (text.isNotEmpty) return text;
+    }
+    try {
+      return const JsonEncoder.withIndent('  ').convert(value);
+    } catch (_) {
+      return value.toString();
+    }
+  }
+}
+
+class _DetailBlock extends StatelessWidget {
+  const _DetailBlock({required this.label, required this.body, this.color});
+
+  final String label;
+  final String body;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final failed = tools.any((t) => t.status == ToolEventStatus.failed);
-    return BayaGlassSurface(
-      radius: 18,
-      elevated: false,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _open(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 13),
-            child: Row(
-              children: [
-                Icon(
-                  failed ? LucideIcons.circleAlert : _icon,
-                  size: 19,
-                  color: failed ? colors.error : colors.muted2,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _summary,
-                    style: context.typo.sansBody.copyWith(
-                      color: failed ? colors.error : colors.muted2,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                Icon(LucideIcons.chevronRight, size: 16, color: colors.muted),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: context.typo.monoSmall.copyWith(
+            fontSize: 10,
+            letterSpacing: 1,
+            color: colors.muted,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colors.codeBg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SelectableText(
+            body,
+            style: context.typo.mono.copyWith(
+              fontSize: 12,
+              height: 1.5,
+              color: color ?? colors.text,
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

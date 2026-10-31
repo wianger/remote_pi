@@ -95,6 +95,44 @@ Future<void> _disposeSettings(
 }
 
 void main() {
+  testWidgets(
+    'relay and display details open when providers live on the route only',
+    (tester) async {
+      // Mirrors production: Preferences is app-level (above MaterialApp) while
+      // SettingsViewModel is created by the `/settings` route. Pushed detail
+      // routes are siblings in the navigator, so they must re-inject the
+      // ViewModel themselves or they throw on first read.
+      final fixture = _SettingsFixture();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<Preferences>.value(
+          value: fixture.prefs,
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: ChangeNotifierProvider<SettingsViewModel>.value(
+              value: fixture.vm,
+              child: const SettingsPage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('settings-relay')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('relay-url')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('settings-display')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('theme-selector')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await _disposeSettings(tester, fixture);
+    },
+  );
+
   testWidgets('settings home exposes one entry per section', (tester) async {
     final fixture = await _pumpSettings(tester);
 

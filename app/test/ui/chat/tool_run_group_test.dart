@@ -28,6 +28,65 @@ void main() {
     });
   });
 
+  test('thinking and tool boundaries keep only the newest segment', () {
+    final messages = <ChatMessage>[
+      const UserMsg(id: 'user-1', text: 'Do the thing'),
+      const AssistantMsg(id: 'a-1', text: 'Looking'),
+      const ThinkingMsg(id: 't-1', text: 'reasoning', complete: true),
+      const AssistantMsg(id: 'a-2', text: 'Running the command'),
+      const ToolEvent(
+        id: 'tool-1',
+        toolCallId: 'tool-1',
+        tool: 'command',
+        args: {},
+        status: ToolEventStatus.completed,
+      ),
+      const AssistantMsg(id: 'a-3', text: 'Done'),
+    ];
+
+    expect(assistantCopyIdsForTurns(messages), {'a-3'});
+  });
+
+  test('consecutive calls group; calls split by text stay separate', () {
+    const a = ToolEvent(
+      id: 'tool-1',
+      toolCallId: 'cmd-1',
+      tool: 'command',
+      args: {'command': 'git status'},
+      status: ToolEventStatus.completed,
+    );
+    const b = ToolEvent(
+      id: 'tool-2',
+      toolCallId: 'cmd-2',
+      tool: 'command',
+      args: {'command': 'git diff'},
+      status: ToolEventStatus.completed,
+    );
+    const c = ToolEvent(
+      id: 'tool-3',
+      toolCallId: 'cmd-3',
+      tool: 'command',
+      args: {'command': 'ls'},
+      status: ToolEventStatus.completed,
+    );
+
+    final items = toolRunItemsForMessages([
+      const UserMsg(id: 'u1', text: 'Go'),
+      a,
+      b,
+      const AssistantMsg(id: 'a1', text: 'Now the next one'),
+      c,
+    ]);
+
+    expect(items.length, 4);
+    expect(items[0], isA<UserMsg>());
+    expect(items[1], isA<ToolRunItem>());
+    expect((items[1] as ToolRunItem).tools, [a, b]);
+    expect(items[2], isA<AssistantMsg>());
+    // A lone call renders as the plain card, not as a group.
+    expect(items[3], same(c));
+  });
+
   testWidgets('multiple tools collapse into one row and open a grouped sheet', (
     tester,
   ) async {

@@ -967,65 +967,51 @@ class _ComposerActionButton extends StatelessWidget {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final visualEnabled =
         !disabled && (_mode != _ComposerMode.sendText || hasContent);
+    final isVoice = _mode == _ComposerMode.sendAudio;
+    final isCancel = _mode == _ComposerMode.cancel;
+    final background = !visualEnabled
+        ? colors.inputFill.withValues(alpha: .55)
+        : isVoice
+        ? colors.surface.withValues(alpha: .92)
+        : isCancel
+        ? colors.error.withValues(alpha: .16)
+        : colors.accent;
+    final foreground = !visualEnabled
+        ? colors.muted
+        : isVoice
+        ? colors.text
+        : isCancel
+        ? colors.error
+        : colors.onAccent;
     return AnimatedContainer(
       duration: reduceMotion
           ? Duration.zero
           : const Duration(milliseconds: 200),
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       child: Center(
         child: AnimatedContainer(
           duration: reduceMotion
               ? Duration.zero
               : const Duration(milliseconds: 200),
-          width: 38,
-          height: 38,
+          width: isVoice ? 40 : 44,
+          height: isVoice ? 40 : 44,
           decoration: BoxDecoration(
-            gradient: visualEnabled
-                ? _mode == _ComposerMode.sendAudio
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            colors.glassTint,
-                            colors.inputFill.withValues(alpha: 0.94),
-                          ],
-                        )
-                      : _mode == _ComposerMode.cancel
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            colors.error.withValues(alpha: 0.22),
-                            colors.error.withValues(alpha: 0.12),
-                          ],
-                        )
-                      : LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [colors.accent, colors.accent],
-                        )
-                : LinearGradient(
-                    colors: [
-                      colors.glassTint.withValues(alpha: 0.52),
-                      colors.glassFill.withValues(alpha: 0.42),
-                    ],
-                  ),
-            borderRadius: BorderRadius.circular(19),
+            color: background,
+            shape: isVoice ? BoxShape.circle : BoxShape.rectangle,
+            borderRadius: isVoice ? null : BorderRadius.circular(22),
             border: Border.all(
-              color: visualEnabled
-                  ? _mode == _ComposerMode.cancel
-                        ? colors.error.withValues(alpha: 0.48)
-                        : colors.glassHighlight
-                  : colors.glassEdge.withValues(alpha: 0.55),
-              width: 0.8,
+              color: isVoice ? colors.glassEdge : Colors.transparent,
+              width: isVoice ? 0.8 : 0,
             ),
-            boxShadow: visualEnabled && !MediaQuery.highContrastOf(context)
+            boxShadow:
+                visualEnabled && !isVoice && !MediaQuery.highContrastOf(context)
                 ? [
                     BoxShadow(
-                      color: colors.glassShadow,
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                      color: (isCancel ? colors.error : colors.accent)
+                          .withValues(alpha: .28),
+                      blurRadius: 14,
+                      offset: const Offset(0, 5),
                     ),
                   ]
                 : null,
@@ -1043,14 +1029,8 @@ class _ComposerActionButton extends StatelessWidget {
             child: Icon(
               _icon,
               key: ValueKey(_mode),
-              color: !visualEnabled
-                  ? colors.muted
-                  : _mode == _ComposerMode.sendAudio
-                  ? colors.text
-                  : _mode == _ComposerMode.cancel
-                  ? colors.error
-                  : colors.onAccent,
-              size: 19,
+              color: foreground,
+              size: isVoice ? 20 : 21,
             ),
           ),
         ),

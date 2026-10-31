@@ -15,6 +15,7 @@ import 'package:app/ui/chat/widgets/thinking_block.dart';
 import 'package:app/ui/chat/context/widgets/context_usage_button.dart';
 import 'package:app/ui/chat/context/widgets/context_usage_sheet.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
+import 'package:app/ui/chat/quick_actions/widgets/model_picker_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/commands/viewmodels/agent_commands_viewmodel.dart';
@@ -489,7 +490,7 @@ class ChatPage extends StatelessWidget {
       streaming: isWorking,
       onCancel: cancelId != null ? () => vm.cancel(cancelId) : null,
       onOpenQuickActions: actionsEnabled
-          ? () => showQuickActionsSheet(context)
+          ? () => showStandaloneModelPicker(context)
           : null,
       onSlashCommand: (id, raw) {
         switch (id) {
@@ -499,6 +500,7 @@ class ChatPage extends StatelessWidget {
               workspaceKey: context.read<HomeViewModel>().selectedWorkspace,
             );
           case 'model':
+            showStandaloneModelPicker(context);
           case 'thinking':
             showQuickActionsSheet(context);
           case 'compact':
@@ -642,19 +644,57 @@ class ChatPage extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 
-class _ToolRun {
-  const _ToolRun(this.tools);
+/// Groups chat messages for rendering: consecutive completed tool calls become
+/// a single [ToolRunItem]; everything else stays in order.
+List<Object> toolRunItemsForMessages(List<ChatMessage> messages) {
+  final items = <Object>[];
+  final run = <ToolEvent>[];
+  void flushRun() {
+    if (run.isEmpty) return;
+    items.add(run.length == 1 ? run.single : ToolRunItem(List.of(run)));
+    run.clear();
+  }
+
+  for (final message in messages) {
+    final needsApproval =
+        message is ToolEvent &&
+        message.status == ToolEventStatus.pending &&
+        message.args is Map &&
+        message.args['approval_required'] == true;
+    if (message is ToolEvent && !needsApproval) {
+      run.add(message);
+      continue;
+    }
+    flushRun();
+    items.add(message);
+  }
+  flushRun();
+  return items;
+}
+
+/// A run of consecutive tool calls rendered as one collapsible row.
+class ToolRunItem {
+  const ToolRunItem(this.tools);
   final List<ToolEvent> tools;
 }
 
 /// Returns the final assistant segment of each completed user turn. Tool
 /// boundaries split one logical answer across several bubbles; only this last
-/// segment owns the copy action.
+/// segment owns the copy action, so a reply interleaved with tool calls shows
+/// a single copy button under the final text instead of one per segment.
 Set<String> assistantCopyIdsForTurns(List<ChatMessage> messages) {
   final ids = <String>{};
   String? lastAssistant;
   for (final message in messages) {
-    if (message is AssistantMsg) lastAssistant = message.id;
+    if (message is AssistantMsg) {
+      lastAssistant = message.id;
+      continue;
+    }
+    // Any non-assistant content ends the current run of assistant segments, so
+    // a later segment becomes the newest candidate for the turn.
+    if (message is ToolEvent || message is ThinkingMsg) {
+      continue;
+    }
     if (message is UserMsg) {
       if (lastAssistant != null) ids.add(lastAssistant);
       lastAssistant = null;
@@ -681,7 +721,10 @@ class _MessageList extends StatefulWidget {
 }
 
 class _MessageListState extends State<_MessageList> {
-  static const _latestThreshold = 120.0;
+  /// How far past the newest message the user must scroll before the
+  /// "jump to latest" button appears. Small on purpose so it shows up as soon
+  /// as the newest message leaves the viewport.
+  static const _latestThreshold = 72.0;
 
   final _controller = ScrollController();
   bool _showLatest = false;
@@ -691,13 +734,23 @@ class _MessageListState extends State<_MessageList> {
   void initState() {
     super.initState();
     _controller.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onScroll());
   }
 
   void _onScroll() {
-    final next =
-        _controller.hasClients && _controller.offset > _latestThreshold;
+    if (!_controller.hasClients) return;
+    final next = _isAwayFromLatest(_controller.position);
     if (next == _showLatest) return;
     setState(() => _showLatest = next);
+  }
+
+  /// `reverse: true` anchors the newest row at scroll offset 0, so
+  /// `extentBefore` is exactly how far the user has travelled back into the
+  /// history. That stays correct when a single message is taller than the
+  /// viewport, where a plain offset threshold can be reached instantly.
+  bool _isAwayFromLatest(ScrollMetrics metrics) {
+    if (metrics.maxScrollExtent <= 0) return false;
+    return metrics.extentBefore > _latestThreshold;
   }
 
   bool _onScrollNotification(ScrollNotification notification) {
@@ -715,6 +768,12 @@ class _MessageListState extends State<_MessageList> {
     if (notification is ScrollEndNotification) {
       _keyboardDismissTriggered = false;
     }
+    if (notification is ScrollUpdateNotification ||
+        notification is ScrollEndNotification ||
+        notification is UserScrollNotification) {
+      final next = _isAwayFromLatest(notification.metrics);
+      if (next != _showLatest) setState(() => _showLatest = next);
+    }
     return false;
   }
 
@@ -728,47 +787,7 @@ class _MessageListState extends State<_MessageList> {
     );
   }
 
-  List<Object> _items() {
-    final toolsByTurn = <int, List<ToolEvent>>{};
-    var turn = -1;
-    for (final message in widget.messages) {
-      if (message is UserMsg) turn++;
-      final needsApproval =
-          message is ToolEvent &&
-          message.status == ToolEventStatus.pending &&
-          message.args is Map &&
-          message.args['approval_required'] == true;
-      if (message is ToolEvent && !needsApproval) {
-        toolsByTurn.putIfAbsent(turn, () => []).add(message);
-      }
-    }
-
-    final items = <Object>[];
-    final emittedTurns = <int>{};
-    turn = -1;
-    for (final message in widget.messages) {
-      if (message is UserMsg) {
-        turn++;
-        items.add(message);
-        continue;
-      }
-      final needsApproval =
-          message is ToolEvent &&
-          message.status == ToolEventStatus.pending &&
-          message.args is Map &&
-          message.args['approval_required'] == true;
-      if (message is ToolEvent && !needsApproval) {
-        final grouped = toolsByTurn[turn];
-        if (grouped != null && emittedTurns.add(turn)) {
-          items.add(_ToolRun(List<ToolEvent>.unmodifiable(grouped)));
-        }
-        continue;
-      }
-      items.add(message);
-    }
-    return items;
-  }
-
+  List<Object> _items() => toolRunItemsForMessages(widget.messages);
   @override
   Widget build(BuildContext context) {
     final items = _items();
@@ -804,7 +823,7 @@ class _MessageListState extends State<_MessageList> {
                 final itemIdx =
                     items.length - 1 - (i - (streaming != null ? 1 : 0));
                 final item = items[itemIdx];
-                if (item is _ToolRun) {
+                if (item is ToolRunItem) {
                   return KeyedSubtree(
                     key: ValueKey('tool-run-${item.tools.first.id}'),
                     child: ToolRunGroup(tools: item.tools),

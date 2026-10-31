@@ -45,14 +45,13 @@ void main() {
       ),
     );
 
+    // The whole card opens the sheet now — no precise tap on the trailing icon.
     await tester.tap(find.text('Computer A'));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch device'), findsOneWidget);
     expect(switched, isNull);
     expect(renameCalls, 0);
     expect(deleteCalls, 0);
-
-    await tester.tap(find.byKey(const Key('device-switch')));
-    await tester.pumpAndSettle();
-    expect(find.text('Switch device'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('device-rename-computer-a')));
     await tester.pumpAndSettle();
@@ -83,6 +82,7 @@ void main() {
   ) async {
     var created = 0;
     var deleted = 0;
+    var renamed = 0;
     await tester.pumpWidget(
       MaterialApp(
         theme: buildLightTheme(),
@@ -100,6 +100,10 @@ void main() {
             hasDevice: true,
             onSelected: (_) {},
             onCreate: () => created++,
+            onRename: (_, _) async {
+              renamed++;
+              return true;
+            },
             canDelete: (_) => true,
             onDelete: (_) async {
               deleted++;
@@ -117,6 +121,18 @@ void main() {
     await tester.tap(find.byKey(const Key('workspace-add')));
     await tester.pumpAndSettle();
     expect(created, 1);
+
+    await tester.tap(find.byKey(const Key('workspace-switch')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const Key('workspace-rename-pc:workspace:beta')),
+      findsOne,
+    );
+    await tester.tap(
+      find.byKey(const Key('workspace-rename-pc:workspace:beta')),
+    );
+    await tester.pumpAndSettle();
+    expect(renamed, 1);
 
     await tester.tap(find.byKey(const Key('workspace-switch')));
     await tester.pumpAndSettle();
@@ -201,7 +217,15 @@ void main() {
         prefs.selectedWorkspace,
         HomeViewModel.workspaceKey(peer.remoteEpk, '/code/beta'),
       );
+      // Rename stays on the pencil; deletion moved to a right-swipe on the
+      // whole session row (no more long-press menu).
       expect(find.byTooltip('Rename session'), findsOneWidget);
+      await tester.drag(find.text('Beta task'), const Offset(400, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete from phone?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
       await tester.tap(find.byTooltip('Rename session'));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -215,12 +239,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Renamed Beta'), findsOneWidget);
 
-      await tester.longPress(find.text('Renamed Beta'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Delete from phone'));
+      await tester.drag(find.text('Renamed Beta'), const Offset(400, 0));
       await tester.pumpAndSettle();
       expect(find.text('Delete from phone?'), findsOneWidget);
-      await tester.tap(find.text('Delete'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Delete'),
+        ),
+      );
       await tester.pumpAndSettle();
       channel.control.add(
         RoomAnnounced(

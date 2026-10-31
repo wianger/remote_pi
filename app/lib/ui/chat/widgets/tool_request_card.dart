@@ -28,7 +28,10 @@ class ToolRequestCard extends StatefulWidget {
 }
 
 class _ToolRequestCardState extends State<ToolRequestCard> {
-  bool _expanded = false;
+  /// Single calls in the chat flow show their command/summary immediately so
+  /// the transcript reads like a log; only the (potentially long) output is
+  /// behind the expander. Real approvals always render fully.
+  bool _outputExpanded = false;
   ToolEvent get tool => widget.tool;
   void Function(String, ApproveDecision)? get onDecide => widget.onDecide;
 
@@ -53,7 +56,6 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final color = _statusColor(context);
-    final details = _expanded || _needsApproval;
     final name = tool.tool.toLowerCase();
     if (!_needsApproval &&
         (_running || tool.status == ToolEventStatus.completed) &&
@@ -68,21 +70,26 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
         complete: !_running,
       );
     }
-    final output = details ? _formatResult(tool.result) : null;
+    final output = _formatResult(tool.result);
+    final hasOutput = output != null && output.trim().isNotEmpty;
+    final longOutput =
+        hasOutput &&
+        (output.length > 900 || '\n'.allMatches(output).length > 12);
+    final showOutput = hasOutput && (!longOutput || _outputExpanded);
     return Material(
       color: colors.bg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Semantics(
-            button: !_needsApproval,
-            expanded: details,
+            button: !_needsApproval && longOutput,
+            expanded: _outputExpanded,
             child: InkWell(
               key: ValueKey('tool-details-${tool.toolCallId}'),
               borderRadius: BorderRadius.circular(8),
-              onTap: _needsApproval
+              onTap: _needsApproval || !longOutput
                   ? null
-                  : () => setState(() => _expanded = !_expanded),
+                  : () => setState(() => _outputExpanded = !_outputExpanded),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 2,
@@ -92,9 +99,9 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
                   children: [
                     Expanded(child: _buildHeader(context, color)),
                     const SizedBox(width: 10),
-                    if (!_needsApproval)
+                    if (longOutput && !_needsApproval)
                       Icon(
-                        details
+                        _outputExpanded
                             ? LucideIcons.chevronDown
                             : LucideIcons.chevronRight,
                         size: 15,
@@ -105,83 +112,88 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
               ),
             ),
           ),
-          if (details)
-            Container(
-              margin: const EdgeInsets.only(left: 9, top: 4, bottom: 8),
-              padding: const EdgeInsets.only(left: 17),
-              decoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(color: colors.border, width: 2),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCodeBlock(context),
-                  if (output != null && output.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'Output',
-                      style: context.typo.sansBody.copyWith(
-                        fontSize: 12,
-                        color: colors.muted,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      constraints: const BoxConstraints(maxHeight: 280),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: colors.codeBg,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: SingleChildScrollView(
-                        child: SelectableText(
-                          output,
-                          style: context.typo.mono.copyWith(
-                            fontSize: 12,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  if (_needsApproval) ...[
-                    Text(
-                      'The agent is waiting for your approval.',
-                      style: TextStyle(color: colors.text, fontSize: 13),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        OutlinedButton(
-                          onPressed: onDecide == null
-                              ? null
-                              : () => onDecide!(
-                                  tool.toolCallId,
-                                  ApproveDecision.deny,
-                                ),
-                          child: const Text('Deny'),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton(
-                          onPressed: onDecide == null
-                              ? null
-                              : () => onDecide!(
-                                  tool.toolCallId,
-                                  ApproveDecision.allow,
-                                ),
-                          child: const Text('Allow once'),
-                        ),
-                      ],
-                    ),
-                  ] else
-                    _buildOutcome(context, color),
-                ],
-              ),
+          Container(
+            margin: const EdgeInsets.only(left: 9, top: 4, bottom: 8),
+            padding: const EdgeInsets.only(left: 17),
+            decoration: BoxDecoration(
+              border: Border(left: BorderSide(color: colors.border, width: 2)),
             ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCodeBlock(context),
+                if (hasOutput) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    constraints: BoxConstraints(
+                      maxHeight: showOutput ? 420 : 132,
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.codeBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SingleChildScrollView(
+                      child: SelectableText(
+                        output.trim(),
+                        style: context.typo.mono.copyWith(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: colors.muted2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (longOutput)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        key: ValueKey('tool-output-toggle-${tool.toolCallId}'),
+                        onPressed: () =>
+                            setState(() => _outputExpanded = !_outputExpanded),
+                        child: Text(
+                          _outputExpanded ? 'Show less' : 'Show full output',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 10),
+                if (_needsApproval) ...[
+                  Text(
+                    'The agent is waiting for your approval.',
+                    style: TextStyle(color: colors.text, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: onDecide == null
+                            ? null
+                            : () => onDecide!(
+                                tool.toolCallId,
+                                ApproveDecision.deny,
+                              ),
+                        child: const Text('Deny'),
+                      ),
+                      const SizedBox(width: 10),
+                      FilledButton(
+                        onPressed: onDecide == null
+                            ? null
+                            : () => onDecide!(
+                                tool.toolCallId,
+                                ApproveDecision.allow,
+                              ),
+                        child: const Text('Allow once'),
+                      ),
+                    ],
+                  ),
+                ] else
+                  _buildOutcome(context, color),
+              ],
+            ),
+          ),
         ],
       ),
     );

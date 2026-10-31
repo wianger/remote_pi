@@ -94,67 +94,6 @@ Future<void> _renameSession(BuildContext context, HomeItem item) async {
   }
 }
 
-enum _SessionAction { rename, info, delete }
-
-Future<void> _showSessionActions(
-  BuildContext context,
-  HomeItem item, {
-  required String displayName,
-}) async {
-  final action = await showModalBottomSheet<_SessionAction>(
-    context: context,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(LucideIcons.pencil, size: 20),
-              title: const Text('Rename'),
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(_SessionAction.rename),
-            ),
-            ListTile(
-              leading: const Icon(LucideIcons.info, size: 20),
-              title: const Text('Info'),
-              onTap: () => Navigator.of(sheetContext).pop(_SessionAction.info),
-            ),
-            ListTile(
-              leading: Icon(
-                LucideIcons.trash2,
-                size: 20,
-                color: sheetContext.colors.error,
-              ),
-              title: Text(
-                'Delete from phone',
-                style: TextStyle(color: sheetContext.colors.error),
-              ),
-              onTap: () =>
-                  Navigator.of(sheetContext).pop(_SessionAction.delete),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-  if (!context.mounted || action == null) return;
-  switch (action) {
-    case _SessionAction.rename:
-      await _renameSession(context, item);
-    case _SessionAction.info:
-      await showSessionInfoDialog(
-        context,
-        peer: item.peer,
-        room: item.room,
-        name: displayName,
-      );
-    case _SessionAction.delete:
-      await _deleteFromPhone(context, item);
-  }
-}
-
 Future<void> showCreateWorkspace(BuildContext context) async {
   final vm = context.read<HomeViewModel>();
   final device = vm.selectedDevice;
@@ -264,7 +203,7 @@ class _SessionShellState extends State<SessionShell> {
             ? null
             : Drawer(
                 width: math.min(352, MediaQuery.sizeOf(context).width - 28),
-                backgroundColor: context.colors.bg.withValues(alpha: 0),
+                backgroundColor: context.colors.bg,
                 elevation: 0,
                 clipBehavior: Clip.antiAlias,
                 shape: const RoundedRectangleBorder(
@@ -416,6 +355,29 @@ class _SessionSidebarState extends State<SessionSidebar> {
     }
   }
 
+  Future<bool> _renameWorkspace(
+    HomeViewModel vm,
+    String key,
+    String currentName,
+  ) async {
+    final name = await showWorkspaceRenameDialog(
+      context,
+      currentName: currentName,
+    );
+    if (!mounted || name == null || name.trim().isEmpty) return false;
+    try {
+      await vm.renameWorkspace(key, name);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not rename this workspace.')),
+        );
+      }
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -429,10 +391,10 @@ class _SessionSidebarState extends State<SessionSidebar> {
               item.displayName.toLowerCase().contains(_query.toLowerCase()),
         )
         .toList();
-    return BayaGlassSurface(
-      elevated: false,
+    return Material(
+      color: colors.bg,
       child: Material(
-        color: colors.bg.withValues(alpha: 0),
+        color: Colors.transparent,
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -497,6 +459,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               onSelected: (value) =>
                                   _choose(() => vm.selectWorkspace(value)),
                               onCreate: () => showCreateWorkspace(context),
+                              onRename: (key, currentName) =>
+                                  _renameWorkspace(vm, key, currentName),
                               canDelete: vm.isCustomWorkspace,
                               onDelete: (key) => _deleteWorkspace(vm, key),
                             ),
@@ -580,11 +544,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                           : () => _open(item),
                                       onRename: () =>
                                           _renameSession(context, item),
-                                      onLongPress: () => _showSessionActions(
-                                        context,
-                                        item,
-                                        displayName: vm.displayNameOf(item),
-                                      ),
+                                      onDelete: () =>
+                                          _deleteFromPhone(context, item),
                                     ),
                                 ],
                               ),
@@ -604,16 +565,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    _SidebarCircleAction(
-                      key: const Key('sidebar-pair'),
-                      tooltip: 'Pair computer',
-                      icon: LucideIcons.scanLine,
-                      onPressed: () {
-                        widget.close?.call();
-                        context.push('/pair');
-                      },
-                    ),
-                    const SizedBox(width: 10),
                     _SidebarCircleAction(
                       key: const Key('sidebar-settings'),
                       tooltip: 'Settings',
@@ -673,14 +624,14 @@ class _SessionRow extends StatelessWidget {
     required this.working,
     this.onTap,
     this.onRename,
-    this.onLongPress,
+    this.onDelete,
   });
   final HomeItem item;
   final String displayName;
   final bool selected, online, working;
   final VoidCallback? onTap;
   final VoidCallback? onRename;
-  final VoidCallback? onLongPress;
+  final VoidCallback? onDelete;
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -691,95 +642,140 @@ class _SessionRow extends StatelessWidget {
         : online
         ? colors.success
         : colors.muted;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: ListTile(
-        selected: selected,
-        selectedTileColor: colors.selection,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        leading: Padding(
-          padding: const EdgeInsets.only(top: 3),
-          child: Icon(
-            selected ? LucideIcons.messagesSquare : LucideIcons.messageSquare,
-            size: 19,
-            color: selected ? colors.accent : colors.muted2,
-          ),
+    final tile = ListTile(
+      selected: selected,
+      selectedTileColor: colors.selection,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      leading: Padding(
+        padding: const EdgeInsets.only(top: 3),
+        child: Icon(
+          selected ? LucideIcons.messagesSquare : LucideIcons.messageSquare,
+          size: 19,
+          color: selected ? colors.accent : colors.muted2,
         ),
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 15,
-            color: colors.text,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-          ),
+      ),
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 15,
+          color: colors.text,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
         ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    agentLabel,
-                    style: TextStyle(fontSize: 11, color: colors.muted2),
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 5),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  agentLabel,
+                  style: TextStyle(fontSize: 11, color: colors.muted2),
+                ),
+                const SizedBox(width: 10),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 5,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: statusColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      working
-                          ? 'Working'
-                          : online
-                          ? 'Ready'
-                          : 'Offline',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: statusColor),
-                    ),
-                  ),
-                ],
-              ),
-              if (item.room.cwd case final cwd?)
-                Padding(
-                  padding: const EdgeInsets.only(top: 3),
+                ),
+                const SizedBox(width: 5),
+                Flexible(
                   child: Text(
-                    cwd,
+                    working
+                        ? 'Working'
+                        : online
+                        ? 'Ready'
+                        : 'Offline',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: context.typo.monoSmall.copyWith(
-                      fontSize: 10,
-                      color: colors.muted,
-                    ),
+                    style: TextStyle(fontSize: 11, color: statusColor),
                   ),
                 ),
-            ],
-          ),
-        ),
-        trailing: onRename == null
-            ? null
-            : IconButton(
-                key: ValueKey(
-                  'session-rename-${item.peer.remoteEpk}-${item.room.roomId}',
+              ],
+            ),
+            if (item.room.cwd case final cwd?)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  cwd,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.typo.monoSmall.copyWith(
+                    fontSize: 10,
+                    color: colors.muted,
+                  ),
                 ),
-                tooltip: 'Rename session',
-                visualDensity: VisualDensity.compact,
-                onPressed: onRename,
-                icon: Icon(LucideIcons.pencil, size: 16, color: colors.muted2),
               ),
-        onLongPress: onLongPress,
-        onTap: onTap,
+          ],
+        ),
+      ),
+      trailing: onRename == null
+          ? null
+          : IconButton(
+              key: ValueKey(
+                'session-rename-${item.peer.remoteEpk}-${item.room.roomId}',
+              ),
+              tooltip: 'Rename session',
+              visualDensity: VisualDensity.compact,
+              onPressed: onRename,
+              icon: Icon(LucideIcons.pencil, size: 16, color: colors.muted2),
+            ),
+      onTap: onTap,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: onDelete == null
+          ? tile
+          : Dismissible(
+              key: ValueKey(
+                'session-delete-${item.peer.remoteEpk}-${item.room.roomId}',
+              ),
+              direction: DismissDirection.startToEnd,
+              confirmDismiss: (_) async {
+                onDelete!();
+                return false;
+              },
+              background: const _SessionDeleteBackground(),
+              child: tile,
+            ),
+    );
+  }
+}
+
+class _SessionDeleteBackground extends StatelessWidget {
+  const _SessionDeleteBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.only(left: 18),
+      decoration: BoxDecoration(
+        color: colors.error.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.trash2, size: 18, color: colors.error),
+          const SizedBox(width: 7),
+          Text(
+            'Delete',
+            style: context.typo.sansBody.copyWith(
+              color: colors.error,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,3 +1,4 @@
+import 'package:app/config/dependencies.dart';
 import 'package:app/data/actions/actions_repository.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
@@ -7,11 +8,30 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+/// Opens the model chooser on its own, without the intermediate Quick Actions
+/// sheet. The composer's model button uses this so one tap lands directly on
+/// the Claude-style model list.
+Future<void> showStandaloneModelPicker(BuildContext context) {
+  final vm = injector.get<QuickActionsViewModel>();
+  final messenger = ScaffoldMessenger.of(context);
+  return showModelPickerSheet(
+    context,
+    vm: vm,
+    onError: (message) => messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(message, style: const TextStyle(fontSize: 12)),
+      ),
+    ),
+  );
+}
+
 /// Apple-style model chooser with a single calm list and an optional effort
 /// picker, matching the hierarchy used by Claude mobile.
 Future<void> showModelPickerSheet(
   BuildContext context, {
   required QuickActionsViewModel vm,
+  ValueChanged<String>? onError,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -25,13 +45,15 @@ Future<void> showModelPickerSheet(
     ),
     builder: (ctx) => ChangeNotifierProvider<QuickActionsViewModel>.value(
       value: vm,
-      child: const _ModelPickerBody(),
+      child: _ModelPickerBody(onError: onError),
     ),
   );
 }
 
 class _ModelPickerBody extends StatefulWidget {
-  const _ModelPickerBody();
+  const _ModelPickerBody({this.onError});
+
+  final ValueChanged<String>? onError;
 
   @override
   State<_ModelPickerBody> createState() => _ModelPickerBodyState();
@@ -63,7 +85,9 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
       await vm.setModel(model);
       if (mounted) Navigator.of(context).pop();
     } catch (_) {
-      // The owning quick-actions sheet surfaces action errors.
+      // The owning quick-actions sheet surfaces action errors; the standalone
+      // entry point routes them to a snackbar instead.
+      widget.onError?.call('Could not switch model. Try again.');
     }
   }
 
@@ -126,7 +150,7 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
     try {
       await vm.setThinking(picked);
     } catch (_) {
-      // The owning quick-actions sheet surfaces action errors.
+      widget.onError?.call('Could not change reasoning effort. Try again.');
     }
   }
 
