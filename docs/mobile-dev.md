@@ -201,6 +201,19 @@ instead of being interrupted. Wait for that turn to finish and run
 `pi-supervisord` once so the new session-identity and lease operations are
 available; then reload or restart both the daemon and desktop Pi processes.
 
+## Inline scope management (1.2.15 / build 24)
+
+The Device and Workspace switchers now keep destructive actions inside their
+lists: swipe a row end-to-start to delete it. The round plus action pairs a new
+computer from the Device switcher or creates a workspace from the Workspace
+switcher. Device rename remains available from each device row.
+
+Every session row has a dedicated pencil button for rename while long press
+continues to expose rename, info and delete-from-phone. Deleting a logical
+workspace only removes that grouping and its phone-side assignment. The
+sessions, cached messages and computer history remain available under their
+folder-derived groups.
+
 
 ## Mobile controls (1.2.2 / Android build 10)
 

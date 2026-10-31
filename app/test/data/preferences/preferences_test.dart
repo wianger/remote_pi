@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/ui/core/themes/app_font_scale.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -211,6 +213,34 @@ void main() {
       await p.setSelectedRoom(epk: null);
       expect(p.selectedPeerEpk, isNull);
       expect(p.selectedRoomRaw, isNull);
+    });
+
+    test('deleteWorkspace clears its name, assignments and selection', () async {
+      final store = _FakeSecureStorage();
+      final p = Preferences(store);
+      await p.load();
+      final device = base64Encode(List.filled(32, 19));
+      const room = 'room-alpha';
+      final workspace = '$device:workspace:release';
+
+      await p.setWorkspaceName(workspace, 'Release train');
+      await p.setSessionWorkspace(device, room, workspace);
+      await p.setSelectedWorkspace(workspace);
+      expect(p.isCustomWorkspace(workspace), isTrue);
+      expect(p.workspaceForSession(device, room), workspace);
+      expect(p.workspaceForDevice(device), workspace);
+
+      await p.deleteWorkspace(workspace);
+      expect(p.isCustomWorkspace(workspace), isFalse);
+      expect(p.workspaceForSession(device, room), isNull);
+      expect(p.workspaceForDevice(device), isNull);
+
+      final restored = Preferences(store);
+      await restored.load();
+      expect(restored.workspaceName(workspace), isNull);
+      expect(restored.workspaceForSession(device, room), isNull);
+      expect(restored.workspaceForDevice(device), isNull);
+      restored.dispose();
     });
   });
 }

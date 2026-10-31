@@ -171,6 +171,10 @@ class HomeViewModel extends ViewModel<HomeState> {
     return key;
   }
 
+  bool isCustomWorkspace(String key) => _prefs.isCustomWorkspace(key);
+
+  Future<void> deleteWorkspace(String key) => _prefs.deleteWorkspace(key);
+
   Future<void> assignSessionToWorkspace(HomeItem item, String workspaceKey) =>
       _prefs.setSessionWorkspace(
         item.peer.remoteEpk,

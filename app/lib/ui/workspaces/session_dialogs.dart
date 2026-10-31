@@ -57,6 +57,37 @@ Future<bool> showDeviceDeleteDialog(
   return confirmed == true;
 }
 
+Future<bool> showWorkspaceDeleteDialog(
+  BuildContext context, {
+  required String name,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text('Delete $name workspace?'),
+      content: Text(
+        'Sessions and computer history are kept. Sessions will return to '
+        'their folder groups.',
+        style: TextStyle(color: dialogContext.colors.muted2),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: Text(
+            'Delete',
+            style: TextStyle(color: dialogContext.colors.error),
+          ),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
 Future<bool> showSessionDeleteDialog(
   BuildContext context, {
   required String name,
@@ -92,35 +123,67 @@ Future<String?> showNameDialog(
   required String title,
   required String currentValue,
   required String hintText,
-}) {
-  final controller = TextEditingController(text: currentValue);
-  controller.selection = TextSelection(
-    baseOffset: 0,
-    extentOffset: controller.text.length,
-  );
-  return showDialog<String?>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        textInputAction: TextInputAction.done,
-        decoration: InputDecoration(hintText: hintText),
-        onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-          child: const Text('Save'),
-        ),
-      ],
+}) => showDialog<String?>(
+  context: context,
+  builder: (_) =>
+      _NameDialog(title: title, currentValue: currentValue, hintText: hintText),
+);
+
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({
+    required this.title,
+    required this.currentValue,
+    required this.hintText,
+  });
+
+  final String title;
+  final String currentValue;
+  final String hintText;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentValue)
+      ..selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: widget.currentValue.length,
+      );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: TextField(
+      controller: _controller,
+      autofocus: true,
+      textInputAction: TextInputAction.done,
+      decoration: InputDecoration(hintText: widget.hintText),
+      onSubmitted: (value) => Navigator.of(context).pop(value),
     ),
-  ).whenComplete(controller.dispose);
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => Navigator.of(context).pop(_controller.text),
+        child: const Text('Save'),
+      ),
+    ],
+  );
 }
 
 /// Shared by the sidebar action sheet and the chat header menu, so both show

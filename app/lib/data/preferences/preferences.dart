@@ -396,6 +396,69 @@ class Preferences extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Delete a logical workspace without deleting its sessions or their
+  /// computer history. Sessions that belonged to the workspace fall back to
+  /// their folder-derived groups, and a stale remembered selection is removed.
+  Future<void> deleteWorkspace(String key) async {
+    if (!_workspaceNames.containsKey(key)) return;
+    final deviceEnd = key.indexOf(':');
+    final device = deviceEnd < 1 ? null : key.substring(0, deviceEnd);
+    final beforeNames = Map<String, String>.of(_workspaceNames);
+    final beforeSessionWorkspaces = Map<String, String>.of(_sessionWorkspaces);
+    final beforeByDevice = Map<String, String>.of(_workspacesByDevice);
+    final beforeSelectedDevice = _selectedDeviceEpk;
+    final beforeSelectedWorkspace = _selectedWorkspace;
+
+    _workspaceNames.remove(key);
+    _sessionWorkspaces.removeWhere((_, workspace) => workspace == key);
+    final remembered = Map<String, String>.of(_workspacesByDevice);
+    if (device != null) {
+      remembered.removeWhere(
+        (selectedDevice, workspace) =>
+            selectedDevice == device && workspace == key,
+      );
+    }
+    _workspacesByDevice = remembered;
+    if (_selectedDeviceEpk == device) {
+      _selectedWorkspace = remembered[device];
+    }
+
+    try {
+      await _store.write(
+        key: _kWorkspaceNamesKey,
+        value: jsonEncode(_workspaceNames),
+      );
+      await _store.write(
+        key: _kSessionWorkspacesKey,
+        value: jsonEncode(_sessionWorkspaces),
+      );
+      if (remembered.length != beforeByDevice.length ||
+          !mapEquals(remembered, beforeByDevice)) {
+        await _store.write(
+          key: _kNavigationKey,
+          value: jsonEncode({
+            'device': _selectedDeviceEpk,
+            'workspaces': remembered,
+          }),
+        );
+      }
+    } catch (_) {
+      _workspaceNames
+        ..clear()
+        ..addAll(beforeNames);
+      _sessionWorkspaces
+        ..clear()
+        ..addAll(beforeSessionWorkspaces);
+      _workspacesByDevice
+        ..clear()
+        ..addAll(beforeByDevice);
+      _selectedDeviceEpk = beforeSelectedDevice;
+      _selectedWorkspace = beforeSelectedWorkspace;
+      rethrow;
+    }
+    notifyListeners();
+  }
+
   Future<void> restoreSession(String epk, String room) async {
     final key = _conversationKey(epk, room);
     if (!_hiddenSessions.remove(key)) return;

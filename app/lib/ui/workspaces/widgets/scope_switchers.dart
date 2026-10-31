@@ -11,19 +11,21 @@ class DeviceSwitcher extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     this.enabled = true,
-    this.onRenameSelected,
-    this.onDeleteSelected,
+    this.onAdd,
+    this.onRename,
+    this.onDelete,
   });
 
   final Map<String, String> devices;
   final String? selected;
   final ValueChanged<String> onSelected;
   final bool enabled;
-  final VoidCallback? onRenameSelected;
-  final VoidCallback? onDeleteSelected;
+  final VoidCallback? onAdd;
+  final Future<bool> Function(String epk)? onRename;
+  final Future<bool> Function(String epk)? onDelete;
 
   Future<void> _pick(BuildContext context) async {
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showModalBottomSheet<({bool add, String? device})>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
@@ -38,20 +40,17 @@ class DeviceSwitcher extends StatelessWidget {
             children: [
               Padding(
                 padding: const EdgeInsets.only(left: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Switch device',
-                        style: sheetContext.typo.title,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Close device picker',
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon: const Icon(LucideIcons.x, size: 20),
-                    ),
-                  ],
+                child: _SwitcherSheetHeader(
+                  title: 'Switch device',
+                  onClose: () => Navigator.pop(sheetContext),
+                  onAdd: enabled && onAdd != null
+                      ? () => Navigator.pop(sheetContext, (
+                          add: true,
+                          device: null,
+                        ))
+                      : null,
+                  addTooltip: 'Pair another computer',
+                  addKey: const Key('device-add'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -60,25 +59,64 @@ class DeviceSwitcher extends StatelessWidget {
                   shrinkWrap: true,
                   children: [
                     for (final entry in devices.entries)
-                      ListTile(
-                        selected: entry.key == selected,
-                        selectedTileColor: sheetContext.colors.selection,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
+                      Dismissible(
+                        key: ValueKey('device-row-${entry.key}'),
+                        direction: enabled && onDelete != null
+                            ? DismissDirection.endToStart
+                            : DismissDirection.none,
+                        confirmDismiss: (_) => onDelete!(entry.key),
+                        onDismissed: (_) {
+                          if (sheetContext.mounted) Navigator.pop(sheetContext);
+                        },
+                        background: const _SwipeDeleteBackground(),
+                        child: ListTile(
+                          selected: entry.key == selected,
+                          selectedTileColor: sheetContext.colors.selection,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          leading: Icon(
+                            LucideIcons.monitor,
+                            color: sheetContext.colors.muted2,
+                          ),
+                          title: Text(entry.value),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (onRename != null)
+                                IconButton(
+                                  key: ValueKey('device-rename-${entry.key}'),
+                                  tooltip: 'Rename device',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: enabled
+                                      ? () async {
+                                          final renamed = await onRename!(
+                                            entry.key,
+                                          );
+                                          if (renamed && sheetContext.mounted) {
+                                            Navigator.pop(sheetContext);
+                                          }
+                                        }
+                                      : null,
+                                  icon: Icon(
+                                    LucideIcons.pencil,
+                                    size: 17,
+                                    color: sheetContext.colors.muted2,
+                                  ),
+                                ),
+                              if (entry.key == selected)
+                                Icon(
+                                  LucideIcons.check,
+                                  size: 18,
+                                  color: sheetContext.colors.accent,
+                                ),
+                            ],
+                          ),
+                          onTap: () => Navigator.pop(sheetContext, (
+                            add: false,
+                            device: entry.key,
+                          )),
                         ),
-                        leading: Icon(
-                          LucideIcons.monitor,
-                          color: sheetContext.colors.muted2,
-                        ),
-                        title: Text(entry.value),
-                        trailing: entry.key == selected
-                            ? Icon(
-                                LucideIcons.check,
-                                size: 18,
-                                color: sheetContext.colors.accent,
-                              )
-                            : null,
-                        onTap: () => Navigator.pop(sheetContext, entry.key),
                       ),
                   ],
                 ),
@@ -89,13 +127,16 @@ class DeviceSwitcher extends StatelessWidget {
       ),
     );
     if (!context.mounted || choice == null) return;
-    onSelected(choice);
+    if (choice.add) {
+      onAdd?.call();
+      return;
+    }
+    if (choice.device case final device?) onSelected(device);
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final hasSelection = selected != null && devices.containsKey(selected);
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
       decoration: BoxDecoration(
@@ -144,22 +185,9 @@ class DeviceSwitcher extends StatelessWidget {
             key: const Key('device-switch'),
             tooltip: 'Switch device',
             icon: LucideIcons.chevronsUpDown,
-            onPressed: enabled && devices.isNotEmpty
+            onPressed: enabled && (devices.isNotEmpty || onAdd != null)
                 ? () => _pick(context)
                 : null,
-          ),
-          _DeviceActionButton(
-            key: const Key('device-rename'),
-            tooltip: 'Rename device',
-            icon: LucideIcons.pencil,
-            onPressed: enabled && hasSelection ? onRenameSelected : null,
-          ),
-          _DeviceActionButton(
-            key: const Key('device-delete'),
-            tooltip: 'Delete device',
-            icon: LucideIcons.trash2,
-            danger: true,
-            onPressed: enabled && hasSelection ? onDeleteSelected : null,
           ),
         ],
       ),
@@ -173,13 +201,11 @@ class _DeviceActionButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.danger = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final bool danger;
 
   @override
   Widget build(BuildContext context) {
@@ -197,8 +223,6 @@ class _DeviceActionButton extends StatelessWidget {
             size: 16,
             color: onPressed == null
                 ? colors.muted.withValues(alpha: .35)
-                : danger
-                ? colors.error
                 : colors.muted2,
           ),
         ),
@@ -218,6 +242,8 @@ class WorkspaceSwitcher extends StatelessWidget {
     required this.hasDevice,
     required this.onSelected,
     this.onCreate,
+    this.canDelete,
+    this.onDelete,
     this.enabled = true,
   });
 
@@ -228,6 +254,8 @@ class WorkspaceSwitcher extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String> onSelected;
   final VoidCallback? onCreate;
+  final bool Function(String key)? canDelete;
+  final Future<bool> Function(String key)? onDelete;
 
   String _name(String detail) =>
       detail
@@ -237,7 +265,7 @@ class WorkspaceSwitcher extends StatelessWidget {
       detail;
 
   Future<void> _pick(BuildContext context) async {
-    final choice = await showModalBottomSheet<String>(
+    final choice = await showModalBottomSheet<({bool add, String? workspace})>(
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: .38),
@@ -269,29 +297,16 @@ class WorkspaceSwitcher extends StatelessWidget {
                   const SizedBox(height: 10),
                   SizedBox(
                     height: 48,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Text(
-                          'Switch workspace',
-                          style: sheetContext.typo.title.copyWith(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            tooltip: 'Close workspace picker',
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            icon: Icon(
-                              LucideIcons.x,
-                              size: 20,
-                              color: colors.text,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: _SwitcherSheetHeader(
+                      title: 'Switch workspace',
+                      onClose: () => Navigator.of(sheetContext).pop(),
+                      onAdd: enabled && onCreate != null
+                          ? () => Navigator.of(
+                              sheetContext,
+                            ).pop((add: true, workspace: null))
+                          : null,
+                      addTooltip: 'New workspace',
+                      addKey: const Key('workspace-add'),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -312,48 +327,66 @@ class WorkspaceSwitcher extends StatelessWidget {
                           final entry = workspaces.entries.elementAt(index);
                           final selected = entry.key == this.selected;
                           final label = labels[entry.key] ?? _name(entry.value);
-                          return ListTile(
-                            key: ValueKey('workspace-choice-${entry.key}'),
-                            selected: selected,
-                            selectedTileColor: colors.selection,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 7,
-                            ),
-                            leading: Icon(
-                              LucideIcons.layoutDashboard,
-                              size: 20,
-                              color: selected ? colors.accent : colors.muted2,
-                            ),
-                            title: Text(
-                              label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: sheetContext.typo.sansBody.copyWith(
-                                fontSize: 16,
-                                fontWeight: selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w500,
+                          final deletable =
+                              enabled &&
+                              onDelete != null &&
+                              (canDelete?.call(entry.key) ?? true);
+                          return Dismissible(
+                            key: ValueKey('workspace-row-${entry.key}'),
+                            direction: deletable
+                                ? DismissDirection.endToStart
+                                : DismissDirection.none,
+                            confirmDismiss: (_) => onDelete!(entry.key),
+                            onDismissed: (_) {
+                              if (sheetContext.mounted) {
+                                Navigator.of(sheetContext).pop();
+                              }
+                            },
+                            background: const _SwipeDeleteBackground(),
+                            child: ListTile(
+                              key: ValueKey('workspace-choice-${entry.key}'),
+                              selected: selected,
+                              selectedTileColor: colors.selection,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 7,
                               ),
-                            ),
-                            subtitle: Text(
-                              entry.value,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: sheetContext.typo.sansBody.copyWith(
-                                color: colors.muted,
-                                fontSize: 12,
+                              leading: Icon(
+                                LucideIcons.layoutDashboard,
+                                size: 20,
+                                color: selected ? colors.accent : colors.muted2,
                               ),
+                              title: Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: sheetContext.typo.sansBody.copyWith(
+                                  fontSize: 16,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                ),
+                              ),
+                              subtitle: Text(
+                                entry.value,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: sheetContext.typo.sansBody.copyWith(
+                                  color: colors.muted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: selected
+                                  ? Icon(
+                                      LucideIcons.check,
+                                      size: 19,
+                                      color: colors.accent,
+                                    )
+                                  : null,
+                              onTap: () => Navigator.of(
+                                sheetContext,
+                              ).pop((add: false, workspace: entry.key)),
                             ),
-                            trailing: selected
-                                ? Icon(
-                                    LucideIcons.check,
-                                    size: 19,
-                                    color: colors.accent,
-                                  )
-                                : null,
-                            onTap: () =>
-                                Navigator.of(sheetContext).pop(entry.key),
                           );
                         },
                       ),
@@ -367,7 +400,11 @@ class WorkspaceSwitcher extends StatelessWidget {
       },
     );
     if (!context.mounted || choice == null) return;
-    onSelected(choice);
+    if (choice.add) {
+      onCreate?.call();
+      return;
+    }
+    if (choice.workspace case final workspace?) onSelected(workspace);
   }
 
   @override
@@ -395,9 +432,7 @@ class WorkspaceSwitcher extends StatelessWidget {
                 child: InkWell(
                   key: const Key('workspace-switch'),
                   borderRadius: BorderRadius.circular(18),
-                  onTap: enabled && workspaces.isNotEmpty
-                      ? () => _pick(context)
-                      : null,
+                  onTap: enabled && hasDevice ? () => _pick(context) : null,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -453,21 +488,105 @@ class WorkspaceSwitcher extends StatelessWidget {
                 ),
               ),
             ),
-            if (onCreate != null)
-              IconButton(
-                key: const Key('workspace-create'),
-                tooltip: 'New workspace',
-                onPressed: enabled ? onCreate : null,
-                icon: Icon(
-                  LucideIcons.folderPlus,
-                  size: 18,
-                  color: colors.accent,
-                ),
-              ),
           ],
         ),
         Divider(height: 1, color: colors.border.withValues(alpha: .65)),
       ],
+    );
+  }
+}
+
+class _SwitcherSheetHeader extends StatelessWidget {
+  const _SwitcherSheetHeader({
+    required this.title,
+    required this.onClose,
+    required this.onAdd,
+    required this.addTooltip,
+    required this.addKey,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final VoidCallback? onAdd;
+  final String addTooltip;
+  final Key addKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return SizedBox(
+      height: 48,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Text(
+            title,
+            style: context.typo.title.copyWith(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: IconButton(
+              tooltip: 'Close switcher',
+              onPressed: onClose,
+              icon: Icon(LucideIcons.x, size: 20, color: colors.text),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Material(
+              color: colors.selection,
+              shape: const CircleBorder(),
+              child: IconButton(
+                key: addKey,
+                tooltip: addTooltip,
+                onPressed: onAdd,
+                icon: Icon(
+                  LucideIcons.plus,
+                  size: 19,
+                  color: onAdd == null
+                      ? colors.muted.withValues(alpha: .35)
+                      : colors.accent,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwipeDeleteBackground extends StatelessWidget {
+  const _SwipeDeleteBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 22),
+      decoration: BoxDecoration(
+        color: colors.error.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.trash2, size: 18, color: colors.error),
+          const SizedBox(width: 7),
+          Text(
+            'Delete',
+            style: context.typo.sansBody.copyWith(
+              color: colors.error,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

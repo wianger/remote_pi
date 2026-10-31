@@ -13,12 +13,13 @@ import 'package:provider/provider.dart';
 import '../../support/phone_controls.dart';
 
 void main() {
-  testWidgets('device switch, rename and delete use separate tap targets', (
+  testWidgets('device switcher moves add, rename and delete into the sheet', (
     tester,
   ) async {
     String? switched;
     var renameCalls = 0;
     var deleteCalls = 0;
+    var addCalls = 0;
     await tester.pumpWidget(
       MaterialApp(
         theme: buildLightTheme(),
@@ -30,8 +31,15 @@ void main() {
             },
             selected: 'computer-a',
             onSelected: (value) => switched = value,
-            onRenameSelected: () => renameCalls++,
-            onDeleteSelected: () => deleteCalls++,
+            onAdd: () => addCalls++,
+            onRename: (epk) async {
+              renameCalls++;
+              return true;
+            },
+            onDelete: (epk) async {
+              deleteCalls++;
+              return true;
+            },
           ),
         ),
       ),
@@ -42,19 +50,79 @@ void main() {
     expect(renameCalls, 0);
     expect(deleteCalls, 0);
 
-    await tester.tap(find.byKey(const Key('device-rename')));
+    await tester.tap(find.byKey(const Key('device-switch')));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch device'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('device-rename-computer-a')));
+    await tester.pumpAndSettle();
     expect(renameCalls, 1);
     expect(deleteCalls, 0);
 
-    await tester.tap(find.byKey(const Key('device-delete')));
+    await tester.tap(find.byKey(const Key('device-switch')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Computer B'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
     expect(deleteCalls, 1);
 
     await tester.tap(find.byKey(const Key('device-switch')));
     await tester.pumpAndSettle();
-    expect(find.text('Switch device'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('device-add')));
+    await tester.pumpAndSettle();
+    expect(addCalls, 1);
+
+    await tester.tap(find.byKey(const Key('device-switch')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Computer B'));
     await tester.pumpAndSettle();
     expect(switched, 'computer-b');
+  });
+
+  testWidgets('workspace switcher adds from a circle and deletes on swipe', (
+    tester,
+  ) async {
+    var created = 0;
+    var deleted = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildLightTheme(),
+        home: Scaffold(
+          body: WorkspaceSwitcher(
+            workspaces: const {
+              'pc:workspace:alpha': 'one session',
+              'pc:workspace:beta': 'two sessions',
+            },
+            labels: const {
+              'pc:workspace:alpha': 'Alpha',
+              'pc:workspace:beta': 'Beta',
+            },
+            selected: 'pc:workspace:alpha',
+            hasDevice: true,
+            onSelected: (_) {},
+            onCreate: () => created++,
+            canDelete: (_) => true,
+            onDelete: (_) async {
+              deleted++;
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('workspace-switch')));
+    await tester.pumpAndSettle();
+    expect(find.text('Switch workspace'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('workspace-add')));
+    await tester.pumpAndSettle();
+    expect(created, 1);
+
+    await tester.tap(find.byKey(const Key('workspace-switch')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('Beta'), const Offset(-500, 0));
+    await tester.pumpAndSettle();
+    expect(deleted, 1);
   });
 
   testWidgets(
@@ -132,7 +200,21 @@ void main() {
         prefs.selectedWorkspace,
         HomeViewModel.workspaceKey(peer.remoteEpk, '/code/beta'),
       );
-      await tester.longPress(find.text('Beta task'));
+      expect(find.byTooltip('Rename session'), findsOneWidget);
+      await tester.tap(find.byTooltip('Rename session'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(TextField),
+        ),
+        'Renamed Beta',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(find.text('Renamed Beta'), findsOneWidget);
+
+      await tester.longPress(find.text('Renamed Beta'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete from phone'));
       await tester.pumpAndSettle();

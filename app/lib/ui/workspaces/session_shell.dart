@@ -76,6 +76,24 @@ Future<void> _deleteFromPhone(BuildContext context, HomeItem item) async {
   }
 }
 
+Future<void> _renameSession(BuildContext context, HomeItem item) async {
+  final vm = context.read<HomeViewModel>();
+  final name = await showSessionRenameDialog(
+    context,
+    currentName: vm.displayNameOf(item),
+  );
+  if (name == null || !context.mounted) return;
+  try {
+    await vm.renameSession(item, name);
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not rename this session.')),
+      );
+    }
+  }
+}
+
 enum _SessionAction { rename, info, delete }
 
 Future<void> _showSessionActions(
@@ -122,14 +140,9 @@ Future<void> _showSessionActions(
     ),
   );
   if (!context.mounted || action == null) return;
-  final vm = context.read<HomeViewModel>();
   switch (action) {
     case _SessionAction.rename:
-      final name = await showSessionRenameDialog(
-        context,
-        currentName: displayName,
-      );
-      if (name != null) await vm.renameSession(item, name);
+      await _renameSession(context, item);
     case _SessionAction.info:
       await showSessionInfoDialog(
         context,
@@ -334,27 +347,72 @@ class _SessionSidebarState extends State<SessionSidebar> {
     }
   }
 
-  Future<void> _deleteSelectedDevice(HomeViewModel vm) async {
-    final epk = vm.selectedDevice;
-    if (epk == null) return;
+  Future<bool> _renameDevice(HomeViewModel vm, String epk) async {
     final peer = vm.devices[epk];
-    if (peer == null) return;
-    final name = peer.nickname ?? peer.sessionName;
-    final confirmed = await showDeviceDeleteDialog(context, name: name);
-    if (!mounted || !confirmed) return;
+    if (peer == null) return false;
+    final name = await showDeviceRenameDialog(
+      context,
+      currentName: peer.nickname ?? peer.sessionName,
+    );
+    if (!mounted || name == null || name.trim().isEmpty) return false;
+    try {
+      await vm.renameDevice(epk, name);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not rename this device.')),
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<bool> _deleteDevice(HomeViewModel vm, String epk) async {
+    final peer = vm.devices[epk];
+    if (peer == null) return false;
+    final wasSelected = vm.selectedDevice == epk;
+    final confirmed = await showDeviceDeleteDialog(
+      context,
+      name: peer.nickname ?? peer.sessionName,
+    );
+    if (!mounted || !confirmed) return false;
     try {
       await vm.deleteDevice(epk);
-      if (!mounted) return;
-      context.read<SessionSelection>().clear();
-      widget.close?.call();
-      context.go('/home');
+      if (wasSelected && mounted) {
+        context.read<SessionSelection>().clear();
+        widget.close?.call();
+        context.go('/home');
+      }
+      return true;
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted) return false;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Could not delete this device. Try again.'),
         ),
       );
+      return false;
+    }
+  }
+
+  Future<bool> _deleteWorkspace(HomeViewModel vm, String key) async {
+    final name = vm.workspaceLabel(key);
+    if (name == null || !vm.isCustomWorkspace(key)) return false;
+    final confirmed = await showWorkspaceDeleteDialog(context, name: name);
+    if (!mounted || !confirmed) return false;
+    try {
+      await vm.deleteWorkspace(key);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not delete this workspace. Try again.'),
+          ),
+        );
+      }
+      return false;
     }
   }
 
@@ -415,25 +473,12 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               enabled: !_choosing,
                               onSelected: (value) =>
                                   _choose(() => vm.selectDevice(value)),
-                              onDeleteSelected: () => _deleteSelectedDevice(vm),
-                              onRenameSelected: vm.selectedDevice == null
-                                  ? null
-                                  : () async {
-                                      final epk = vm.selectedDevice!;
-                                      final peer = vm.devices[epk];
-                                      if (peer == null) return;
-                                      final name = await showDeviceRenameDialog(
-                                        context,
-                                        currentName:
-                                            peer.nickname ?? peer.sessionName,
-                                      );
-                                      if (name == null ||
-                                          name.trim().isEmpty ||
-                                          !context.mounted) {
-                                        return;
-                                      }
-                                      await vm.renameDevice(epk, name);
-                                    },
+                              onAdd: () {
+                                widget.close?.call();
+                                context.push('/pair');
+                              },
+                              onRename: (epk) => _renameDevice(vm, epk),
+                              onDelete: (epk) => _deleteDevice(vm, epk),
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -452,6 +497,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               onSelected: (value) =>
                                   _choose(() => vm.selectWorkspace(value)),
                               onCreate: () => showCreateWorkspace(context),
+                              canDelete: vm.isCustomWorkspace,
+                              onDelete: (key) => _deleteWorkspace(vm, key),
                             ),
                           ),
                           Padding(
@@ -552,6 +599,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                       onTap: _opening
                                           ? null
                                           : () => _open(item),
+                                      onRename: () =>
+                                          _renameSession(context, item),
                                       onLongPress: () => _showSessionActions(
                                         context,
                                         item,
@@ -644,12 +693,14 @@ class _SessionRow extends StatelessWidget {
     required this.online,
     required this.working,
     this.onTap,
+    this.onRename,
     this.onLongPress,
   });
   final HomeItem item;
   final String displayName;
   final bool selected, online, working;
   final VoidCallback? onTap;
+  final VoidCallback? onRename;
   final VoidCallback? onLongPress;
   @override
   Widget build(BuildContext context) {
@@ -737,6 +788,17 @@ class _SessionRow extends StatelessWidget {
             ],
           ),
         ),
+        trailing: onRename == null
+            ? null
+            : IconButton(
+                key: ValueKey(
+                  'session-rename-${item.peer.remoteEpk}-${item.room.roomId}',
+                ),
+                tooltip: 'Rename session',
+                visualDensity: VisualDensity.compact,
+                onPressed: onRename,
+                icon: Icon(LucideIcons.pencil, size: 16, color: colors.muted2),
+              ),
         onLongPress: onLongPress,
         onTap: onTap,
       ),
@@ -881,6 +943,7 @@ class SessionWelcome extends StatelessWidget {
                         item.room.roomId,
                       ),
                       onTap: () => _openSession(context, item),
+                      onRename: () => _renameSession(context, item),
                       onLongPress: () => _showSessionActions(
                         context,
                         item,
