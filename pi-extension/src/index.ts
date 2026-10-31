@@ -2626,6 +2626,11 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
       // cwd guard also keeps tests with a minimal ctx (no cwd) from triggering
       // the wizard path.
       const isDaemon = process.env["REMOTE_PI_DAEMON"] === "1";
+      // Register identity directly from the full session_start context. The
+      // daemon's headless `/remote-pi` bootstrap intentionally carries only
+      // ui+cwd, so relying on `_cmdRootInner` can lose the persisted session
+      // identity depending on SDK/event ordering.
+      if (isDaemon) void _identifySupervisorDaemonSession(ctx);
       // One-shot / non-interactive Pi (`pi -p` / `pi --print`) is documented as
       // "process the prompt and exit". Auto-starting the relay there opens a WS
       // that is never `.unref()`'d, so the idle Node event loop never drains and
