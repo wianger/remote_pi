@@ -432,3 +432,16 @@ Device, workspace and full session browsing remains in the sidebar. This keeps
 the home screen useful when returning to the app while preserving one complete
 navigation surface for switching computers, logical workspaces and individual
 conversations.
+
+## Sidebar workspace hierarchy (1.2.17 / build 26)
+
+The Workspace selector is now a compact card below the larger Device card.
+Its monospace WORKSPACE label, grid icon and folder summary distinguish it from
+the device destination while keeping parent and child scope visually related.
+The search field has a separate spacing band instead of sitting directly on the
+former divider.
+
+The Workspace sheet presents each logical workspace as its own rounded row with
+an icon tile, path and selection indicator. The active row uses a filled icon
+and check mark, and an explicit empty state appears when the selected computer
+has no workspaces. Spacing, rename and swipe-to-delete behavior are unchanged.

@@ -501,6 +501,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               onDelete: (key) => _deleteWorkspace(vm, key),
                             ),
                           ),
+                          const SizedBox(height: 12),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: TextField(
