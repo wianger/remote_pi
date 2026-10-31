@@ -15,6 +15,87 @@ import '../../support/phone_controls.dart';
 
 void main() {
   testWidgets(
+    'sidebar scrolls its header instead of overflowing in short windows',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final pc = phoneTestPeer();
+      final prefs = Preferences();
+      await prefs.load();
+      await prefs.setSelectedWorkspace(
+        HomeViewModel.workspaceKey(pc.remoteEpk, '/code/shared'),
+      );
+      final channel = PhoneTestChannel();
+      final storage = PhoneTestStorage([pc]);
+      final conn = ConnectionManager(
+        storage: storage,
+        factory: (_, _) async => channel,
+        emitDebounce: Duration.zero,
+      );
+      conn.adopt(channel, pc);
+      final vm = HomeViewModel(storage, prefs, conn);
+      final selection = SessionSelection();
+      channel.control.add(
+        RoomAnnounced(
+          peer: pc.remoteEpk,
+          roomId: 'pc-one',
+          name: 'Desktop one',
+          cwd: '/code/shared',
+          startedAt: 1,
+        ),
+      );
+      channel.control.add(
+        RoomAnnounced(
+          peer: pc.remoteEpk,
+          roomId: 'pc-two',
+          name: 'Desktop two',
+          cwd: '/code/shared',
+          startedAt: 1,
+        ),
+      );
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: vm),
+            ChangeNotifierProvider.value(value: selection),
+          ],
+          child: MaterialApp(
+            theme: buildLightTheme(),
+            home: const Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 330,
+                  height: 480,
+                  child: SessionSidebar(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The fixed header stack is taller than 480dp; it must scroll with the
+      // session list instead of throwing a RenderFlex overflow.
+      expect(tester.takeException(), isNull);
+      await tester.dragUntilVisible(
+        find.text('Desktop one'),
+        find.byType(ListView).first,
+        const Offset(0, -80),
+      );
+      expect(find.text('Desktop one'), findsOneWidget);
+      // Bottom actions stay pinned and tappable below the scroll area.
+      expect(find.text('Pair computer'), findsOneWidget);
+      expect(find.text('Settings'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      vm.dispose();
+      conn.dispose();
+      prefs.dispose();
+      selection.dispose();
+      await channel.disposeStreams();
+    },
+  );
+
+  testWidgets(
     'device then workspace scopes sessions and remembers each device across relaunch',
     (tester) async {
       FlutterSecureStorage.setMockInitialValues({});

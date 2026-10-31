@@ -205,9 +205,13 @@ class ChatPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 5),
-                        Text(
-                          status,
-                          style: TextStyle(fontSize: 12, color: statusColor),
+                        Flexible(
+                          child: Text(
+                            status,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: statusColor),
+                          ),
                         ),
                       ],
                     ),

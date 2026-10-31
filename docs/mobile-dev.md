@@ -271,3 +271,13 @@ offline usage shows a dash rather than zero, and the arc is bounded at 100%.
 Device selection uses a prominent monitor card and bottom sheet. Workspace
 selection uses a flat folder/path row and an anchored menu showing full paths.
 Both controls retain the existing scoped session list and saved selection.
+
+## Small-window layout (1.2.10 / build 18)
+
+The sidebar header (brand row, device and workspace switchers, new-session
+button, search field and session label) now lives inside the scroll view, so
+short windows such as split-screen panes scroll the header with the session
+list instead of overflowing and squashing the list to zero height. The pair
+and settings actions stay pinned at the bottom. In the chat header the status
+label is wrapped with an ellipsis constraint, so "Reconnecting" and other
+statuses no longer overflow at 320dp width with the XL font scale.

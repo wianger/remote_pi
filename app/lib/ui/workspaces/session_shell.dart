@@ -215,138 +215,169 @@ class _SessionSidebarState extends State<SessionSidebar> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 14, 12, 16),
-                child: Row(
-                  children: [
-                    const AppMark(size: 36, tile: true),
-                    const SizedBox(width: 10),
-                    Text(
-                      kAppName,
-                      style: brandTextStyle(fontSize: 22, color: colors.text),
-                    ),
-                    const Spacer(),
-                    if (widget.close != null)
-                      IconButton(
-                        onPressed: widget.close,
-                        tooltip: 'Close sidebar',
-                        icon: const Icon(LucideIcons.panelLeftClose, size: 19),
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DeviceSwitcher(
-                  key: const Key('device-selector'),
-                  devices: {
-                    for (final entry in vm.devices.entries)
-                      entry.key:
-                          entry.value.nickname ?? entry.value.sessionName,
-                  },
-                  selected: vm.selectedDevice,
-                  enabled: !_choosing,
-                  onSelected: (value) => _choose(() => vm.selectDevice(value)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: WorkspaceSwitcher(
-                  key: const Key('workspace-selector'),
-                  workspaces: {
-                    for (final entry in workspaces.entries)
-                      entry.key: entry.value.room.cwd ?? 'Other sessions',
-                  },
-                  selected: vm.selectedWorkspace,
-                  hasDevice: vm.selectedDevice != null,
-                  enabled: !_choosing,
-                  onSelected: (value) =>
-                      _choose(() => vm.selectWorkspace(value)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-                child: FilledButton.icon(
-                  onPressed: () {
-                    widget.close?.call();
-                    openNewSession(context);
-                  },
-                  icon: const Icon(LucideIcons.plus, size: 17),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 11),
-                    child: Text('New session'),
-                  ),
-                  style: FilledButton.styleFrom(shape: const StadiumBorder()),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _search,
-                  onChanged: (value) => setState(() => _query = value),
-                  style: context.typo.sansBody.copyWith(fontSize: 14),
-                  decoration: const InputDecoration(
-                    hintText: 'Search sessions',
-                    isDense: true,
-                    prefixIcon: Icon(LucideIcons.search, size: 17),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                child: Text(
-                  'Sessions · ${vm.workspaceItems.length}',
-                  style: TextStyle(
-                    color: colors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
               Expanded(
                 child: state is HomeLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : items.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            state is HomeNoPeer
-                                ? 'Pair a computer to get started.'
-                                : _query.isNotEmpty
-                                ? 'No matching sessions in this workspace.'
-                                : 'No sessions on this device yet. Open a workspace to begin.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: colors.muted,
-                              height: 1.6,
-                              fontSize: 14,
+                    : ListView(
+                        padding: EdgeInsets.zero,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 14, 12, 16),
+                            child: Row(
+                              children: [
+                                const AppMark(size: 36, tile: true),
+                                const SizedBox(width: 10),
+                                Text(
+                                  kAppName,
+                                  style: brandTextStyle(
+                                    fontSize: 22,
+                                    color: colors.text,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (widget.close != null)
+                                  IconButton(
+                                    onPressed: widget.close,
+                                    tooltip: 'Close sidebar',
+                                    icon: const Icon(
+                                      LucideIcons.panelLeftClose,
+                                      size: 19,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                        ),
-                      )
-                    : ListView(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        children: [
-                          for (final item in items)
-                            _SessionRow(
-                              item: item,
-                              selected: selection.matches(
-                                item.peer.remoteEpk,
-                                item.room.roomId,
-                              ),
-                              online: vm.isRoomLive(
-                                item.peer.remoteEpk,
-                                item.room.roomId,
-                              ),
-                              working: vm.isRoomWorking(
-                                item.peer.remoteEpk,
-                                item.room.roomId,
-                              ),
-                              onTap: _opening ? null : () => _open(item),
-                              onDelete: () => _deleteFromPhone(context, item),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: DeviceSwitcher(
+                              key: const Key('device-selector'),
+                              devices: {
+                                for (final entry in vm.devices.entries)
+                                  entry.key:
+                                      entry.value.nickname ??
+                                      entry.value.sessionName,
+                              },
+                              selected: vm.selectedDevice,
+                              enabled: !_choosing,
+                              onSelected: (value) =>
+                                  _choose(() => vm.selectDevice(value)),
                             ),
+                          ),
+                          const SizedBox(height: 14),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: WorkspaceSwitcher(
+                              key: const Key('workspace-selector'),
+                              workspaces: {
+                                for (final entry in workspaces.entries)
+                                  entry.key:
+                                      entry.value.room.cwd ?? 'Other sessions',
+                              },
+                              selected: vm.selectedWorkspace,
+                              hasDevice: vm.selectedDevice != null,
+                              enabled: !_choosing,
+                              onSelected: (value) =>
+                                  _choose(() => vm.selectWorkspace(value)),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                widget.close?.call();
+                                openNewSession(context);
+                              },
+                              icon: const Icon(LucideIcons.plus, size: 17),
+                              label: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 11),
+                                child: Text('New session'),
+                              ),
+                              style: FilledButton.styleFrom(
+                                shape: const StadiumBorder(),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: TextField(
+                              controller: _search,
+                              onChanged: (value) =>
+                                  setState(() => _query = value),
+                              style: context.typo.sansBody.copyWith(
+                                fontSize: 14,
+                              ),
+                              decoration: const InputDecoration(
+                                hintText: 'Search sessions',
+                                isDense: true,
+                                prefixIcon: Icon(LucideIcons.search, size: 17),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                            child: Text(
+                              'Sessions · ${vm.workspaceItems.length}',
+                              style: TextStyle(
+                                color: colors.muted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (items.isEmpty)
+                            SizedBox(
+                              height: 200,
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Center(
+                                  child: Text(
+                                    state is HomeNoPeer
+                                        ? 'Pair a computer to get started.'
+                                        : _query.isNotEmpty
+                                        ? 'No matching sessions in this workspace.'
+                                        : 'No sessions on this device yet. Open a workspace to begin.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: colors.muted,
+                                      height: 1.6,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else ...[
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Column(
+                                children: [
+                                  for (final item in items)
+                                    _SessionRow(
+                                      item: item,
+                                      selected: selection.matches(
+                                        item.peer.remoteEpk,
+                                        item.room.roomId,
+                                      ),
+                                      online: vm.isRoomLive(
+                                        item.peer.remoteEpk,
+                                        item.room.roomId,
+                                      ),
+                                      working: vm.isRoomWorking(
+                                        item.peer.remoteEpk,
+                                        item.room.roomId,
+                                      ),
+                                      onTap: _opening
+                                          ? null
+                                          : () => _open(item),
+                                      onDelete: () =>
+                                          _deleteFromPhone(context, item),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
               ),

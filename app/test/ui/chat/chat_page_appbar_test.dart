@@ -158,4 +158,73 @@ void main() {
       conn.dispose();
     },
   );
+
+  testWidgets(
+    'status line stays inside the header at narrow width with XL text scaling',
+    (tester) async {
+      final conn = ConnectionManager(
+        factory: (_, _) async => _FakeChannel(),
+        storage: _FakeStorage(),
+      );
+      final boxes = LocalBoxes();
+      final sync = SyncService(conn, boxes);
+      final read = SessionReadRepository(boxes);
+      final prefs = Preferences(_FakeSecureStorage());
+      final actions = ActionsRepository(conn);
+      final vm = ChatViewModel(read, sync, conn, prefs, _FakeStorage());
+      final voice = VoiceInputViewModel(_FakeSpeech());
+      final attach = AttachmentViewModel(_FakePicker(), actions);
+      final sel = SessionSelection();
+      final usage = ContextUsageViewModel(_ContextRepository());
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+          child: MaterialApp(
+            home: MultiProvider(
+              providers: [
+                ChangeNotifierProvider<ChatViewModel>.value(value: vm),
+                ChangeNotifierProvider<ContextUsageViewModel>.value(
+                  value: usage,
+                ),
+                ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
+                ChangeNotifierProvider<AttachmentViewModel>.value(
+                  value: attach,
+                ),
+                ChangeNotifierProvider<Preferences>.value(value: prefs),
+                ChangeNotifierProvider<SessionSelection>.value(value: sel),
+              ],
+              child: const Scaffold(
+                body: SizedBox(
+                  width: 320,
+                  child: ChatPage(
+                    initialTitle: 'My Project',
+                    initialDevice: 'MacBook de Jacob',
+                    initialOnline: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // 320dp window + 1.3 font scale leaves too little room for an
+      // unconstrained status label next to the device name and context ring.
+      expect(tester.takeException(), isNull);
+      expect(find.text('Ready'), findsOneWidget);
+      expect(find.text('MacBook de Jacob'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      vm.dispose();
+      usage.dispose();
+      attach.dispose();
+      voice.dispose();
+      actions.dispose();
+      sync.dispose();
+      sel.dispose();
+      conn.dispose();
+    },
+  );
 }
