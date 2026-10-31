@@ -82,7 +82,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Fix resumed conversations'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('download-github-apk')));
+      // A newer build was found: _check now shows a BayaNotice confirm modal.
+      expect(find.byKey(const Key('baya-notice')), findsOneWidget);
+      // The inline card also renders below the modal.
+      expect(find.text('Fix resumed conversations'), findsOneWidget);
+      // Tap the modal's confirm button, which calls _download() → opener.
+      await tester.tap(find.byKey(const Key('baya-notice-confirm')));
       await tester.pump();
       expect(opener.urls, [url]);
     },

@@ -56,7 +56,14 @@ class _UpdateBannerState extends State<UpdateBanner> {
     if (state is UpdateBannerVisible && !identical(state, _last)) {
       _last = state;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _present(vm, state.info);
+        // Only raise the modal when the route that owns this banner is
+        // actually on top. If the user is inside /about or /settings they
+        // will get the same prompt from those pages; showing it here too
+        // would produce two overlapping dialogs.
+        if (!mounted) return;
+        final route = ModalRoute.of(context);
+        if (route != null && !route.isCurrent) return;
+        _present(vm, state.info);
       });
     }
     return const SizedBox.shrink();

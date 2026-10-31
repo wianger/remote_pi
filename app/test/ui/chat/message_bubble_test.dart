@@ -50,6 +50,36 @@ void main() {
     expect(find.byType(SelectionArea), findsOneWidget);
   });
 
+  testWidgets('the copy footer is a labelled row, not a bare icon', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AssistantBubble(AssistantMsg(id: 'a1', text: 'reply')),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('assistant-copy')), findsOneWidget);
+    expect(find.text('Copy'), findsOneWidget);
+  });
+
+  testWidgets('showCopy=false hides the copy footer', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AssistantBubble(
+            AssistantMsg(id: 'a1', text: 'reply'),
+            showCopy: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('assistant-copy')), findsNothing);
+  });
+
   testWidgets('UserBubble text is selectable (copyable)', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

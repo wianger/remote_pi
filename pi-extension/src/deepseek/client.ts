@@ -6,6 +6,45 @@ import { resolveDeepSeekExecutable } from "../workspace/dsh_executable.js";
 export type JsonObject = Record<string, unknown>;
 export type RpcId = number | string;
 
+export interface DeepSeekSpawnPlan {
+  command: string;
+  args: string[];
+  /** Node must not re-quote: the command line is already cmd.exe-shaped. */
+  windowsVerbatimArguments: boolean;
+}
+
+/**
+ * Turn the resolved executable into something `spawn` accepts.
+ *
+ * `resolvePiSpawn` unwraps npm shims and Pi's managed launcher, but the
+ * DeepSeek Harness desktop bundle ships its own `dsh.cmd` that sets
+ * `ELECTRON_RUN_AS_NODE=1` and boots the app's `DeepSeek Harness.exe`. Modern
+ * Node refuses to `spawn` a `.cmd` directly (EINVAL, post CVE-2024-27980), so
+ * that shim has to run through `cmd.exe`.
+ */
+export function deepSeekSpawnPlan(
+  target: { command: string; prefixArgs: string[] },
+  args: string[],
+  plat: NodeJS.Platform = process.platform,
+  comSpec: string = process.env["ComSpec"]?.trim() || "cmd.exe",
+): DeepSeekSpawnPlan {
+  const all = [...target.prefixArgs, ...args];
+  if (plat === "win32" && /\.(cmd|bat)$/i.test(target.command)) {
+    const line = [
+      `"${target.command}"`,
+      ...all.map((arg) => /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '""')}"` : arg),
+    ].join(" ");
+    // `/s` strips the outer pair of quotes, leaving the quoted shim path plus
+    // its arguments for cmd to run verbatim.
+    return {
+      command: comSpec,
+      args: ["/d", "/s", "/c", `"${line}"`],
+      windowsVerbatimArguments: true,
+    };
+  }
+  return { command: target.command, args: all, windowsVerbatimArguments: false };
+}
+
 export interface DeepSeekServerRequest {
   id: RpcId;
   method: string;
@@ -56,11 +95,13 @@ export class DeepSeekClient extends EventEmitter<DeepSeekClientEvents> {
       this.executable = await resolveDeepSeekExecutable();
     }
     const target = resolvePiSpawn(this.executable);
+    const plan = deepSeekSpawnPlan(target, ["--profile", "acp"]);
     this.closing = false;
-    const child = spawn(target.command, [...target.prefixArgs, "--profile", "acp"], {
+    const child = spawn(plan.command, plan.args, {
       cwd: this.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      windowsVerbatimArguments: plan.windowsVerbatimArguments,
       env: { ...process.env },
     });
     this.child = child;

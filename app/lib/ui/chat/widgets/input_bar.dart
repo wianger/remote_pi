@@ -832,22 +832,44 @@ class _QuickActionsButtonState extends State<_QuickActionsButton>
       child: FadeTransition(
         opacity: _fade,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 180),
-          child: TextButton.icon(
-            key: const Key('input-bar-quick-actions'),
-            style: TextButton.styleFrom(
-              foregroundColor: context.colors.muted2,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              minimumSize: const Size(0, 36),
-            ),
-            onPressed: widget.onPressed,
-            iconAlignment: IconAlignment.end,
-            icon: const Icon(LucideIcons.chevronDown, size: 13),
-            label: Text(
-              widget.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
+          constraints: const BoxConstraints(maxWidth: 190),
+          // A filled pill with a chip icon and a caret makes it read as the
+          // model switcher rather than a stray label next to `+`.
+          child: Material(
+            color: context.colors.selection,
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const Key('input-bar-quick-actions'),
+              onTap: widget.onPressed,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 7, 8, 7),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      LucideIcons.cpu,
+                      size: 14,
+                      color: context.colors.muted2,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        widget.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      LucideIcons.chevronDown,
+                      size: 14,
+                      color: context.colors.muted2,
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -970,18 +992,18 @@ class _ComposerActionButton extends StatelessWidget {
     final isVoice = _mode == _ComposerMode.sendAudio;
     final isCancel = _mode == _ComposerMode.cancel;
     final background = !visualEnabled
-        ? colors.inputFill.withValues(alpha: .55)
-        : isVoice
-        ? colors.surface.withValues(alpha: .92)
+        ? colors.inputFill
         : isCancel
         ? colors.error.withValues(alpha: .16)
+        : isVoice
+        ? colors.selection
         : colors.accent;
     final foreground = !visualEnabled
         ? colors.muted
-        : isVoice
-        ? colors.text
         : isCancel
         ? colors.error
+        : isVoice
+        ? colors.text
         : colors.onAccent;
     return AnimatedContainer(
       duration: reduceMotion
@@ -994,15 +1016,20 @@ class _ComposerActionButton extends StatelessWidget {
           duration: reduceMotion
               ? Duration.zero
               : const Duration(milliseconds: 200),
-          width: isVoice ? 40 : 44,
-          height: isVoice ? 40 : 44,
+          // Both actions share one 44px circle so the pair reads as a set
+          // instead of a small mic next to a large square send.
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
             color: background,
-            shape: isVoice ? BoxShape.circle : BoxShape.rectangle,
-            borderRadius: isVoice ? null : BorderRadius.circular(22),
+            shape: BoxShape.circle,
             border: Border.all(
-              color: isVoice ? colors.glassEdge : Colors.transparent,
-              width: isVoice ? 0.8 : 0,
+              // Keep a hairline on the quiet states so the mic and the
+              // (disabled) send read as a matching pair of circle buttons.
+              color: visualEnabled
+                  ? (isVoice ? colors.glassEdge : Colors.transparent)
+                  : colors.glassEdge,
+              width: 0.8,
             ),
             boxShadow:
                 visualEnabled && !isVoice && !MediaQuery.highContrastOf(context)
@@ -1030,7 +1057,7 @@ class _ComposerActionButton extends StatelessWidget {
               _icon,
               key: ValueKey(_mode),
               color: foreground,
-              size: isVoice ? 20 : 21,
+              size: 21,
             ),
           ),
         ),

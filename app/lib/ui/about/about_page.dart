@@ -50,7 +50,21 @@ class AboutPage extends StatelessWidget {
           message: 'Could not check GitHub. Check your connection.',
         );
       case UpdateBannerVisible():
-        await _download(context);
+        // Show the modal here and silence the background UpdateBanner
+        // (Home stays mounted below About in the navigation stack). The
+        // ViewModel's `_showing` gate only prevents a duplicate from the
+        // same widget; we own the About route's prompt directly.
+        await showBayaNotice(
+          context,
+          title: 'Update available',
+          message: 'Version ${(vm.state as UpdateBannerVisible).info.version} '
+              '(${(vm.state as UpdateBannerVisible).info.buildNumber}) is ready to download.',
+          confirmLabel: 'Download APK',
+          secondaryLabel: 'Later',
+          onConfirm: () => _download(context),
+          onSecondary: vm.dismiss,
+          dismissible: false,
+        );
       default:
         break;
     }

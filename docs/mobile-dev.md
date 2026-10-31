@@ -533,3 +533,28 @@ cards that show live status and selection.
 The model control opens a two-level Claude-style picker: level one lists the
 current Model and Effort with their values, and tapping either drills into the
 full list, with the header switching from a close action to a back chevron.
+
+## Review fixes and composer polish (1.2.21 / build 30)
+
+The DeepSeek desktop bundle ships a `dsh.cmd` that sets
+`ELECTRON_RUN_AS_NODE=1` and boots `DeepSeek Harness.exe`; `resolvePiSpawn`
+cannot unwrap that shape, and modern Node refuses to `spawn` a `.cmd`
+directly (EINVAL). `deepSeekSpawnPlan` now routes that shim through
+`cmd.exe /d /s /c`, so a DeepSeek workspace actually starts instead of the
+daemon dying on a raw spawn error.
+
+The transcript no longer guesses the composer height. `ChatFrame` measures the
+composer each frame and publishes it through an `InheritedNotifier`, so the
+list's bottom padding and the centred jump-to-latest button follow attachments,
+queued previews, multi-line text and the safe-area inset.
+
+Manual update checks no longer raise two dialogs: About and Settings own the
+confirm modal, and the background `UpdateBanner` stays quiet unless its own
+route is on top.
+
+In the transcript, the copy action under the last assistant segment is a
+labelled `Copy` row instead of a lone icon, and the collapsed tool-run row
+names the first call it made (`git status  ·  +2 more`) instead of only
+counting calls. The composer's model control is a filled pill with a CPU icon
+and caret so it reads as the switcher next to `+`, and the mic and send buttons
+are matching 44px circles in every state.

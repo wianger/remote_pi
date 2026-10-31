@@ -38,8 +38,21 @@ class UpdateSettingsSection extends StatelessWidget {
           title: 'Check for updates',
           message: 'Could not check GitHub. Check your connection.',
         );
+      case UpdateBannerVisible():
+        // Show a modal here rather than letting the background UpdateBanner
+        // (Home is still in the navigation stack) raise a duplicate.
+        await showBayaNotice(
+          context,
+          title: 'Update available',
+          message: 'Version ${(vm.state as UpdateBannerVisible).info.version} '
+              '(${(vm.state as UpdateBannerVisible).info.buildNumber}) is ready to download.',
+          confirmLabel: 'Download APK',
+          secondaryLabel: 'Later',
+          onConfirm: () => _download(context),
+          onSecondary: vm.dismiss,
+          dismissible: false,
+        );
       default:
-        // A newer build is rendered inline below with its own download action.
         break;
     }
   }

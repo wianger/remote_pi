@@ -4,9 +4,38 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import {
   DeepSeekClient,
+  deepSeekSpawnPlan,
   type DeepSeekServerRequest,
   type JsonObject,
 } from "./client.js";
+
+describe("deepSeekSpawnPlan", () => {
+  const bundledShim =
+    "C:\\Users\\me\\AppData\\Local\\Programs\\DeepSeek Harness\\resources\\runtime\\cli\\bin\\dsh.cmd";
+
+  test("wraps the desktop bundle's cmd shim so Node does not reject it", () => {
+    const plan = deepSeekSpawnPlan(
+      { command: bundledShim, prefixArgs: [] },
+      ["--profile", "acp"],
+      "win32",
+      "C:\\Windows\\System32\\cmd.exe",
+    );
+    expect(plan.command).toBe("C:\\Windows\\System32\\cmd.exe");
+    expect(plan.windowsVerbatimArguments).toBe(true);
+    expect(plan.args.slice(0, 3)).toEqual(["/d", "/s", "/c"]);
+    // One outer pair of quotes because `/s` strips it before running.
+    expect(plan.args[3]).toBe(`"${`"${bundledShim}"`} --profile acp"`);
+  });
+
+  test("leaves a plain executable alone", () => {
+    const plan = deepSeekSpawnPlan({ command: "/usr/local/bin/dsh", prefixArgs: [] }, ["--profile", "acp"], "linux");
+    expect(plan).toEqual({
+      command: "/usr/local/bin/dsh",
+      args: ["--profile", "acp"],
+      windowsVerbatimArguments: false,
+    });
+  });
+});
 
 describe("DeepSeek ACP stdio client", () => {
   let root: string | undefined;

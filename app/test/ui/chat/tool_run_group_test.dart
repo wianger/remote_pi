@@ -113,6 +113,8 @@ void main() {
       ),
     );
     expect(find.text('Ran a command, used a tool'), findsOneWidget);
+    // The collapsed row now names what ran instead of only counting calls.
+    expect(find.text('Post review findings on PR 371  ·  +1 more'), findsOneWidget);
     await tester.tap(find.text('Ran a command, used a tool'));
     await tester.pumpAndSettle();
     expect(find.text('Ran'), findsOneWidget);

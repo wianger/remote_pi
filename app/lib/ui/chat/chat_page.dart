@@ -81,33 +81,13 @@ class ChatPage extends StatelessWidget {
       backgroundColor: context.colors.bg,
       body: SafeArea(
         bottom: false,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(child: _buildBody(context, state, vm)),
-            Positioned(
-              top: 8,
-              left: 12,
-              right: 12,
-              child: _buildTopBar(context, state),
-            ),
-            if (state is ChatReady && state.pairingRevoked)
-              Positioned(
-                top: 78,
-                left: 12,
-                right: 12,
-                child: _RevokedBanner(onRePair: () => context.go('/pair')),
-              ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                child: _buildInput(context, state, vm),
-              ),
-            ),
-          ],
+        child: _ChatFrame(
+          topBar: _buildTopBar(context, state),
+          revoked: state is ChatReady && state.pairingRevoked
+              ? _RevokedBanner(onRePair: () => context.go('/pair'))
+              : null,
+          body: _buildBody(context, state, vm),
+          composer: _buildInput(context, state, vm),
         ),
       ),
     );
@@ -687,6 +667,95 @@ Set<String> assistantCopyIdsForTurns(List<ChatMessage> messages) {
   return ids;
 }
 
+/// Composer height published to the transcript.
+///
+/// The transcript keeps scrolling *under* the floating composer, so anything
+/// anchored to its bottom has to know how tall the composer currently is. It
+/// grows with an attachment preview, queued-message previews, the slash
+/// palette and multi-line text, so a constant inset cannot stay correct.
+class _ComposerHeight extends InheritedNotifier<ValueNotifier<double>> {
+  const _ComposerHeight({
+    required ValueNotifier<double> notifier,
+    required super.child,
+  }) : super(notifier: notifier);
+
+  /// Current composer height, or 0 before the first measurement.
+  static double of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_ComposerHeight>()
+          ?.notifier
+          ?.value ??
+      0;
+}
+
+/// Chat body + top bar + floating composer, measuring the composer as it
+/// changes so the transcript and its jump-to-latest control stay clear of it.
+class _ChatFrame extends StatefulWidget {
+  const _ChatFrame({
+    required this.topBar,
+    required this.revoked,
+    required this.body,
+    required this.composer,
+  });
+
+  final Widget topBar;
+  final Widget? revoked;
+  final Widget body;
+  final Widget composer;
+
+  @override
+  State<_ChatFrame> createState() => _ChatFrameState();
+}
+
+class _ChatFrameState extends State<_ChatFrame> {
+  final _composerHeight = ValueNotifier<double>(0);
+  final _composerKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _composerHeight.dispose();
+    super.dispose();
+  }
+
+  /// Reads the laid-out composer size once per frame. Only the notifier moves,
+  /// so dependents rebuild without re-entering this widget's build.
+  void _measureComposer() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final height = _composerKey.currentContext?.size?.height;
+      if (height == null) return;
+      if ((height - _composerHeight.value).abs() < 0.5) return;
+      _composerHeight.value = height;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _measureComposer();
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: _ComposerHeight(notifier: _composerHeight, child: widget.body),
+        ),
+        Positioned(top: 8, left: 12, right: 12, child: widget.topBar),
+        if (widget.revoked != null)
+          Positioned(top: 78, left: 12, right: 12, child: widget.revoked!),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: SafeArea(
+            key: _composerKey,
+            top: false,
+            child: widget.composer,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MessageList extends StatefulWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
@@ -780,6 +849,15 @@ class _MessageListState extends State<_MessageList> {
     // into several text segments, but only the final segment gets the button.
     final copyIds = assistantCopyIdsForTurns(widget.messages);
 
+    // Follow the measured composer height (includes attachment previews, queued
+    // messages, multi-line text, safe-area inset). Fall back to 160 before the
+    // first measurement so the list never starts fully under the composer.
+    final composerH = _ComposerHeight.of(context);
+    // 24 = visual gap between last bubble and the jump button.
+    final bottomPad = (composerH > 0 ? composerH + 24 : 168).clamp(120, 420).toDouble();
+    // The jump button is centred 16 above the top of the composer.
+    final jumpBottom = (composerH > 0 ? composerH + 16 : 150).clamp(80, 400).toDouble();
+
     return NotificationListener<ScrollNotification>(
       onNotification: _onScrollNotification,
       child: Stack(
@@ -791,7 +869,7 @@ class _MessageListState extends State<_MessageList> {
               controller: _controller,
               shrinkWrap: true,
               reverse: true,
-              padding: const EdgeInsets.fromLTRB(22, 94, 22, 168),
+              padding: EdgeInsets.fromLTRB(22, 94, 22, bottomPad),
               itemCount: itemCount,
               separatorBuilder: (context, idx) => const SizedBox(height: 24),
               itemBuilder: (_, i) {
@@ -838,9 +916,7 @@ class _MessageListState extends State<_MessageList> {
           Positioned(
             left: 0,
             right: 0,
-            // Sits just above the floating composer (142 tall on a 412-wide
-            // phone) so the centred jump button never overlaps the input.
-            bottom: 150,
+            bottom: jumpBottom,
             child: Center(
               child: IgnorePointer(
                 ignoring: !_showLatest,

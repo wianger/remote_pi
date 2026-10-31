@@ -38,6 +38,17 @@ class ToolRunGroup extends StatelessWidget {
 
   bool get _failed => tools.any((t) => t.status == ToolEventStatus.failed);
 
+  /// One readable line under the summary so the row says what actually ran
+  /// instead of only how many calls there were. Uses the first call's own
+  /// description/command, and appends the remaining count so a long run stays
+  /// honest about being truncated.
+  String? get _previewLine {
+    if (tools.isEmpty) return null;
+    final head = ToolRunGroup._preview(tools.first);
+    if (tools.length == 1) return head;
+    return '$head  ·  +${tools.length - 1} more';
+  }
+
   IconData get _icon {
     final name = tools.first.tool.toLowerCase();
     if (tools.every(_isCommand)) return LucideIcons.terminal;
@@ -71,12 +82,30 @@ class ToolRunGroup extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    _summary,
-                    style: context.typo.sansBody.copyWith(
-                      color: _failed ? colors.error : colors.muted2,
-                      fontSize: 13,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _summary,
+                        style: context.typo.sansBody.copyWith(
+                          color: _failed ? colors.error : colors.muted2,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (_previewLine case final preview?) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          preview,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.typo.monoSmall.copyWith(
+                            fontSize: 11.5,
+                            color: colors.muted,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 Icon(LucideIcons.chevronRight, size: 16, color: colors.muted),
