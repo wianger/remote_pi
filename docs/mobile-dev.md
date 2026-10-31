@@ -419,3 +419,16 @@ interactive presentation layer. Remote Pi therefore does not expose ACP context
 compaction, elicitation/`ask_user`, plans or terminal-client callbacks for this
 adapter. Those controls should be treated as unavailable for DeepSeek rather
 than silently emulated.
+
+## Workspace overview home (1.2.16 / build 25)
+
+The home screen now summarizes the selected workspace instead of duplicating
+the sidebar's complete session list. It shows the selected computer, workspace
+name, folder count and Sessions / Live / Working totals. A single Continue card
+opens the running session when one exists, otherwise the most recently started
+session. New session is the home screen's primary action.
+
+Device, workspace and full session browsing remains in the sidebar. This keeps
+the home screen useful when returning to the app while preserving one complete
+navigation surface for switching computers, logical workspaces and individual
+conversations.

@@ -187,6 +187,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('All'), findsNothing);
+      expect(find.text('New session'), findsNothing);
       expect(find.textContaining('Working'), findsNothing);
       expect(find.text('Alpha task'), findsOneWidget);
       expect(find.text('Beta task'), findsNothing);

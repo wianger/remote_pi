@@ -131,6 +131,10 @@ class _Home extends ViewModel<HomeState> implements HomeViewModel {
   @override
   String? workspaceSubtitle(String key) => workspaces[key];
   @override
+  bool isCustomWorkspace(String key) => false;
+  @override
+  Future<void> deleteWorkspace(String key) async {}
+  @override
   String displayNameOf(HomeItem item) => item.displayName;
   @override
   List<HomeItem> get workspaceItems => allItems
@@ -616,15 +620,15 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Sessions in this workspace'), findsOneWidget);
+      expect(find.byKey(const Key('workspace-overview')), findsOneWidget);
       await _save(tester, homeKey, '$output/home.png');
-      await tester.tap(find.byTooltip('Sessions'));
+      await tester.tap(find.byTooltip('Open navigation'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('device-switch')));
       await tester.pumpAndSettle();
       expect(find.text('Switch device'), findsOneWidget);
       await _save(tester, homeKey, '$output/device-picker.png');
-      await tester.tap(find.byTooltip('Close device picker'));
+      await tester.tap(find.byTooltip('Close switcher'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('workspace-selector')));
       await tester.pumpAndSettle();

@@ -502,28 +502,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                            child: FilledButton.icon(
-                              onPressed: vm.selectedWorkspace == null
-                                  ? null
-                                  : () => _startSession(
-                                      context,
-                                      close: widget.close,
-                                    ),
-                              icon: const Icon(
-                                LucideIcons.messageSquarePlus,
-                                size: 17,
-                              ),
-                              label: const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 11),
-                                child: Text('New session'),
-                              ),
-                              style: FilledButton.styleFrom(
-                                shape: const StadiumBorder(),
-                              ),
-                            ),
-                          ),
-                          Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: TextField(
                               controller: _search,
@@ -808,17 +786,12 @@ class _SessionRow extends StatelessWidget {
 
 class SessionWelcome extends StatelessWidget {
   const SessionWelcome({super.key});
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final vm = context.watch<HomeViewModel>();
     final state = vm.state;
-    final items = vm.workspaceItems;
-    final active = items
-        .where(
-          (item) => vm.isRoomWorking(item.peer.remoteEpk, item.room.roomId),
-        )
-        .length;
     return Scaffold(
       backgroundColor: colors.bg,
       appBar: AppBar(
@@ -829,130 +802,527 @@ class SessionWelcome extends StatelessWidget {
           child: SizedBox.expand(),
         ),
         centerTitle: true,
-        title: const Text('Sessions'),
+        title: const Text('Overview'),
         leading: SessionShell.menuOf(context) == null
             ? null
             : IconButton(
                 onPressed: SessionShell.menuOf(context),
-                tooltip: 'Sessions',
+                tooltip: 'Open navigation',
                 icon: const Icon(LucideIcons.panelLeft, size: 21),
               ),
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 580),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 34, 24, 24),
+        child: switch (state) {
+          HomeLoading() => const Center(child: CircularProgressIndicator()),
+          HomeNoPeer() => const _NoDeviceOverview(),
+          HomeList() => _WorkspaceOverview(vm: vm),
+        },
+      ),
+    );
+  }
+}
+
+class _NoDeviceOverview extends StatelessWidget {
+  const _NoDeviceOverview();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: BayaGlassSurface(
+            radius: 32,
+            child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: colors.selection,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      LucideIcons.monitorSmartphone,
+                      color: colors.accent,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Bring your first computer online',
+                    textAlign: TextAlign.center,
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Pair a device to see its workspaces and activity here. '
+                    'Your navigation and session list will appear in the '
+                    'sidebar.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.muted2,
+                      fontSize: 14,
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => context.push('/pair'),
+                    icon: const Icon(LucideIcons.scanLine, size: 18),
+                    label: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 11),
+                      child: Text('Pair computer'),
+                    ),
+                    style: FilledButton.styleFrom(shape: const StadiumBorder()),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkspaceOverview extends StatelessWidget {
+  const _WorkspaceOverview({required this.vm});
+
+  final HomeViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final workspace = vm.selectedWorkspace;
+    final items = [...vm.workspaceItems]
+      ..sort((a, b) => b.room.startedAt.compareTo(a.room.startedAt));
+    final working = items
+        .where(
+          (item) => vm.isRoomWorking(item.peer.remoteEpk, item.room.roomId),
+        )
+        .toList();
+    final liveCount = items
+        .where((item) => vm.isRoomLive(item.peer.remoteEpk, item.room.roomId))
+        .length;
+    final folderCount = items
+        .map((item) => item.room.cwd)
+        .whereType<String>()
+        .where((folder) => folder.isNotEmpty)
+        .toSet()
+        .length;
+    final focus = working.firstOrNull ?? items.firstOrNull;
+    final deviceEpk = vm.selectedDevice;
+    final device = deviceEpk == null ? null : vm.devices[deviceEpk];
+    final deviceName =
+        device?.nickname ?? device?.sessionName ?? 'No device selected';
+    final workspaceName = vm.workspaceLabel(workspace) ?? 'No workspace';
+    final focusWorking =
+        focus != null &&
+        vm.isRoomWorking(focus.peer.remoteEpk, focus.room.roomId);
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: ListView(
+          key: const Key('workspace-overview'),
+          padding: const EdgeInsets.fromLTRB(24, 30, 24, 32),
+          children: [
+            Text(
+              'CURRENT WORKSPACE',
+              style: context.typo.monoSmall.copyWith(
+                color: colors.accent,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              workspaceName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.typo.sansBody.copyWith(
+                fontSize: 34,
+                fontWeight: FontWeight.w700,
+                height: 1.14,
+                letterSpacing: -0.8,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
               children: [
-                Text(
-                  'What are we\nworking on?',
-                  style: context.typo.sansBody.copyWith(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                    letterSpacing: -0.8,
+                Icon(LucideIcons.monitor, size: 16, color: colors.muted2),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    deviceName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.muted2,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                if (folderCount > 0) ...[
+                  const SizedBox(width: 8),
+                  Text('·', style: TextStyle(color: colors.muted)),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$folderCount ${folderCount == 1 ? 'folder' : 'folders'}',
+                    style: TextStyle(color: colors.muted, fontSize: 13),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 24),
+            BayaGlassSurface(
+              radius: 26,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _OverviewMetric(
+                        key: const Key('overview-sessions'),
+                        label: 'SESSIONS',
+                        value: '${items.length}',
+                        color: colors.text,
+                      ),
+                    ),
+                    _MetricDivider(color: colors.border),
+                    Expanded(
+                      child: _OverviewMetric(
+                        key: const Key('overview-live'),
+                        label: 'LIVE',
+                        value: '$liveCount',
+                        color: liveCount > 0 ? colors.success : colors.muted2,
+                      ),
+                    ),
+                    _MetricDivider(color: colors.border),
+                    Expanded(
+                      child: _OverviewMetric(
+                        key: const Key('overview-working'),
+                        label: 'WORKING',
+                        value: '${working.length}',
+                        color: working.isNotEmpty
+                            ? colors.working
+                            : colors.muted2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
                 Text(
-                  'Choose a device, a workspace, then a session.',
-                  style: TextStyle(color: colors.muted2, fontSize: 15),
+                  focusWorking ? 'Running now' : 'Continue',
+                  style: context.typo.sansBody.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.2,
+                  ),
                 ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: vm.selectedDevice == null
-                            ? null
-                            : () => showCreateWorkspace(context),
-                        icon: const Icon(LucideIcons.folderPlus, size: 17),
-                        label: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 11),
-                          child: Text('New workspace'),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
+                const Spacer(),
+                if (working.length > 1)
+                  Text(
+                    '${working.length} running',
+                    style: TextStyle(
+                      color: colors.working,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: vm.selectedWorkspace == null
-                            ? null
-                            : () => _startSession(context),
-                        icon: const Icon(
-                          LucideIcons.messageSquarePlus,
-                          size: 17,
-                        ),
-                        label: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 11),
-                          child: Text('New session'),
-                        ),
-                        style: FilledButton.styleFrom(
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (focus == null)
+              _EmptyWorkspaceCard(
+                hasWorkspace: workspace != null,
+                onStart: workspace == null
+                    ? () => showCreateWorkspace(context)
+                    : () => _startSession(context),
+              )
+            else
+              _FocusSessionCard(
+                item: focus,
+                displayName: vm.displayNameOf(focus),
+                agent: workspaceAgentLabelForRoom(focus.room.name),
+                working: focusWorking,
+                online: vm.isRoomLive(focus.peer.remoteEpk, focus.room.roomId),
+                onOpen: () => _openSession(context, focus),
+              ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const Key('overview-new-session'),
+              onPressed: workspace == null
+                  ? vm.selectedDevice == null
+                        ? null
+                        : () => showCreateWorkspace(context)
+                  : () => _startSession(context),
+              icon: Icon(
+                workspace == null
+                    ? LucideIcons.folderPlus
+                    : LucideIcons.messageSquarePlus,
+                size: 18,
+              ),
+              label: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  workspace == null ? 'Create workspace' : 'New session',
                 ),
-                const SizedBox(height: 28),
-                Row(
-                  children: [
-                    Text(
-                      'Sessions in this workspace',
-                      style: context.typo.sansBody.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '$active working',
-                      style: TextStyle(
-                        color: active > 0 ? colors.working : colors.muted,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+              ),
+              style: FilledButton.styleFrom(shape: const StadiumBorder()),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Use the sidebar for devices, workspaces and the full session list.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.muted, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: context.typo.sansBody.copyWith(
+            color: color,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: context.typo.monoSmall.copyWith(
+            color: context.colors.muted,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricDivider extends StatelessWidget {
+  const _MetricDivider({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: 1, height: 34, color: color);
+}
+
+class _FocusSessionCard extends StatelessWidget {
+  const _FocusSessionCard({
+    required this.item,
+    required this.displayName,
+    required this.agent,
+    required this.working,
+    required this.online,
+    required this.onOpen,
+  });
+
+  final HomeItem item;
+  final String displayName;
+  final String agent;
+  final bool working;
+  final bool online;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final statusColor = working
+        ? colors.working
+        : online
+        ? colors.success
+        : colors.muted;
+    return BayaGlassSurface(
+      radius: 28,
+      child: Material(
+        color: colors.bg.withValues(alpha: 0),
+        child: InkWell(
+          key: const Key('overview-focus-session'),
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 16, 18),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: working
+                        ? colors.working.withValues(alpha: .12)
+                        : colors.selection,
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                  child: Icon(
+                    working ? LucideIcons.activity : LucideIcons.messageSquare,
+                    size: 22,
+                    color: working ? colors.working : colors.accent,
+                  ),
                 ),
-                const SizedBox(height: 12),
-                if (items.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 28),
-                    child: Text(
-                      state is HomeNoPeer
-                          ? 'Pair your computer from the sidebar to get started.'
-                          : 'Start a connected agent on this device to see its projects here.',
-                      style: TextStyle(color: colors.muted, height: 1.6),
-                    ),
-                  )
-                else
-                  for (final item in items)
-                    _SessionRow(
-                      item: item,
-                      displayName: vm.displayNameOf(item),
-                      selected: false,
-                      online: vm.isRoomLive(
-                        item.peer.remoteEpk,
-                        item.room.roomId,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        workspaceSessionTitle(displayName),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.typo.sansBody.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      working: vm.isRoomWorking(
-                        item.peer.remoteEpk,
-                        item.room.roomId,
+                      const SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: statusColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            working
+                                ? 'Working'
+                                : online
+                                ? 'Ready'
+                                : 'Offline',
+                            style: TextStyle(
+                              color: statusColor,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              '$agent · ${item.room.cwd ?? item.room.roomId}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.muted,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      onTap: () => _openSession(context, item),
-                      onRename: () => _renameSession(context, item),
-                      onLongPress: () => _showSessionActions(
-                        context,
-                        item,
-                        displayName: vm.displayNameOf(item),
-                      ),
-                    ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(LucideIcons.arrowUpRight, size: 19, color: colors.muted2),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyWorkspaceCard extends StatelessWidget {
+  const _EmptyWorkspaceCard({
+    required this.hasWorkspace,
+    required this.onStart,
+  });
+
+  final bool hasWorkspace;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return BayaGlassSurface(
+      radius: 28,
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Row(
+          children: [
+            Icon(
+              hasWorkspace
+                  ? LucideIcons.messageSquareDashed
+                  : LucideIcons.layoutDashboard,
+              color: colors.muted2,
+              size: 24,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hasWorkspace ? 'No sessions yet' : 'No workspace selected',
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    hasWorkspace
+                        ? 'Start one in any folder on this computer.'
+                        : 'Create a workspace before starting a session.',
+                    style: TextStyle(
+                      color: colors.muted,
+                      fontSize: 12.5,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: onStart,
+              child: Text(hasWorkspace ? 'Start' : 'Create'),
+            ),
+          ],
         ),
       ),
     );
