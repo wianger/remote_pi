@@ -171,17 +171,35 @@ need `git pull --ff-only`, `pnpm build` and Pi `/reload` (or restart).
 
 Pi publishes a hashed SDK session id as part of its opaque room identifier.
 Mobile groups a daemon and a desktop resume of that exact conversation into one
-row and one message cache, preferring a live/working route, then the interactive
-route. Different conversations in the same directory remain independent, and
-commands always target one physical room. The existing relay needs no rebuild.
-Both Pi processes must load the new extension before this identity is available.
-Native `resume` still starts a separate Pi process; it does not attach its TUI to
-the supervisor's process. This change groups conversation views and routing,
-without merging the two processes or their in-memory agent state.
+row and one message cache. Different conversations in the same directory remain
+independent, and commands always target one physical room. The existing relay
+needs no rebuild. Both Pi processes must load the development extension before
+this identity is available.
 
 For an already-running phone-created Pi daemon, wait until its turn finishes,
 then use `/remote-pi daemon restart <id>` (or omit the id to restart all).
 This reloads the development extension in the daemon as well as the desktop.
+
+## Single live owner for resumed conversations (1.2.14 / build 22)
+
+The supervisor daemon now reports its persisted Pi session id. When the same
+conversation is opened with `/resume` in a desktop TUI, the interactive process
+asks the supervisor to park that matching daemon before it publishes its relay
+room. The desktop becomes the single live owner of user input, streaming text,
+thinking and tool events for the duration of the interactive session.
+
+This fixes one-sided synchronization when the same session was open in both
+places: a phone message now wakes the desktop Pi process, and terminal input is
+broadcast to the phone through the same process. It also prevents one prompt
+from starting two model turns. Closing the desktop session or running
+`/remote-pi stop` restores the supervisor daemon immediately. A supervisor PID
+watchdog restores it after a hard desktop crash.
+
+If the background daemon is already processing a turn, it keeps authority
+instead of being interrupted. Wait for that turn to finish and run
+`/remote-pi` again. After updating the extension, restart
+`pi-supervisord` once so the new session-identity and lease operations are
+available; then reload or restart both the daemon and desktop Pi processes.
 
 
 ## Mobile controls (1.2.2 / Android build 10)

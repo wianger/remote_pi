@@ -58,6 +58,7 @@ const SUPERVISOR_SOCK_NAME = "supervisor.sock";
  *  child stays in `crashed` state until manual `restart_all` or fresh
  *  registry add. Keeps logs sane when the agent dies on every boot. */
 const RESTART_BACKOFFS_MS = [1_000, 5_000, 30_000, 5 * 60_000];
+const PARKED_OWNER_POLL_MS = 2_000;
 
 function supervisorSockPath(): string {
   const root = process.env["REMOTE_PI_HOME"] || homedir();
@@ -104,6 +105,8 @@ export interface SupervisorOptions {
   extensionPath: string;
   /** Override the `pi` binary path. Defaults to "pi" on PATH. */
   piBin?: string;
+  /** Test/embedded override for the control-plane IPC address. */
+  controlSocket?: string;
 }
 
 /** Pure decision for `fireJob` (plan/39) — picks the action from the daemon's
@@ -126,16 +129,28 @@ interface ChildSlot {
   child: RpcChild;
   restartTimer: ReturnType<typeof setTimeout> | null;
   restartAttempt: number;
+  /** SDK conversation id reported after the Pi session starts. */
+  sessionId?: string;
 }
 
 export class Supervisor {
   private server: Server | null = null;
+  private readonly controlSocket: string;
   private readonly children = new Map<string, ChildSlot>();
   /** Live croner schedules, keyed by cron job id (plan/39). */
   private readonly cronJobs = new Map<string, Cron>();
+  /**
+   * Daemon ids parked by an interactive Pi process. The PID is a crash-safe
+   * lease: release_session is the fast path, while the watchdog resumes the
+   * daemon if the desktop process disappears without session_shutdown.
+   */
+  private readonly parkedOwners = new Map<string, number>();
+  private parkedOwnerTimer: ReturnType<typeof setInterval> | null = null;
   private shuttingDown = false;
 
-  constructor(private readonly opts: SupervisorOptions) {}
+  constructor(private readonly opts: SupervisorOptions) {
+    this.controlSocket = opts.controlSocket ?? supervisorSockPath();
+  }
 
   /** Bind the control UDS + spawn all registered daemons. */
   async start(): Promise<void> {
@@ -145,6 +160,8 @@ export class Supervisor {
     migrateRegistryNames();
     await this._bindUds();
     if (this.opts.autoStartRegistered !== false) this._spawnAllFromRegistry();
+    this.parkedOwnerTimer = setInterval(() => this._reapParkedOwners(), PARKED_OWNER_POLL_MS);
+    this.parkedOwnerTimer.unref();
     // Cron (plan/39): schedule all enabled jobs, then run any missed catchup.
     this._reconcileCron();
     this._runCatchup();
@@ -153,6 +170,11 @@ export class Supervisor {
   /** Graceful shutdown: stop all children, close UDS. */
   async stop(): Promise<void> {
     this.shuttingDown = true;
+    if (this.parkedOwnerTimer !== null) {
+      clearInterval(this.parkedOwnerTimer);
+      this.parkedOwnerTimer = null;
+    }
+    this.parkedOwners.clear();
     // Stop all cron schedules (plan/39) so no fire races with teardown.
     for (const c of this.cronJobs.values()) c.stop();
     this.cronJobs.clear();
@@ -173,7 +195,7 @@ export class Supervisor {
     // Best-effort: clear the socket file so a next supervisor bind succeeds.
     // Windows named pipes have no file (auto-removed on exit) → nothing to do.
     if (!usesNamedPipe()) {
-      try { unlinkSync(supervisorSockPath()); } catch { /* ignored */ }
+      try { unlinkSync(this.controlSocket); } catch { /* ignored */ }
     }
   }
 
@@ -186,7 +208,7 @@ export class Supervisor {
   }
 
   private async _bindUds(): Promise<void> {
-    const path = supervisorSockPath();
+    const path = this.controlSocket;
     const pipe = usesNamedPipe();
     // Single-instance guard. PROBE first: a live supervisor answering the
     // connect means we must NOT start a second one. Stealing the socket
@@ -247,6 +269,9 @@ export class Supervisor {
       case "send":         return this._opSend(req.id, req.text);
       case "register":     return this._opRegister(req.cwd);
       case "unregister":   return this._opUnregister(req.id);
+      case "identify_session": return this._opIdentifySession(req.id, req.pid, req.session_id);
+      case "park_session": return this._opParkSession(req.id, req.owner_pid, req.session_id);
+      case "release_session": return this._opReleaseSession(req.id, req.owner_pid);
       case "cron_add":     return this._opCronAdd(req);
       case "cron_list":    return this._opCronList();
       case "cron_remove":  return this._opCronRemove(req.job_id);
@@ -290,6 +315,7 @@ export class Supervisor {
         state: slot?.child.state ?? "stopped",
         ...(entry.agent && entry.agent !== "pi" ? { agent: entry.agent } : {}),
       };
+      if (slot?.sessionId) info.session_id = slot.sessionId;
       if (slot) {
         if (slot.child.pid !== undefined) info.pid = slot.child.pid;
         if (slot.child.uptimeMs !== undefined) info.uptime_s = Math.floor(slot.child.uptimeMs / 1000);
@@ -308,6 +334,7 @@ export class Supervisor {
         already.push(entry.id);
         continue;
       }
+      if (this.parkedOwners.has(entry.id)) continue;
       this._spawnEntry(entry.id, entry.cwd, entry.name);
       started.push(entry.id);
     }
@@ -324,6 +351,9 @@ export class Supervisor {
     const slot = this.children.get(id);
     if (slot && slot.child.state === "running") {
       return { ok: true, data: { id, state: slot.child.state, started: false } };
+    }
+    if (this.parkedOwners.has(id)) {
+      return { ok: true, data: { id, state: slot?.child.state ?? "stopped", started: false } };
     }
     this._spawnEntry(entry.id, entry.cwd, entry.name);
     const state = this.children.get(id)?.child.state ?? "starting";
@@ -373,6 +403,12 @@ export class Supervisor {
     const entry = listDaemons().find((d) => d.id === id);
     if (!entry) return { ok: false, error: `no daemon with id ${id}` };
     const slot = this.children.get(id);
+    if (this.parkedOwners.has(id)) {
+      return {
+        ok: true,
+        data: { id, state: slot?.child.state ?? "stopped", restarted: false },
+      };
+    }
     if (slot && slot.child.state === "running") {
       if (slot.restartTimer !== null) {
         clearTimeout(slot.restartTimer);
@@ -404,6 +440,122 @@ export class Supervisor {
     return { ok: true, data: { id, delivered: ok } };
   }
 
+  /**
+   * Stores the persisted Pi conversation id for a running daemon. A daemon
+   * calls this after session_start; pid validation prevents a stale control
+   * message from attaching metadata to a replacement child.
+   */
+  private _opIdentifySession(id: string, pid: number, sessionId: string): ControlReply<unknown> {
+    const slot = this.children.get(id);
+    if (!slot || slot.child.state !== "running") {
+      return { ok: false, error: `daemon ${id} not running` };
+    }
+    if (!Number.isInteger(pid) || pid <= 0 || slot.child.pid !== pid) {
+      return { ok: false, error: "daemon pid does not match the running child" };
+    }
+    if (!sessionId.trim()) return { ok: false, error: "session_id is required" };
+    slot.sessionId = sessionId;
+    return { ok: true, data: { id, session_id: sessionId } };
+  }
+
+  /**
+   * Parks the exact daemon conversation before an interactive resume starts
+   * its relay. This is deliberately bounded by the same authoritative busy
+   * probe used by cron: killing a live provider turn would lose work, so a
+   * busy daemon remains authoritative and the interactive process stays out
+   * of the relay until another `/remote-pi` attempt.
+   */
+  private async _opParkSession(
+    id: string,
+    ownerPid: number,
+    sessionId: string,
+  ): Promise<ControlReply<unknown>> {
+    const entry = listDaemons().find((d) => d.id === id);
+    if (!entry) return { ok: false, error: `no daemon with id ${id}` };
+    if (!Number.isInteger(ownerPid) || ownerPid <= 0 || !sessionId.trim()) {
+      return { ok: false, error: "owner_pid and session_id are required" };
+    }
+    const slot = this.children.get(id);
+    if (this.parkedOwners.get(id) === ownerPid) {
+      return {
+        ok: true,
+        data: { id, state: slot?.child.state ?? "stopped", parked: true },
+      };
+    }
+    if (!slot || slot.child.state !== "running") {
+      return {
+        ok: true,
+        data: {
+          id,
+          state: slot?.child.state ?? "stopped",
+          parked: false,
+          reason: "not_running",
+        },
+      };
+    }
+    if (slot.sessionId !== sessionId) {
+      return {
+        ok: false,
+        error: `daemon ${id} hosts ${slot.sessionId ?? "an unidentified session"}, not ${sessionId}`,
+      };
+    }
+    if (await slot.child.refreshBusy()) {
+      return {
+        ok: true,
+        data: { id, state: slot.child.state, parked: false, reason: "busy" },
+      };
+    }
+    if (slot.restartTimer !== null) {
+      clearTimeout(slot.restartTimer);
+      slot.restartTimer = null;
+    }
+    await slot.child.stop();
+    this.parkedOwners.set(id, ownerPid);
+    return {
+      ok: true,
+      data: { id, state: slot.child.state, parked: true },
+    };
+  }
+
+  /** Releases a parked daemon and restores its always-on host immediately. */
+  private _opReleaseSession(id: string, ownerPid: number): ControlReply<unknown> {
+    const entry = listDaemons().find((d) => d.id === id);
+    if (!entry) return { ok: false, error: `no daemon with id ${id}` };
+    const parkedBy = this.parkedOwners.get(id);
+    if (parkedBy === undefined) {
+      const state = this.children.get(id)?.child.state ?? "stopped";
+      return { ok: true, data: { id, state, released: false } };
+    }
+    if (parkedBy !== ownerPid) {
+      return { ok: false, error: `daemon ${id} is parked by another process` };
+    }
+    this.parkedOwners.delete(id);
+    this._spawnEntry(entry.id, entry.cwd, entry.name);
+    return {
+      ok: true,
+      data: { id, state: this.children.get(id)?.child.state ?? "starting", released: true },
+    };
+  }
+
+  /** Returns true when a PID still exists. EPERM means it exists but is not ours. */
+  private _ownerAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "EPERM";
+    }
+  }
+
+  private _reapParkedOwners(): void {
+    for (const [id, ownerPid] of [...this.parkedOwners]) {
+      if (this._ownerAlive(ownerPid)) continue;
+      const entry = listDaemons().find((d) => d.id === id);
+      this.parkedOwners.delete(id);
+      if (entry) this._spawnEntry(entry.id, entry.cwd, entry.name);
+    }
+  }
+
   private _opRegister(rawCwd: string): ControlReply<unknown> {
     try {
       const { id, cwd } = addDaemon(rawCwd);
@@ -417,6 +569,7 @@ export class Supervisor {
     // Stop the child first so we don't leave an orphan when the registry
     // entry is gone.
     const slot = this.children.get(id);
+    this.parkedOwners.delete(id);
     if (slot) {
       if (slot.restartTimer !== null) {
         clearTimeout(slot.restartTimer);
@@ -581,6 +734,10 @@ export class Supervisor {
   }
 
   private _spawnEntry(id: string, cwd: string, name?: string): void {
+    // An interactive owner has exclusive authority until it releases the
+    // lease. This guard also covers cron wake-ups and bulk start/restart
+    // requests that could otherwise recreate a second live relay.
+    if (this.parkedOwners.has(id)) return;
     // Clean up any prior slot (e.g. crashed + waiting for backoff).
     const existing = this.children.get(id);
     if (existing) {

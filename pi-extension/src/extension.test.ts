@@ -13,6 +13,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { DaemonInfo } from "./daemon/control_protocol.js";
 
 const _convertToPngMock = vi.hoisted(() => vi.fn(async () => null));
 
@@ -237,6 +238,7 @@ const {
   _handleControl,
   _routeClientMessageFrom,
   _deliverMeshMessageToAgentForTest,
+  _findSupervisorDaemonForSession,
   CTRL_PREFIX,
 } = indexModule;
 const { acquireCwdLock } = await import("./session/cwd_lock.js");
@@ -4961,6 +4963,34 @@ describe("session_start auto-init skips relay in print/-p mode (#44)", () => {
     await new Promise<void>((r) => setTimeout(r, 20));
 
     expect(_hasMeshNodeForTest()).toBe(true);
+  });
+});
+
+describe("desktop session authority selection", () => {
+  test("matches only the live Pi daemon for the same cwd and persisted session", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "rp-authority-select-"));
+    const daemon = (overrides: Partial<DaemonInfo>): DaemonInfo => ({
+      id: "abc12345",
+      cwd,
+      name: "project",
+      state: "running",
+      session_id: "session-a",
+      ...overrides,
+    });
+
+    expect(
+      _findSupervisorDaemonForSession(
+        [
+          daemon({ id: "stopped001", state: "stopped" }),
+          daemon({ id: "otheragent", agent: "codex" }),
+          daemon({ id: "othersid00", session_id: "session-b" }),
+          daemon({ id: "othercwd00", cwd: mkdtempSync(join(tmpdir(), "rp-authority-other-")) }),
+          daemon({ id: "matching01" }),
+        ],
+        cwd,
+        "session-a",
+      )?.id,
+    ).toBe("matching01");
   });
 });
 

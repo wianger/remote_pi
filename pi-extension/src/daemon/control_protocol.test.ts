@@ -24,6 +24,9 @@ describe("control_protocol — request/reply framing", () => {
       { op: "send", id: "abc12345", text: "Refactor X" },
       { op: "register", cwd: "/Users/x/Movies" },
       { op: "unregister", id: "abc12345" },
+      { op: "identify_session", id: "abc12345", pid: 123, session_id: "session-1" },
+      { op: "park_session", id: "abc12345", owner_pid: 456, session_id: "session-1" },
+      { op: "release_session", id: "abc12345", owner_pid: 456 },
     ];
     for (const req of ops) {
       const wire = encodeRequest(req);

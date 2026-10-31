@@ -96,6 +96,7 @@ import {
 } from "./session/global_config.js";
 import { acquireCwdLock, type AcquiredLock } from "./session/cwd_lock.js";
 import { addDaemon, listDaemons, removeDaemon } from "./daemon/registry.js";
+import { daemonIdForAgent } from "./daemon/id.js";
 import { callSupervisor, supervisorOnline, SupervisorOfflineError } from "./daemon/client.js";
 import type { ControlRequest, DaemonInfo } from "./daemon/control_protocol.js";
 import { EXIT_DAEMON_FRESH_SESSION } from "./daemon/rpc_child.js";
@@ -1136,6 +1137,18 @@ let _cwdLock: AcquiredLock | null = null;
 // a live race). Null until the lock is acquired.
 let _lockedName: string | null = null;
 
+/**
+ * A desktop resume parks the matching supervisor daemon for the lifetime of
+ * this interactive session. The supervisor also watches ownerPid, so a crash
+ * without session_shutdown still restores the always-on host.
+ */
+type ParkedSupervisorSession = {
+  id: string;
+  ownerPid: number;
+  sessionId: string;
+};
+let _parkedSupervisorSession: ParkedSupervisorSession | null = null;
+
 /** Restore the active session branch on startup, resume, fork, and reload.
  * getBranch() includes persisted messages before compaction, unlike the model
  * context. Normal message_end events append subsequent messages to this seed.
@@ -1613,12 +1626,148 @@ async function _attemptReconnect(
   _emitRelayState();
 }
 
+/** Persisted Pi conversation id, when the active SDK exposes one. */
+function _piSessionIdForContext(ctx: unknown): string | undefined {
+  const context = (ctx ?? {}) as Partial<ExtensionContext>;
+  try {
+    return (
+      context.sessionManager
+      ?? (_lastEventCtx as Partial<ExtensionContext> | null)?.sessionManager
+    )?.getSessionId();
+  } catch {
+    // Older SDKs expose no persisted identity. Keep their legacy route.
+    return undefined;
+  }
+}
+
+function _canonicalCwd(cwd: string): string {
+  try {
+    return realpathSync(cwd);
+  } catch {
+    return cwd;
+  }
+}
+
+/**
+ * Finds the one running Pi daemon that owns the persisted conversation a
+ * desktop is resuming. Agent id/cwd checks avoid parking Codex/DeepSeek or a
+ * different workspace that happens to expose the same session id.
+ */
+export function _findSupervisorDaemonForSession(
+  daemons: readonly DaemonInfo[],
+  cwd: string,
+  sessionId: string,
+): DaemonInfo | undefined {
+  const canonical = _canonicalCwd(cwd);
+  return daemons.find((daemon) =>
+    daemon.state === "running"
+    && (daemon.agent === undefined || daemon.agent === "pi")
+    && daemon.session_id === sessionId
+    && _canonicalCwd(daemon.cwd) === canonical,
+  );
+}
+
+/**
+ * Daemons report their persisted conversation id to the supervisor. This is
+ * what lets an interactive resume park only the matching background host.
+ */
+async function _identifySupervisorDaemonSession(ctx: unknown): Promise<void> {
+  if (process.env["REMOTE_PI_DAEMON"] !== "1") return;
+  const sessionId = _piSessionIdForContext(ctx);
+  if (!sessionId || !("cwd" in ((ctx ?? {}) as object))) return;
+  const cwd = _canonicalCwd((ctx as { cwd: string }).cwd);
+  const id = daemonIdForAgent(cwd, "pi");
+  try {
+    await callSupervisor({
+      op: "identify_session",
+      id,
+      pid: process.pid,
+      session_id: sessionId,
+    });
+  } catch {
+    // Supervisor is optional; an older supervisor returns unknown-op.
+  }
+}
+
+/**
+ * Before a resumed desktop TUI publishes a relay room, stop its matching
+ * supervisor daemon and hold a local lease. Both UIs then target the same Pi
+ * process, so terminal input, phone input, streaming text, thinking and tool
+ * events share one live stream and the model turn is started exactly once.
+ */
+async function _claimSupervisorSessionAuthority(
+  cwd: string,
+  sessionId: string | undefined,
+  notify?: (message: string, level: "info" | "warning" | "error") => void,
+): Promise<boolean> {
+  if (process.env["REMOTE_PI_DAEMON"] === "1" || !sessionId) return true;
+  let daemons: DaemonInfo[];
+  try {
+    ({ daemons } = await callSupervisor({ op: "list" }));
+  } catch {
+    // No supervisor: preserve the prior standalone interactive behavior.
+    return true;
+  }
+  const daemon = _findSupervisorDaemonForSession(daemons, cwd, sessionId);
+  if (!daemon) return true;
+
+  try {
+    const result = await callSupervisor({
+      op: "park_session",
+      id: daemon.id,
+      owner_pid: process.pid,
+      session_id: sessionId,
+    });
+    if (!result.parked) {
+      if (result.reason === "busy") {
+        notify?.(
+          "[remote-pi] This background session is still running a turn. "
+            + "Wait for it to finish, then run /remote-pi again to resume live desktop control.",
+          "warning",
+        );
+        return false;
+      }
+      return true;
+    }
+    _parkedSupervisorSession = {
+      id: daemon.id,
+      ownerPid: process.pid,
+      sessionId,
+    };
+    notify?.(
+      "[remote-pi] Desktop resume took live control; the background host will return when this session closes.",
+      "info",
+    );
+    return true;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    notify?.(
+      `[remote-pi] Could not coordinate the background host (${detail}). `
+        + "Run /remote-pi after the active turn finishes.",
+      "warning",
+    );
+    return false;
+  }
+}
+
+/** Fast restoration path; the supervisor PID watchdog covers hard crashes. */
+function _releaseSupervisorSessionAuthority(): Promise<void> | null {
+  const parked = _parkedSupervisorSession;
+  if (!parked) return null;
+  _parkedSupervisorSession = null;
+  return callSupervisor({
+    op: "release_session",
+    id: parked.id,
+    owner_pid: parked.ownerPid,
+  }).then(
+    () => undefined,
+    () => undefined, // The supervisor PID watchdog restores after a hard exit.
+  );
+}
+
 /** Separate a persisted Pi conversation from the process serving it. */
 function _roomForSession(cwd: string, name: string, ctx: unknown): string {
-  const context = (ctx ?? {}) as Partial<ExtensionContext>;
-  let id: string | undefined;
-  try { id = (context.sessionManager ?? (_lastEventCtx as Partial<ExtensionContext> | null)?.sessionManager)?.getSessionId(); }
-  catch { /* Older SDKs expose no persisted identity. Keep their legacy route. */ }
+  const id = _piSessionIdForContext(ctx);
   return roomIdForPiSession(cwd, name, id, process.env["REMOTE_PI_DAEMON"] === "1");
 }
 
@@ -2498,6 +2647,8 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     _rootLifecycleGeneration += 1;
     _relayLifecycleGeneration += 1;
     _meshJoinGeneration += 1;
+    const releaseParkedSession = _releaseSupervisorSessionAuthority();
+    if (releaseParkedSession) await releaseParkedSession;
     // The bridge owns live pi.events subscriptions + flow TTLs. Dispose before
     // the outgoing session is replaced so stale listeners cannot leak or
     // double-broadcast. session_start rebinds it on module-reuse hosts; fresh
@@ -2777,6 +2928,16 @@ async function _cmdRootInner(
   if (!_isCurrentRootLifecycle(rootLifecycleGeneration)) return;
 
   const cwd = "cwd" in ctx ? (ctx as ExtensionCommandContext).cwd : process.cwd();
+  if (process.env["REMOTE_PI_DAEMON"] === "1") {
+    await _identifySupervisorDaemonSession(ctx);
+  } else {
+    const claimed = await _claimSupervisorSessionAuthority(
+      cwd,
+      _piSessionIdForContext(ctx),
+      (message, level) => ctx.ui.notify(message, level),
+    );
+    if (!claimed || !_isCurrentRootLifecycle(rootLifecycleGeneration)) return;
+  }
   // Lock identity is (cwd, name). Several agents may run in the SAME folder; the
   // requested name just has to be made unique. Derive the name the same way
   // `_cmdJoin` does so the lock and the mesh registration agree on identity.
@@ -3249,6 +3410,8 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
  * `/remote-pi` again.
  */
 async function _cmdStop(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
+  const releaseParkedSession = _releaseSupervisorSessionAuthority();
+  if (releaseParkedSession) await releaseParkedSession;
   // Invalidate queued root work and local async candidates even when none has
   // published yet.
   _rootLifecycleGeneration += 1;

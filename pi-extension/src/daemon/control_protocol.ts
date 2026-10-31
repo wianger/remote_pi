@@ -25,6 +25,8 @@ export interface DaemonInfo {
   cwd: string;           // absolute realpath
   name: string;          // from <cwd>/.pi/remote-pi/config.json agent_name
   state: DaemonState;
+  /** Persisted Pi conversation currently hosted by a running Pi daemon. */
+  session_id?: string;
   pid?: number;          // current process pid, when running
   uptime_s?: number;     // since last successful spawn, when running
   restart_count?: number;
@@ -44,6 +46,13 @@ export type ControlRequest =
   | { op: "send"; id: string; text: string }
   | { op: "register"; cwd: string }
   | { op: "unregister"; id: string }
+  // ── interactive Pi authority ──
+  // A daemon identifies the persisted Pi session it is serving. When that
+  // exact session is resumed in an interactive TUI, the interactive process
+  // parks the daemon for its lifetime so only one process owns live turns.
+  | { op: "identify_session"; id: string; pid: number; session_id: string }
+  | { op: "park_session"; id: string; owner_pid: number; session_id: string }
+  | { op: "release_session"; id: string; owner_pid: number }
   // ── cron (plan/39) ──
   | { op: "cron_add"; daemon_id: string; schedule: string; prompt: string; tz?: string; skip_if_busy?: boolean; wake?: boolean; catchup?: boolean }
   | { op: "cron_list" }
@@ -74,6 +83,9 @@ export interface ControlReplyShapes {
   send: { id: string; delivered: boolean };
   register: { id: string; cwd: string };
   unregister: { removed: boolean; cwd?: string };
+  identify_session: { id: string; session_id: string };
+  park_session: { id: string; state: DaemonState; parked: boolean; reason?: "busy" | "not_running" };
+  release_session: { id: string; state: DaemonState; released: boolean };
   // ── cron (plan/39) ──
   cron_add: { job: CronJobView };
   cron_list: { jobs: CronJobView[] };

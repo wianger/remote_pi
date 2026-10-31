@@ -3,10 +3,11 @@ import { RpcChild } from "./rpc_child.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createConnection } from "node:net";
-import { join } from "node:path";
-import { Supervisor, decideFireAction, getSupervisorSockPath } from "./supervisor.js";
+import { basename, join } from "node:path";
+import { Supervisor, decideFireAction } from "./supervisor.js";
 import { addDaemon } from "./registry.js";
 import { readCronLog } from "./cron_log.js";
+import { ipcAddress } from "../session/ipc.js";
 import {
   encodeRequest,
   parseReply,
@@ -26,11 +27,12 @@ import {
  */
 
 let testHome: string;
+let testSupervisorPath: string;
 let supervisor: Supervisor | null = null;
 
 async function ask<R = ControlReply<unknown>>(req: ControlRequest): Promise<R> {
   return new Promise((resolve, reject) => {
-    const sock = createConnection({ path: getSupervisorSockPath() });
+    const sock = createConnection({ path: testSupervisorPath });
     let buf = "";
     sock.setEncoding("utf8");
     sock.on("data", (chunk: string) => {
@@ -49,6 +51,10 @@ async function ask<R = ControlReply<unknown>>(req: ControlRequest): Promise<R> {
 
 beforeEach(async () => {
   testHome = mkdtempSync(join(tmpdir(), "pi-sv-"));
+  testSupervisorPath = ipcAddress(
+    `sv-test-${basename(testHome)}`,
+    join(testHome, "supervisor.sock"),
+  );
   process.env["REMOTE_PI_HOME"] = testHome;
   supervisor = new Supervisor({
     // Point at a non-existent extension. The supervisor will try to
@@ -62,6 +68,7 @@ beforeEach(async () => {
     // which is harmless here — the spawning tests only check `started/restarted`
     // booleans, returned synchronously at spawn time.
     piBin: process.execPath,
+    controlSocket: testSupervisorPath,
   });
   await supervisor.start();
 });
@@ -76,6 +83,216 @@ afterEach(async () => {
 });
 
 describe("Supervisor — control UDS surface", () => {
+  function mockRunningDaemonChildren(pid = 43210) {
+    const spawn = vi.spyOn(RpcChild.prototype, "spawn").mockImplementation(function (this: RpcChild) {
+      const mutable = this as unknown as {
+        _state: string;
+        child: { pid: number; stdin: null } | null;
+      };
+      mutable._state = "running";
+      mutable.child = { pid, stdin: null };
+    });
+    const stop = vi.spyOn(RpcChild.prototype, "stop").mockImplementation(async function (this: RpcChild) {
+      const mutable = this as unknown as {
+        _state: string;
+        child: unknown;
+      };
+      mutable._state = "stopped";
+      mutable.child = null;
+    });
+    return {
+      spawn,
+      stop,
+      restore() {
+        spawn.mockRestore();
+        stop.mockRestore();
+      },
+    };
+  }
+
+  function discardMockedChildren(): void {
+    const mutable = supervisor as unknown as {
+      children: Map<string, unknown>;
+    } | null;
+    mutable?.children.clear();
+  }
+
+  test("interactive resume parks only the matching idle conversation and releases it", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-sv-authority-"));
+    const reg = await ask({ op: "register", cwd: tmp }) as ControlReply<{ id: string }>;
+    expect(reg.ok).toBe(true);
+    const id = reg.ok ? reg.data!.id : "";
+    const children = mockRunningDaemonChildren();
+    try {
+      await ask({ op: "start", id });
+      const identified = await ask({
+        op: "identify_session",
+        id,
+        pid: 43210,
+        session_id: "pi-session-one",
+      });
+      expect(identified).toMatchObject({
+        ok: true,
+        data: { id, session_id: "pi-session-one" },
+      });
+
+      const mismatch = await ask({
+        op: "park_session",
+        id,
+        owner_pid: process.pid,
+        session_id: "different-session",
+      });
+      expect(mismatch.ok).toBe(false);
+      expect(children.stop).not.toHaveBeenCalled();
+
+      const parked = await ask({
+        op: "park_session",
+        id,
+        owner_pid: process.pid,
+        session_id: "pi-session-one",
+      });
+      expect(parked).toMatchObject({
+        ok: true,
+        data: { id, state: "stopped", parked: true },
+      });
+      expect(children.stop).toHaveBeenCalledTimes(1);
+
+      const list = await ask({ op: "list" }) as ControlReply<{
+        daemons: Array<{ id: string; state: string; session_id?: string }>;
+      }>;
+      expect(list.ok).toBe(true);
+      if (list.ok) {
+        expect(list.data!.daemons.find((daemon) => daemon.id === id)).toMatchObject({
+          state: "stopped",
+          session_id: "pi-session-one",
+        });
+      }
+
+      const blockedStart = await ask({ op: "start", id });
+      expect(blockedStart).toMatchObject({
+        ok: true,
+        data: { id, state: "stopped", started: false },
+      });
+      const blockedRestart = await ask({ op: "restart", id });
+      expect(blockedRestart).toMatchObject({
+        ok: true,
+        data: { id, state: "stopped", restarted: false },
+      });
+      expect(children.spawn).toHaveBeenCalledTimes(1);
+
+      const released = await ask({
+        op: "release_session",
+        id,
+        owner_pid: process.pid,
+      });
+      expect(released).toMatchObject({
+        ok: true,
+        data: { id, state: "running", released: true },
+      });
+      expect(children.spawn).toHaveBeenCalledTimes(2);
+      expect(children.stop).toHaveBeenCalledTimes(1);
+
+      const secondRelease = await ask({
+        op: "release_session",
+        id,
+        owner_pid: process.pid,
+      });
+      expect(secondRelease).toMatchObject({
+        ok: true,
+        data: { id, state: "running", released: false },
+      });
+      expect(children.spawn).toHaveBeenCalledTimes(2);
+    } finally {
+      discardMockedChildren();
+      children.restore();
+    }
+  });
+
+  test("a busy daemon keeps authority instead of being interrupted by desktop resume", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-sv-authority-busy-"));
+    const reg = await ask({ op: "register", cwd: tmp }) as ControlReply<{ id: string }>;
+    const id = reg.ok ? reg.data!.id : "";
+    const children = mockRunningDaemonChildren(43211);
+    const busy = vi.spyOn(RpcChild.prototype, "refreshBusy").mockResolvedValue(true);
+    try {
+      await ask({ op: "start", id });
+      await ask({
+        op: "identify_session",
+        id,
+        pid: 43211,
+        session_id: "pi-session-busy",
+      });
+      const parked = await ask({
+        op: "park_session",
+        id,
+        owner_pid: process.pid,
+        session_id: "pi-session-busy",
+      });
+      expect(parked).toMatchObject({
+        ok: true,
+        data: { id, state: "running", parked: false, reason: "busy" },
+      });
+      expect(children.stop).not.toHaveBeenCalled();
+    } finally {
+      discardMockedChildren();
+      busy.mockRestore();
+      children.restore();
+    }
+  });
+
+  test("watchdog restores a parked daemon after its desktop owner disappears", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "pi-sv-authority-watchdog-"));
+    const reg = await ask({ op: "register", cwd: tmp }) as ControlReply<{ id: string }>;
+    const id = reg.ok ? reg.data!.id : "";
+    const ownerPid = 987654;
+    const children = mockRunningDaemonChildren(43212);
+    const ownerAlive = vi.spyOn(process, "kill").mockImplementation((pid) => {
+      if (pid === ownerPid) {
+        const error = new Error("process does not exist") as NodeJS.ErrnoException;
+        error.code = "ESRCH";
+        throw error;
+      }
+      return true;
+    });
+    try {
+      await ask({ op: "start", id });
+      await ask({
+        op: "identify_session",
+        id,
+        pid: 43212,
+        session_id: "pi-session-watchdog",
+      });
+      const parked = await ask({
+        op: "park_session",
+        id,
+        owner_pid: ownerPid,
+        session_id: "pi-session-watchdog",
+      });
+      expect(parked).toMatchObject({
+        ok: true,
+        data: { id, state: "stopped", parked: true },
+      });
+
+      const internals = supervisor as unknown as { _reapParkedOwners(): void };
+      internals._reapParkedOwners();
+
+      expect(children.spawn).toHaveBeenCalledTimes(2);
+      const restarted = await ask({ op: "list" });
+      expect(restarted).toMatchObject({
+        ok: true,
+        data: {
+          daemons: expect.arrayContaining([
+            expect.objectContaining({ id, state: "running" }),
+          ]),
+        },
+      });
+    } finally {
+      discardMockedChildren();
+      ownerAlive.mockRestore();
+      children.restore();
+    }
+  });
+
   test("batch start and restart retain Pi/Codex names in the same directory", async () => {
     const pi = addDaemon(testHome, "project");
     const codex = addDaemon(testHome, "Codex · project", "codex");
@@ -190,7 +407,7 @@ describe("Supervisor — control UDS surface", () => {
 
   test("malformed request returns ok:false with parser error", async () => {
     const reply = await new Promise<ControlReply<unknown>>((resolve, reject) => {
-      const sock = createConnection({ path: getSupervisorSockPath() });
+      const sock = createConnection({ path: testSupervisorPath });
       let buf = "";
       sock.setEncoding("utf8");
       sock.on("data", (c: string) => {
@@ -209,7 +426,7 @@ describe("Supervisor — control UDS surface", () => {
     // Bypass the typed encoder so we can send an op the type system
     // doesn't know about.
     const reply = await new Promise<ControlReply<unknown>>((resolve, reject) => {
-      const sock = createConnection({ path: getSupervisorSockPath() });
+      const sock = createConnection({ path: testSupervisorPath });
       let buf = "";
       sock.setEncoding("utf8");
       sock.on("data", (c: string) => {
