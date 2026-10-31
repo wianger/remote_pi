@@ -1,17 +1,21 @@
 import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
+import 'package:app/domain/value_objects/session_room.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
+import 'package:app/ui/workspaces/session_dialogs.dart';
 import 'package:app/ui/workspaces/workspace_navigation.dart';
 import 'package:app/ui/chat/widgets/thinking_block.dart';
 import 'package:app/ui/chat/context/widgets/context_usage_button.dart';
+import 'package:app/ui/chat/context/widgets/context_usage_sheet.dart';
 import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
+import 'package:app/ui/chat/commands/viewmodels/agent_commands_viewmodel.dart';
 import 'package:app/ui/chat/states/chat_state.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
@@ -20,7 +24,9 @@ import 'package:app/ui/chat/widgets/input_bar.dart';
 import 'package:app/ui/chat/widgets/message_bubble.dart';
 import 'package:app/ui/chat/widgets/streaming_bubble.dart';
 import 'package:app/ui/chat/widgets/tool_request_card.dart';
+import 'package:app/ui/chat/widgets/tool_run_group.dart';
 import 'package:app/ui/chat/widgets/extension_ui_sheet.dart';
+import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -124,7 +130,12 @@ class ChatPage extends StatelessWidget {
     final reconnecting = resolved && state is ChatReady && state.isOffline;
     final working = vm.isWorking;
     final roomName = _roomDisplayName(room, state, initialTitle);
-    final title = roomName.replaceFirst('Codex · ', '');
+    final prefs = context.watch<Preferences>();
+    final localName = peer != null && room != null
+        ? prefs.sessionName(peer.remoteEpk, room.roomId)
+        : null;
+    final displayName = localName ?? roomName;
+    final title = displayName.replaceFirst('Codex · ', '');
     final device = _peerDisplayName(peer, initialDevice);
     final statusColor = working
         ? colors.working
@@ -218,102 +229,52 @@ class ChatPage extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'New session',
-                onPressed: () => openNewSession(context),
-                icon: Icon(
-                  LucideIcons.squarePen,
-                  size: 20,
-                  color: colors.muted2,
-                ),
-              ),
               ContextUsageButton(
                 key: ValueKey('${peer?.remoteEpk}:${peer?.roomId}'),
                 enabled: online && peer != null,
                 working: working,
                 messageCount: state is ChatReady ? state.messages.length : 0,
               ),
-              IconButton(
-                tooltip: 'Session info',
+              PopupMenuButton<String>(
+                tooltip: 'Session actions',
                 icon: Icon(
                   LucideIcons.ellipsis,
                   size: 21,
                   color: colors.muted2,
                 ),
-                onPressed: () {
-                  final p = vm.activePeer;
-                  if (p != null) {
-                    _showSessionInfo(context, p, vm.activeRoom, roomName);
+                onSelected: (value) async {
+                  final currentPeer = vm.activePeer;
+                  if (currentPeer == null) return;
+                  if (value == 'rename') {
+                    final name = await showSessionRenameDialog(
+                      context,
+                      currentName: displayName,
+                    );
+                    if (name != null) {
+                      await prefs.setSessionName(
+                        currentPeer.remoteEpk,
+                        vm.activeRoom?.roomId ?? 'main',
+                        name,
+                      );
+                    }
+                  } else if (value == 'info') {
+                    await showSessionInfoDialog(
+                      context,
+                      peer: currentPeer,
+                      room: vm.activeRoom,
+                      name: displayName,
+                    );
                   }
                 },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'rename', child: Text('Rename')),
+                  PopupMenuItem(value: 'info', child: Text('Info')),
+                ],
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  /// Session details dialog — surfaced from the AppBar info action.
-  /// Shows the human name, the Pi-side path (cwd), the owning device,
-  /// plus model/room/paired-date when known.
-  static Future<void> _showSessionInfo(
-    BuildContext context,
-    PeerRecord peer,
-    RoomInfo? room,
-    String name,
-  ) {
-    final owner = (peer.nickname?.isNotEmpty ?? false)
-        ? peer.nickname!
-        : peer.sessionName.isNotEmpty
-        ? peer.sessionName
-        : peer.remoteEpk.substring(0, 8);
-    final model = room?.model;
-    final paired = peer.pairedAt.contains('T')
-        ? peer.pairedAt.split('T').first
-        : peer.pairedAt;
-    return showDialog<void>(
-      context: context,
-      builder: (dCtx) {
-        final colors = dCtx.colors;
-        return AlertDialog(
-          backgroundColor: colors.bg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: colors.border),
-          ),
-          title: Text(
-            'Session info',
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 15,
-              color: colors.text,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _InfoRow(label: 'Name', value: name),
-              _InfoRow(label: 'Path', value: room?.cwd ?? '—'),
-              _InfoRow(label: 'Owner', value: owner),
-              if (model != null && model.isNotEmpty)
-                _InfoRow(label: 'Model', value: model),
-              _InfoRow(label: 'Room', value: room?.roomId ?? '—'),
-              _InfoRow(label: 'Paired', value: paired),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dCtx).pop(),
-              child: Text(
-                'Close',
-                style: TextStyle(fontFamily: kMonoFamily, color: colors.accent),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 
@@ -323,7 +284,8 @@ class ChatPage extends StatelessWidget {
     String? initialTitle,
   ) {
     if (room != null) {
-      if (room.name != null && room.name!.isNotEmpty) return room.name!;
+      final announced = displayRoomName(room.name);
+      if (announced.isNotEmpty) return announced;
       final cwd = room.cwd;
       if (cwd != null && cwd.isNotEmpty) {
         final segs = cwd.split('/').where((s) => s.isNotEmpty).toList();
@@ -430,6 +392,7 @@ class ChatPage extends StatelessWidget {
         !isRevoked &&
         !isPeerOffline &&
         !isPresenceOffline;
+    final commandState = context.watch<AgentCommandsViewModel>().state;
 
     return InputBar(
       agentLabel:
@@ -448,6 +411,38 @@ class ChatPage extends StatelessWidget {
       onOpenQuickActions: actionsEnabled
           ? () => showQuickActionsSheet(context)
           : null,
+      onSlashCommand: (id, raw) {
+        switch (id) {
+          case 'new':
+            openNewSession(
+              context,
+              workspaceKey: context.read<HomeViewModel>().selectedWorkspace,
+            );
+          case 'model':
+          case 'thinking':
+            showQuickActionsSheet(context);
+          case 'compact':
+            showQuickActionsSheet(context, compactOnOpen: true);
+          case 'context':
+            showContextUsage(context);
+          case 'attach':
+            _openAttach(context, context.read<AttachmentViewModel>());
+          case 'settings':
+            context.push('/settings');
+          case 'pair':
+            context.push('/pair');
+          case 'about':
+            context.push('/about');
+          case 'agent':
+            vm.sendMessage(raw);
+          case 'workspace':
+            showCreateWorkspace(context);
+        }
+      },
+      onSlashOpen: context.read<AgentCommandsViewModel>().refresh,
+      agentCommands: commandState.commands,
+      agentCommandsLoading: commandState.loading,
+      agentCommandsError: commandState.error,
       queuedMessages: isReady ? state.queuedMessages : const [],
       onSetQueued: vm.queueMessage,
       onClearQueued: vm.clearQueuedMessage,
@@ -567,6 +562,28 @@ class ChatPage extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 
+class _ToolRun {
+  const _ToolRun(this.tools);
+  final List<ToolEvent> tools;
+}
+
+/// Returns the final assistant segment of each completed user turn. Tool
+/// boundaries split one logical answer across several bubbles; only this last
+/// segment owns the copy action.
+Set<String> assistantCopyIdsForTurns(List<ChatMessage> messages) {
+  final ids = <String>{};
+  String? lastAssistant;
+  for (final message in messages) {
+    if (message is AssistantMsg) lastAssistant = message.id;
+    if (message is UserMsg) {
+      if (lastAssistant != null) ids.add(lastAssistant);
+      lastAssistant = null;
+    }
+  }
+  if (lastAssistant != null) ids.add(lastAssistant);
+  return ids;
+}
+
 class _MessageList extends StatelessWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
@@ -580,7 +597,37 @@ class _MessageList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final itemCount = messages.length + (streaming != null ? 1 : 0);
+    final items = <Object>[];
+    final toolRun = <ToolEvent>[];
+    void flushTools() {
+      if (toolRun.isEmpty) return;
+      items.add(
+        toolRun.length == 1
+            ? toolRun.single
+            : _ToolRun(List<ToolEvent>.unmodifiable(toolRun)),
+      );
+      toolRun.clear();
+    }
+
+    for (final message in messages) {
+      final needsApproval =
+          message is ToolEvent &&
+          message.status == ToolEventStatus.pending &&
+          message.args is Map &&
+          message.args['approval_required'] == true;
+      if (message is ToolEvent && !needsApproval) {
+        toolRun.add(message);
+      } else {
+        flushTools();
+        items.add(message);
+      }
+    }
+    flushTools();
+
+    final itemCount = items.length + (streaming != null ? 1 : 0);
+    // One copy action per assistant turn: tool calls can split a single reply
+    // into several text segments, but only the final segment gets the button.
+    final copyIds = assistantCopyIdsForTurns(messages);
 
     // `reverse: true` anchors the viewport to the bottom (offset 0 = newest)
     // and keeps it there as content arrives — no manual scroll-to-bottom is
@@ -607,14 +654,23 @@ class _MessageList extends StatelessWidget {
               child: StreamingBubble(streaming!),
             );
           }
-          final msgIdx =
-              messages.length - 1 - (i - (streaming != null ? 1 : 0));
-          final msg = messages[msgIdx];
+          final itemIdx = items.length - 1 - (i - (streaming != null ? 1 : 0));
+          final item = items[itemIdx];
+          if (item is _ToolRun) {
+            return KeyedSubtree(
+              key: ValueKey('tool-run-${item.tools.first.id}'),
+              child: ToolRunGroup(tools: item.tools),
+            );
+          }
+          final msg = item as ChatMessage;
           return KeyedSubtree(
             key: ValueKey(msg.id),
             child: switch (msg) {
               UserMsg() => UserBubble(msg),
-              AssistantMsg() => AssistantBubble(msg),
+              AssistantMsg() => AssistantBubble(
+                msg,
+                showCopy: copyIds.contains(msg.id),
+              ),
               ThinkingMsg() => ThinkingBlock(
                 text: msg.text,
                 complete: msg.complete,
@@ -703,45 +759,6 @@ class _RevokedBanner extends StatelessWidget {
                 fontWeight: FontWeight.w600,
                 decoration: TextDecoration.underline,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One labelled key/value row in the session-info dialog. The value is
-/// selectable so the user can copy the path / device name.
-class _InfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 10,
-              color: colors.muted,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 2),
-          SelectableText(
-            value,
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 13,
-              color: colors.text,
             ),
           ),
         ],

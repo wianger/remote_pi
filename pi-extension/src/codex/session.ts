@@ -14,7 +14,12 @@ import { CodexClient, object, type CodexServerRequest, type JsonObject } from ".
 type Client = Pick<CodexClient, "start" | "request" | "respond" | "rejectRequest" | "close" | "on">;
 type UserMessage = Extract<ClientMessage, { type: "user_message" }>;
 interface PendingApproval { request: CodexServerRequest; tool: string; args: JsonObject }
-interface SavedSession { threadId: string; startedAt: number; events: SessionHistoryEvent[] }
+interface SavedSession {
+  threadId: string;
+  startedAt: number;
+  events: SessionHistoryEvent[];
+  contextUsage?: { tokens: number | null; context_window: number | null; percent: number | null };
+}
 
 export interface CodexSessionOptions {
   cwd: string;
@@ -77,6 +82,10 @@ export class CodexSession {
           this.model = typeof resumed.model === "string" ? resumed.model : "";
           this.startedAt = typeof saved.startedAt === "number" ? saved.startedAt : Date.now();
           this.events = Array.isArray(saved.events) ? saved.events as SessionHistoryEvent[] : [];
+          if (saved.contextUsage) {
+            const usage = object(saved.contextUsage);
+            this.contextUsage = contextUsageSnapshot(usage.tokens, usage.context_window);
+          }
           const unfinished = new Map<string, true>();
           this.events = this.events.map((event) => {
             if (event.type === "agent_thinking") return { ...event, complete: true };
@@ -126,6 +135,13 @@ export class CodexSession {
           sender.send({ type: "context_usage", in_reply_to: message.id, source: "codex", ...this.contextUsage });
           return;
         case "list_models": await this.models(sender, message.id); return;
+        case "commands_get":
+          sender.send({
+            type: "commands_list",
+            in_reply_to: message.id,
+            commands: [],
+          });
+          return;
         case "model_set":
           if (this.busy) throw new Error("Wait for the current response before changing models.");
           this.model = message.model_id;
@@ -270,6 +286,9 @@ export class CodexSession {
       if (params.threadId !== this.threadId) return;
       const usage = object(params.tokenUsage);
       this.contextUsage = contextUsageSnapshot(object(usage.last).totalTokens, usage.modelContextWindow);
+      // Resume does not replay tokenUsage until the next turn; keep the last
+      // known snapshot on disk so a reopened thread still shows context.
+      this.persist();
       return;
     }
     if (method === "turn/started") {
@@ -510,7 +529,12 @@ export class CodexSession {
 
   private persist(): void {
     if (!this.threadId) return;
-    const saved: SavedSession = { threadId: this.threadId, startedAt: this.startedAt, events: this.events };
+    const saved: SavedSession = {
+      threadId: this.threadId,
+      startedAt: this.startedAt,
+      events: this.events,
+      contextUsage: this.contextUsage,
+    };
     mkdirSync(dirname(this.statePath), { recursive: true, mode: 0o700 });
     const temp = this.statePath + ".tmp";
     writeFileSync(temp, JSON.stringify(saved), { mode: 0o600 });

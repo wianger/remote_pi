@@ -1,4 +1,3 @@
-import 'package:app/ui/core/branding/app_brand.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/transport/relay_config.dart';
 import 'package:app/pairing/storage.dart';
@@ -7,7 +6,6 @@ import 'package:app/ui/settings/states/settings_state.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:app/ui/settings/widgets/widgets.dart';
 import 'package:flutter/material.dart';
-import 'package:app/ui/update/widgets/update_settings_section.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -54,8 +52,6 @@ class SettingsPage extends StatelessWidget {
           Divider(color: colors.border, height: 1),
           const _DisplaySection(),
           Divider(color: colors.border, height: 1),
-          const UpdateSettingsSection(),
-          Divider(color: colors.border, height: 1),
           const _SectionHeader('Pairings'),
           switch (state) {
             SettingsLoading() => Padding(
@@ -68,7 +64,6 @@ class SettingsPage extends StatelessWidget {
             SettingsList(:final peers) => _PeerList(
               peers: peers,
               onRevoke: vm.revoke,
-              onSetNickname: vm.setNickname,
             ),
           },
           // Plan-17 follow-up — entry point to pair an additional Pi.
@@ -78,10 +73,11 @@ class SettingsPage extends StatelessWidget {
           const _AddPairingButton(),
           Divider(color: colors.border, height: 1),
           ListTile(
-            title: const Text('Open-source licenses'),
+            leading: const Icon(LucideIcons.info, size: 20),
+            title: const Text('About'),
+            subtitle: const Text('Version, updates and project links'),
             trailing: const Icon(LucideIcons.chevronRight, size: 18),
-            onTap: () =>
-                showLicensePage(context: context, applicationName: kAppName),
+            onTap: () => context.push('/about'),
           ),
         ],
       ),
@@ -414,13 +410,8 @@ class _EmptyState extends StatelessWidget {
 class _PeerList extends StatelessWidget {
   final List<PeerRecord> peers;
   final Future<void> Function(String epk) onRevoke;
-  final Future<void> Function(String epk, String? nickname) onSetNickname;
 
-  const _PeerList({
-    required this.peers,
-    required this.onRevoke,
-    required this.onSetNickname,
-  });
+  const _PeerList({required this.peers, required this.onRevoke});
 
   @override
   Widget build(BuildContext context) {
@@ -429,7 +420,6 @@ class _PeerList extends StatelessWidget {
         for (final peer in peers)
           PeerListItem(
             peer: peer,
-            onEditNickname: () => _editNickname(context, peer),
             onRevokeRequested: () async {
               final confirmed = await showRevokeConfirmDialog(
                 context,
@@ -442,15 +432,5 @@ class _PeerList extends StatelessWidget {
           ),
       ],
     );
-  }
-
-  Future<void> _editNickname(BuildContext context, PeerRecord peer) async {
-    final result = await showNicknameEditor(
-      context,
-      defaultName: peer.sessionName,
-      currentNickname: peer.nickname ?? '',
-    );
-    if (result == null) return; // canceled
-    await onSetNickname(peer.remoteEpk, result.isEmpty ? null : result);
   }
 }

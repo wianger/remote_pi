@@ -281,3 +281,34 @@ list instead of overflowing and squashing the list to zero height. The pair
 and settings actions stay pinned at the bottom. In the chat header the status
 label is wrapped with an ellipsis constraint, so "Reconnecting" and other
 statuses no longer overflow at 320dp width with the XL font scale.
+
+## Logical workspaces and command controls (1.2.11 / build 19)
+
+Workspaces are now phone-side logical containers rather than directory
+aliases. Create a workspace with **New workspace**, then start sessions in any
+folders on that device; **New session** adds the resulting conversation to the
+selected workspace. Opening a grouped session keeps that workspace selected.
+Device and workspace use distinct controls, and the sidebar no longer has a
+separate collapse button. Pair and Settings share one compact action row.
+
+Session Rename, Info and Delete are available by long press. The chat header
+menu offers Rename and Info, while Delete remains the phone-only cache removal.
+Computer changes to an existing conversation no longer expose broker suffixes
+such as `#2`. Paired connections adopt their persisted conversation room
+immediately, so daemon and interactive Pi endpoints continue writing to the
+same local history.
+
+The About page now groups version information, GitHub update checks, project
+and release links, licenses and contributor details in the FlClash-style
+layout. Update state is no longer duplicated in Settings.
+
+The composer keeps voice input and model/thinking controls available while a
+text draft exists. Typing `/` opens agent commands, prompt templates and
+skills in addition to built-in actions. Compact and fresh-session actions now
+live in that slash palette instead of separate quick-action buttons.
+
+Assistant turns expose one copy action on their final text segment. Consecutive
+completed tool calls collapse into one Claude-mobile-style summary row with a
+detail sheet; approval requests remain separate interactive cards. Context
+usage requests correlate a Pi conversation's daemon and interactive endpoints
+and reject late replies after switching to another conversation.

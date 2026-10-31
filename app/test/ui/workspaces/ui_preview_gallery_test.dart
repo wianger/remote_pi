@@ -7,17 +7,25 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:app/data/preferences/preferences.dart';
+import 'package:app/domain/contracts/agent_commands_repository.dart';
 import 'package:app/domain/session_state.dart';
 import 'package:app/domain/contracts/context_usage_repository.dart';
+import 'package:app/domain/contracts/dismissed_update_store.dart';
+import 'package:app/domain/contracts/update_checker.dart';
+import 'package:app/domain/contracts/url_opener.dart';
+import 'package:app/domain/entities/agent_command.dart';
 import 'package:app/domain/entities/context_usage.dart';
+import 'package:app/domain/entities/update_info.dart';
 import 'package:app/ui/chat/context/viewmodels/context_usage_viewmodel.dart';
 import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
+import 'package:app/ui/about/about_page.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/chat_page.dart';
+import 'package:app/ui/chat/commands/viewmodels/agent_commands_viewmodel.dart';
 import 'package:app/ui/chat/states/chat_state.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/widgets/message_bubble.dart';
@@ -27,6 +35,7 @@ import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/viewmodel/viewmodel.dart';
 import 'package:app/ui/home/states/home_state.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
+import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:app/ui/workspaces/new_session_page.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
@@ -103,13 +112,26 @@ class _Home extends ViewModel<HomeState> implements HomeViewModel {
   List<HomeItem> get deviceItems =>
       allItems.where((item) => item.peer.remoteEpk == selectedDevice).toList();
   @override
-  Map<String, HomeItem> get workspaces => {
+  Map<String, String> get workspaces => {
     for (final item in deviceItems)
-      HomeViewModel.workspaceKey(item.peer.remoteEpk, item.room.cwd): item,
+      HomeViewModel.workspaceKey(item.peer.remoteEpk, item.room.cwd):
+          item.room.cwd ?? '',
   };
   @override
   String get selectedWorkspace =>
       HomeViewModel.workspaceKey(_computer.remoteEpk, _room.cwd);
+  @override
+  String? workspaceLabel(String? key) {
+    if (key == null) return null;
+    final path = workspaces[key];
+    if (path == null || path.isEmpty) return null;
+    return path.split(RegExp(r'[/\\]')).where((part) => part.isNotEmpty).last;
+  }
+
+  @override
+  String? workspaceSubtitle(String key) => workspaces[key];
+  @override
+  String displayNameOf(HomeItem item) => item.displayName;
   @override
   List<HomeItem> get workspaceItems => allItems
       .where(
@@ -302,6 +324,41 @@ class _ContextRepository implements IContextUsageRepository {
   );
 }
 
+class _AgentCommands implements IAgentCommandsRepository {
+  @override
+  Future<List<AgentCommand>> list() async => const [
+    AgentCommand(
+      name: 'review',
+      source: 'extension',
+      description: 'Review the current branch',
+    ),
+    AgentCommand(
+      name: 'browser',
+      source: 'skill',
+      description: 'Operate a browser',
+    ),
+  ];
+  @override
+  void dispose() {}
+}
+
+class _NoUpdateChecker implements UpdateChecker {
+  @override
+  Future<UpdateInfo?> fetchLatest() async => null;
+}
+
+class _NoDismissedUpdateStore implements DismissedUpdateStore {
+  @override
+  Future<void> dismiss(String version) async {}
+  @override
+  Future<String?> dismissedVersion() async => null;
+}
+
+class _NoUrlOpener implements UrlOpener {
+  @override
+  Future<bool> open(String url) async => true;
+}
+
 void main() {
   final output = Platform.environment['REMOTE_PI_PREVIEW_DIR'];
   testWidgets(
@@ -330,6 +387,15 @@ void main() {
         );
       final newSession = NewSessionViewModel(_Workspaces());
       final contextVm = ContextUsageViewModel(_ContextRepository());
+      final commands = AgentCommandsViewModel(_AgentCommands());
+      final updates = UpdateBannerViewModel(
+        _NoUpdateChecker(),
+        _NoDismissedUpdateStore(),
+        _NoUrlOpener(),
+        currentVersion: '1.2.11',
+        currentBuildNumber: 19,
+        enabled: false,
+      );
       final galleryKey = GlobalKey();
       final chatKey = GlobalKey();
       final drawerKey = GlobalKey();
@@ -372,6 +438,9 @@ void main() {
             ChangeNotifierProvider<ChatViewModel>.value(value: chat),
             ChangeNotifierProvider<ContextUsageViewModel>.value(
               value: contextVm,
+            ),
+            ChangeNotifierProvider<AgentCommandsViewModel>.value(
+              value: commands,
             ),
             ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
             ChangeNotifierProvider<AttachmentViewModel>.value(
@@ -579,6 +648,9 @@ void main() {
             ChangeNotifierProvider<ContextUsageViewModel>.value(
               value: contextVm,
             ),
+            ChangeNotifierProvider<AgentCommandsViewModel>.value(
+              value: commands,
+            ),
             ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
             ChangeNotifierProvider<AttachmentViewModel>.value(
               value: attachment,
@@ -625,6 +697,23 @@ void main() {
       await tester.pumpAndSettle();
       await _save(tester, brandKey, '$output/brand.png');
 
+      final aboutKey = GlobalKey();
+      await tester.pumpWidget(
+        ChangeNotifierProvider<UpdateBannerViewModel>.value(
+          value: updates,
+          child: RepaintBoundary(
+            key: aboutKey,
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              theme: previewTheme,
+              home: const AboutPage(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _save(tester, aboutKey, '$output/about.png');
+
       chat.emit(
         ChatReady(
           messages: List.generate(
@@ -642,6 +731,9 @@ void main() {
             ChangeNotifierProvider<ChatViewModel>.value(value: chat),
             ChangeNotifierProvider<ContextUsageViewModel>.value(
               value: contextVm,
+            ),
+            ChangeNotifierProvider<AgentCommandsViewModel>.value(
+              value: commands,
             ),
             ChangeNotifierProvider<VoiceInputViewModel>.value(value: voice),
             ChangeNotifierProvider<AttachmentViewModel>.value(
@@ -673,6 +765,8 @@ void main() {
         selection,
         newSession,
         contextVm,
+        commands,
+        updates,
       ]) {
         notifier.dispose();
       }

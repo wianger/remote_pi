@@ -1,5 +1,6 @@
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
+import 'package:app/domain/value_objects/session_room.dart';
 import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 
 sealed class HomeState {
@@ -36,7 +37,8 @@ class HomeItem {
   /// Display name preference: explicit room.name → cwd basename →
   /// `<peer-nickname>` → fallback session_name.
   String get displayName {
-    if (room.name != null && room.name!.isNotEmpty) return room.name!;
+    final announced = displayRoomName(room.name);
+    if (announced.isNotEmpty) return announced;
     final cwd = room.cwd;
     if (cwd != null && cwd.isNotEmpty) {
       final last = cwd.split('/').where((s) => s.isNotEmpty).toList();

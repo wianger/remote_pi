@@ -16,13 +16,16 @@ import 'package:app/data/transport/channel.dart';
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:app/data/voice/speech_service.dart';
 import 'package:app/pairing/storage.dart';
+import 'package:app/domain/contracts/agent_commands_repository.dart';
 import 'package:app/domain/contracts/context_usage_repository.dart';
+import 'package:app/domain/entities/agent_command.dart';
 import 'package:app/domain/entities/context_usage.dart';
 import 'package:app/ui/chat/context/viewmodels/context_usage_viewmodel.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/chat_page.dart';
+import 'package:app/ui/chat/commands/viewmodels/agent_commands_viewmodel.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -80,6 +83,14 @@ class _ContextRepository implements IContextUsageRepository {
   Future<ContextUsageSnapshot> fetch() async => const ContextUsageSnapshot();
 }
 
+class _EmptyCommandsRepository implements IAgentCommandsRepository {
+  @override
+  Future<List<AgentCommand>> list() async => const [];
+
+  @override
+  void dispose() {}
+}
+
 void main() {
   late Directory dir;
   setUpAll(() async {
@@ -120,6 +131,10 @@ void main() {
               ChangeNotifierProvider<AttachmentViewModel>.value(value: attach),
               ChangeNotifierProvider<Preferences>.value(value: prefs),
               ChangeNotifierProvider<SessionSelection>.value(value: sel),
+              ChangeNotifierProvider(
+                create: (_) =>
+                    AgentCommandsViewModel(_EmptyCommandsRepository()),
+              ),
             ],
             child: const ChatPage(
               initialTitle: 'My Project',
@@ -139,7 +154,7 @@ void main() {
 
       // The info button renders immediately — even with no PeerRecord loaded
       // (activePeer == null here) — so it never pops in and shifts the AppBar.
-      expect(find.byTooltip('Session info'), findsOneWidget);
+      expect(find.byTooltip('Session actions'), findsOneWidget);
 
       // Status dot uses initialOnline before the runtime resolves → shows
       // "Ready" immediately instead of flashing offline/reconnecting.
@@ -193,6 +208,10 @@ void main() {
                 ),
                 ChangeNotifierProvider<Preferences>.value(value: prefs),
                 ChangeNotifierProvider<SessionSelection>.value(value: sel),
+                ChangeNotifierProvider(
+                  create: (_) =>
+                      AgentCommandsViewModel(_EmptyCommandsRepository()),
+                ),
               ],
               child: const Scaffold(
                 body: SizedBox(

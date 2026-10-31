@@ -2,13 +2,18 @@ param(
     [string]$SourceApp = (Join-Path (Split-Path $PSScriptRoot -Parent) 'app'),
     [string]$BuildRoot = (Join-Path $env:LOCALAPPDATA 'RemotePiMobileBuild'),
     [string]$OutputApk = (Join-Path $env:USERPROFILE 'Downloads\RemotePi-Dev-Android.apk'),
-    [string]$ProxyUrl = $env:HTTPS_PROXY
+    [string]$ProxyUrl = $env:HTTPS_PROXY,
+    [string]$FlutterRoot = 'C:\Scoop\apps\flutter\current',
+    [string]$JdkRoot = 'C:\Scoop\apps\temurin17-jdk\current',
+    [string]$AndroidSdkRoot = 'C:\Scoop\apps\android-clt\current',
+    [string]$AndroidBuildToolsRoot = 'C:\Scoop\persist\android-clt\build-tools\36.0.0'
 )
 $ErrorActionPreference = 'Stop'
-$flutter = 'C:\Scoop\apps\flutter\current\bin\flutter.bat'
-$jdk = 'C:\Scoop\apps\temurin17-jdk\current'
-$sdk = 'C:\Scoop\apps\android-clt\current'
-foreach ($toolPath in @($flutter, "$jdk\bin\keytool.exe", "$sdk\platform-tools\adb.exe")) {
+$flutter = Join-Path $FlutterRoot 'bin\flutter.bat'
+$jdk = $JdkRoot
+$sdk = $AndroidSdkRoot
+$apksigner = Join-Path $AndroidBuildToolsRoot 'apksigner.bat'
+foreach ($toolPath in @($flutter, "$jdk\bin\keytool.exe", "$sdk\platform-tools\adb.exe", $apksigner)) {
     if (-not (Test-Path -LiteralPath $toolPath)) { throw "Missing development tool: $toolPath" }
 }
 $source = (Resolve-Path -LiteralPath $SourceApp).ProviderPath
@@ -65,7 +70,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Android build failed.' }
     } finally { Pop-Location }
     $apk = Join-Path $buildApp 'build\app\outputs\flutter-apk\app-release.apk'
-    & "$sdk\build-tools\36.0.0\apksigner.bat" verify --print-certs $apk
+    & $apksigner verify --print-certs $apk
     if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
     Copy-Item -LiteralPath $apk -Destination $OutputApk -Force
     Get-FileHash -LiteralPath $OutputApk -Algorithm SHA256

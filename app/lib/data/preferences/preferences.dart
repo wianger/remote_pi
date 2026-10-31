@@ -17,6 +17,9 @@ class Preferences extends ChangeNotifier {
   final FlutterSecureStorage _store;
   bool _hideToolCalls = false;
   Set<String> _hiddenSessions = {};
+  Map<String, String> _sessionNames = {};
+  Map<String, String> _sessionWorkspaces = {};
+  Map<String, String> _workspaceNames = {};
   String? _selectedWorkspace;
   String? _selectedDeviceEpk;
   Map<String, String> _workspacesByDevice = {};
@@ -31,6 +34,9 @@ class Preferences extends ChangeNotifier {
     : _store = store ?? const FlutterSecureStorage();
 
   static const _kHiddenSessionsKey = 'prefs.hidden_sessions';
+  static const _kSessionNamesKey = 'prefs.session_names';
+  static const _kSessionWorkspacesKey = 'prefs.session_workspaces';
+  static const _kWorkspaceNamesKey = 'prefs.workspace_names';
   static const _kSelectedWorkspaceKey = 'prefs.selected_workspace';
   static const _kNavigationKey = 'prefs.workspace_navigation';
 
@@ -196,6 +202,72 @@ class Preferences extends ChangeNotifier {
       changed = true;
     }
     _selectedWorkspace = remembered[device];
+    final namesRaw = await _store.read(key: _kSessionNamesKey);
+    Map<String, String> names = {};
+    try {
+      final decoded = namesRaw == null ? null : jsonDecode(namesRaw);
+      if (decoded is Map) {
+        for (final entry in decoded.entries) {
+          if (entry.key is String &&
+              entry.value is String &&
+              (entry.value as String).trim().isNotEmpty) {
+            names[entry.key as String] = (entry.value as String).trim();
+          }
+        }
+      }
+    } on FormatException {
+      /* Invalid preference, fall back to the announced room name. */
+    }
+    if (!mapEquals(names, _sessionNames)) {
+      _sessionNames = names;
+      changed = true;
+    }
+    final sessionWorkspacesRaw = await _store.read(key: _kSessionWorkspacesKey);
+    Map<String, String> sessionWorkspaces = {};
+    try {
+      final decoded = sessionWorkspacesRaw == null
+          ? null
+          : jsonDecode(sessionWorkspacesRaw);
+      if (decoded is Map) {
+        for (final entry in decoded.entries) {
+          if (entry.key is String &&
+              entry.value is String &&
+              (entry.value as String).trim().isNotEmpty) {
+            sessionWorkspaces[entry.key as String] = (entry.value as String)
+                .trim();
+          }
+        }
+      }
+    } on FormatException {
+      /* Invalid preference, fall back to the session directory. */
+    }
+    if (!mapEquals(sessionWorkspaces, _sessionWorkspaces)) {
+      _sessionWorkspaces = sessionWorkspaces;
+      changed = true;
+    }
+    final workspaceNamesRaw = await _store.read(key: _kWorkspaceNamesKey);
+    Map<String, String> workspaceNames = {};
+    try {
+      final decoded = workspaceNamesRaw == null
+          ? null
+          : jsonDecode(workspaceNamesRaw);
+      if (decoded is Map) {
+        for (final entry in decoded.entries) {
+          if (entry.key is String &&
+              entry.value is String &&
+              (entry.value as String).trim().isNotEmpty) {
+            workspaceNames[entry.key as String] = (entry.value as String)
+                .trim();
+          }
+        }
+      }
+    } on FormatException {
+      /* Invalid preference, fall back to the folder name. */
+    }
+    if (!mapEquals(workspaceNames, _workspaceNames)) {
+      _workspaceNames = workspaceNames;
+      changed = true;
+    }
     if (changed) notifyListeners();
   }
 
@@ -219,6 +291,106 @@ class Preferences extends ChangeNotifier {
       );
     } catch (_) {
       _hiddenSessions.remove(key);
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  /// Local display-name override for a conversation. Null → use the name the
+  /// computer announced. Kept on this phone so renaming never touches the
+  /// running agent or another device.
+  String? sessionName(String epk, String room) =>
+      _sessionNames[_conversationKey(epk, room)];
+
+  Future<void> setSessionName(String epk, String room, String? name) async {
+    final key = _conversationKey(epk, room);
+    final trimmed = name?.trim();
+    final next = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    final before = _sessionNames[key];
+    if (next == before) return;
+    if (next == null) {
+      _sessionNames.remove(key);
+    } else {
+      _sessionNames[key] = next;
+    }
+    try {
+      await _store.write(
+        key: _kSessionNamesKey,
+        value: jsonEncode(_sessionNames),
+      );
+    } catch (_) {
+      if (before == null) {
+        _sessionNames.remove(key);
+      } else {
+        _sessionNames[key] = before;
+      }
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  /// Display name for a workspace key (`<epk>:<root path>`). Absent means the
+  /// workspace uses the folder basename and was not explicitly created.
+  String? workspaceName(String key) => _workspaceNames[key];
+
+  bool isCustomWorkspace(String key) => _workspaceNames.containsKey(key);
+
+  Iterable<String> customWorkspaceKeysForDevice(String epk) {
+    final device = toStandardB64(epk);
+    return _workspaceNames.keys.where((key) => key.startsWith('$device:'));
+  }
+
+  String? workspaceForSession(String epk, String room) =>
+      _sessionWorkspaces[_conversationKey(epk, room)];
+
+  Future<void> setSessionWorkspace(
+    String epk,
+    String room,
+    String? workspaceKey,
+  ) async {
+    final key = _conversationKey(epk, room);
+    final next = workspaceKey?.trim();
+    final before = _sessionWorkspaces[key];
+    if ((next == null || next.isEmpty) && before == null) return;
+    if (next == before) return;
+    if (next == null || next.isEmpty) {
+      _sessionWorkspaces.remove(key);
+    } else {
+      _sessionWorkspaces[key] = next;
+    }
+    try {
+      await _store.write(
+        key: _kSessionWorkspacesKey,
+        value: jsonEncode(_sessionWorkspaces),
+      );
+    } catch (_) {
+      if (before == null) {
+        _sessionWorkspaces.remove(key);
+      } else {
+        _sessionWorkspaces[key] = before;
+      }
+      rethrow;
+    }
+    notifyListeners();
+  }
+
+  Future<void> setWorkspaceName(String key, String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final before = _workspaceNames[key];
+    if (before == trimmed) return;
+    _workspaceNames[key] = trimmed;
+    try {
+      await _store.write(
+        key: _kWorkspaceNamesKey,
+        value: jsonEncode(_workspaceNames),
+      );
+    } catch (_) {
+      if (before == null) {
+        _workspaceNames.remove(key);
+      } else {
+        _workspaceNames[key] = before;
+      }
       rethrow;
     }
     notifyListeners();

@@ -421,6 +421,7 @@ class ConnectionManager extends Service {
     }
     _retryAttempt = 0;
     _missedPings = 0;
+    _activeRoomId = peer.roomId ?? 'main';
     _activePeer = peer;
     _emit(StatusOnline(channel));
     _startPing(peer, channel);
@@ -659,6 +660,7 @@ class ConnectionManager extends Service {
         // the canonical one. Persists the choice on the PeerRecord
         // so future reconnects address it directly.
         _maybeAdoptLegacyRoom(key, roomId);
+        _followConversationEndpoint(key, roomId);
       case RoomEnded(:final peer, :final roomId):
         final key = toStandardB64(peer);
         // Mark the room offline but KEEP it in the cached set so the
@@ -756,6 +758,9 @@ class ConnectionManager extends Service {
         // Same legacy-discovery hook as RoomAnnounced.
         if (rooms.isNotEmpty) {
           _maybeAdoptLegacyRoom(key, rooms.first.roomId);
+        }
+        for (final room in rooms) {
+          _followConversationEndpoint(key, room.roomId);
         }
     }
     if (presenceDirty) _schedulePresenceEmit();
@@ -1068,6 +1073,42 @@ class ConnectionManager extends Service {
         .savePeer(updated)
         .then((_) {})
         .catchError((Object e, StackTrace _) {});
+  }
+
+  /// Pi can publish a daemon endpoint and a resumed interactive endpoint for
+  /// the same conversation. Keep the active send target on the newest
+  /// interactive endpoint so a resume on the computer does not leave the phone
+  /// talking to the old daemon route.
+  void _followConversationEndpoint(String peerKey, String discoveredRoom) {
+    final active = _activePeer;
+    if (active == null) return;
+    if (toStandardB64(active.remoteEpk) != peerKey) return;
+    if (_activeRoomId == discoveredRoom) return;
+    if (conversationRoomId(_activeRoomId) !=
+        conversationRoomId(discoveredRoom)) {
+      return;
+    }
+    final rooms = _roomsByPeer[peerKey] ?? const <RoomInfo>[];
+    final current = rooms
+        .where((room) => room.roomId == _activeRoomId)
+        .firstOrNull;
+    final candidate = rooms
+        .where((room) => room.roomId == discoveredRoom)
+        .firstOrNull;
+    if (current == null ||
+        candidate == null ||
+        !isRoomLive(peerKey, candidate.roomId)) {
+      return;
+    }
+    // Snapshots can arrive in any order. Compare the complete route before
+    // moving so a late announcement cannot switch back to a stale endpoint.
+    if (!_preferRoom(peerKey, candidate, current)) return;
+    switchRoom(discoveredRoom);
+    final updated = _activePeer?.copyWith(roomId: discoveredRoom);
+    if (updated == null) return;
+    _activePeer = updated;
+    // ignore: unawaited_futures
+    _storage.savePeer(updated).then((_) {}).catchError((Object _) {});
   }
 
   /// On (re)connect, re-send the last subscribe_presence so the relay

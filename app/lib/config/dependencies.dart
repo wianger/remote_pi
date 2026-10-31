@@ -6,6 +6,7 @@ import 'dart:io' show Platform;
 
 import 'package:app/config/utils/injector.dart';
 import 'package:app/data/actions/actions_repository.dart';
+import 'package:app/data/commands/agent_commands_repository.dart';
 import 'package:app/data/workspaces/workspace_repository.dart';
 import 'package:app/domain/workspaces/workspace_repository.dart';
 import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
@@ -27,6 +28,7 @@ import 'package:app/data/update/update_checker_impl.dart';
 import 'package:app/data/update/url_launcher_opener.dart';
 import 'package:app/data/voice/speech_service.dart';
 import 'package:app/domain/contracts/dismissed_update_store.dart';
+import 'package:app/domain/contracts/agent_commands_repository.dart';
 import 'package:app/domain/contracts/update_checker.dart';
 import 'package:app/domain/contracts/url_opener.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
@@ -35,6 +37,7 @@ import 'package:app/pairing/qr_scanner.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
+import 'package:app/ui/chat/commands/viewmodels/agent_commands_viewmodel.dart';
 import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
@@ -134,6 +137,9 @@ Future<void> setupDependencies() async {
   _injector.addRepository<IActionsRepository>(
     () => ActionsRepository(_injector.get<ConnectionManager>()),
   );
+  _injector.addRepository<IAgentCommandsRepository>(
+    () => AgentCommandsRepository(_injector.get<ConnectionManager>()),
+  );
 
   _injector.addOther<IContextUsageRepository>(
     () => ContextUsageRepository(_injector.get<ConnectionManager>()),
@@ -190,6 +196,9 @@ Future<void> setupDependencies() async {
   _injector.addViewModel<OnboardingViewModel>(OnboardingViewModel.new);
   _injector.addViewModel<QuickActionsViewModel>(
     () => QuickActionsViewModel(_injector.get<IActionsRepository>()),
+  );
+  _injector.addViewModel<AgentCommandsViewModel>(
+    () => AgentCommandsViewModel(_injector.get<IAgentCommandsRepository>()),
   );
   // Plan 29 — voice input. New instance per chat mount; reuses the shared
   // SpeechService singleton (which it stops/cancels but never disposes).

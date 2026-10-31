@@ -488,7 +488,8 @@ class SyncService extends Service {
     // chat is still mounted underneath. Never write that room into this box.
     if (originEpk != null &&
         _activeEpk != null &&
-        _conn.activeRoomId != _activeRoomId) {
+        conversationRoomId(_conn.activeRoomId) !=
+            conversationRoomId(_activeRoomId)) {
       return;
     }
     if (originEpk != null &&
@@ -497,6 +498,7 @@ class SyncService extends Service {
     }
     switch (msg) {
       case ContextUsageReply():
+      case CommandsList():
         break;
       case AgentChunk(:final inReplyTo, :final delta):
         _chunkBuffer.write(delta);

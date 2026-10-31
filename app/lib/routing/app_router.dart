@@ -6,12 +6,14 @@ import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
+import 'package:app/ui/chat/commands/viewmodels/agent_commands_viewmodel.dart';
 import 'package:app/ui/chat/chat_page.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/workspaces/session_shell.dart';
 import 'package:app/ui/workspaces/new_session_page.dart';
+import 'package:app/ui/about/about_page.dart';
 import 'package:app/ui/workspaces/viewmodels/new_session_viewmodel.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/onboarding/onboarding_page.dart';
@@ -291,6 +293,7 @@ GoRouter buildRouter(
             providers: [
               ViewmodelProvider<HomeViewModel>(),
               ViewmodelProvider<ChatViewModel>(),
+              ViewmodelProvider<AgentCommandsViewModel>(),
               ViewmodelProvider<ContextUsageViewModel>(),
               ViewmodelProvider<VoiceInputViewModel>(),
               ViewmodelProvider<AttachmentViewModel>(),
@@ -316,6 +319,13 @@ GoRouter buildRouter(
             ViewmodelProvider<UpdateBannerViewModel>(),
           ],
           child: const SettingsPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/about',
+        builder: (ctx, st) => MultiProvider(
+          providers: [ViewmodelProvider<UpdateBannerViewModel>()],
+          child: const AboutPage(),
         ),
       ),
     ],

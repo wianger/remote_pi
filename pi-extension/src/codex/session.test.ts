@@ -57,6 +57,32 @@ describe("Codex mobile session bridge", () => {
     expect(replies.at(-1)).toMatchObject({ tokens: null, context_window: null, percent: null });
   });
 
+  test("restores the last context usage snapshot when a saved thread resumes", async () => {
+    await session.start();
+    client.emit("notification", "thread/tokenUsage/updated", { threadId: "thread-1", turnId: "turn-1",
+      tokenUsage: { last: { totalTokens: 40_000 }, modelContextWindow: 200_000 } });
+    session.close();
+
+    const resumedReplies: ServerMessage[] = [];
+    session = new CodexSession({
+      cwd: root,
+      client,
+      statePath: join(root, "state.json"),
+      broadcast: () => {},
+    });
+    await session.start();
+    await session.handle({ send: (message) => resumedReplies.push(message) }, {
+      type: "context_usage_get",
+      id: "resumed-context",
+    });
+    expect(resumedReplies.at(-1)).toMatchObject({
+      type: "context_usage",
+      tokens: 40_000,
+      context_window: 200_000,
+      percent: 20,
+    });
+  });
+
   test("uses the selected folder and preserves configured sandbox/approval policy", async () => {
     await session.start();
     const params = client.request.mock.calls.find(([method]) => method === "thread/start")?.[1];

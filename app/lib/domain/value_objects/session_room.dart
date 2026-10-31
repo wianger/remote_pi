@@ -12,3 +12,9 @@ bool isInteractivePiRoom(String roomId) =>
 
 String? legacyPiInstanceRoomId(String roomId) =>
     _piRoom.firstMatch(roomId)?.group(3);
+
+/// The broker appends `#2`, `#3`, … when two Pi endpoints request the same
+/// display name. That suffix is routing metadata, not part of the
+/// conversation title shown to the user.
+String displayRoomName(String? name) =>
+    name?.replaceFirst(RegExp(r'#\d+$'), '').trim() ?? '';

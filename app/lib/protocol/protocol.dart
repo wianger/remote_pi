@@ -751,6 +751,14 @@ class ListModels extends ClientMessage {
   Map<String, dynamic> toJson() => {'type': 'list_models', 'id': id};
 }
 
+class GetCommands extends ClientMessage {
+  GetCommands({required this.id});
+  final String id;
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'commands_get', 'id': id};
+}
+
 class WorkspaceBrowse extends ClientMessage {
   WorkspaceBrowse({required this.id, this.path, this.showHidden = false});
   final String id;
@@ -817,6 +825,7 @@ sealed class ServerMessage {
       'action_error' => ActionError.fromJson(json),
       'context_usage' => ContextUsageReply.fromJson(json),
       'models_list' => ModelsList.fromJson(json),
+      'commands_list' => CommandsList.fromJson(json),
       'workspace_listing' => WorkspaceListing(
         inReplyTo: json['in_reply_to'] as String,
         directory: Map<String, dynamic>.from(json['directory'] as Map),
@@ -1480,6 +1489,42 @@ class ModelsList extends ServerMessage {
       current: cur is Map<String, dynamic> ? WireModel.fromJson(cur) : null,
     );
   }
+}
+
+class WireAgentCommand {
+  const WireAgentCommand({
+    required this.name,
+    required this.source,
+    this.description = '',
+  });
+
+  final String name;
+  final String source;
+  final String description;
+
+  factory WireAgentCommand.fromJson(Map<String, dynamic> json) =>
+      WireAgentCommand(
+        name: json['name'] as String,
+        source: json['source'] as String? ?? 'extension',
+        description: json['description'] as String? ?? '',
+      );
+}
+
+class CommandsList extends ServerMessage {
+  const CommandsList({required this.inReplyTo, required this.commands});
+  final String inReplyTo;
+  final List<WireAgentCommand> commands;
+
+  factory CommandsList.fromJson(Map<String, dynamic> json) => CommandsList(
+    inReplyTo: json['in_reply_to'] as String,
+    commands: (json['commands'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map>()
+        .map(
+          (entry) =>
+              WireAgentCommand.fromJson(Map<String, dynamic>.from(entry)),
+        )
+        .toList(growable: false),
+  );
 }
 
 class Bye extends ServerMessage {

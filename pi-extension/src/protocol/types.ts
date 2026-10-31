@@ -202,6 +202,7 @@ export type ClientMessage =
   | { type: "thinking_set"; id: string; level: ThinkingLevel }
   | { type: "context_usage_get"; id: string }
   | { type: "list_models"; id: string }
+  | { type: "commands_get"; id: string }
   // Plan/57 — interactive extension prompt response (ask_user via pi-ask).
   // Mirrors RpcExtensionUIResponse; the optional `ask` envelope carries
   // pi-ask's structured answer so multi/preview/notes survive the round-trip.
@@ -355,6 +356,15 @@ export type ServerMessage =
   | { type: "action_error"; in_reply_to: string; action: ActionName; error: string }
   | { type: "context_usage"; in_reply_to: string; tokens: number | null; context_window: number | null; percent: number | null; source: "pi" | "codex" }
   | { type: "models_list"; in_reply_to: string; models: WireModel[]; current?: WireModel }
+  | {
+      type: "commands_list";
+      in_reply_to: string;
+      commands: Array<{
+        name: string;
+        description?: string;
+        source: "extension" | "prompt" | "skill";
+      }>;
+    }
   // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
   // RpcExtensionUIRequest (select/confirm/input/editor/notify); the optional
   // `ask` envelope carries pi-ask's full question so the app renders richly.

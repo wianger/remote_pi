@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:app/config/dependencies.dart';
-import 'package:app/data/actions/actions_repository.dart' show ActionFailure;
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -24,7 +23,10 @@ import 'package:provider/provider.dart';
 /// from the *page* context here, before the sheet pushes its own route —
 /// the modal's builder context lives above the chat page's providers, so
 /// `context.read<ChatViewModel>()` inside the sheet would not resolve.
-Future<void> showQuickActionsSheet(BuildContext context) {
+Future<void> showQuickActionsSheet(
+  BuildContext context, {
+  bool compactOnOpen = false,
+}) {
   final messenger = ScaffoldMessenger.of(context);
   final chat = context.read<ChatViewModel>();
   // Captured to auto-close the sheet if the tablet's selected session changes
@@ -47,6 +49,7 @@ Future<void> showQuickActionsSheet(BuildContext context) {
           child: QuickActionsSheetBody(
             messenger: messenger,
             onSessionReset: chat.clearActiveSession,
+            compactOnOpen: compactOnOpen,
           ),
         ),
       );
@@ -64,11 +67,13 @@ class QuickActionsSheetBody extends StatefulWidget {
   /// mirror. Optional so tests can omit it; in the app it is wired to
   /// [ChatViewModel.clearActiveSession].
   final Future<void> Function()? onSessionReset;
+  final bool compactOnOpen;
 
   const QuickActionsSheetBody({
     super.key,
     required this.messenger,
     this.onSessionReset,
+    this.compactOnOpen = false,
   });
 
   @override
@@ -86,7 +91,19 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
       if (!mounted) return;
       final vm = context.read<QuickActionsViewModel>();
       _errorSub = vm.errors.listen(_showError);
+      if (widget.compactOnOpen) _compact(vm);
     });
+  }
+
+  Future<void> _compact(QuickActionsViewModel vm) async {
+    try {
+      await vm.compact();
+    } catch (_) {
+      // Errors are exposed through the sheet's toast stream. Keep the sheet
+      // open so the user can retry from the slash command.
+      return;
+    }
+    if (mounted) Navigator.of(context).pop();
   }
 
   void _showError(String message) =>
@@ -134,25 +151,7 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
             const SizedBox(height: 10),
             _DragHandle(),
             const SizedBox(height: 6),
-            const _SheetTitle(text: 'Quick actions'),
-            const _Divider(),
-            _ActionTile(
-              key: const Key('qa-compact'),
-              icon: LucideIcons.shrink,
-              label: 'Compact context',
-              subtitle: 'Summarize old turns to free room.',
-              busy: busyAction == ActionName.sessionCompact,
-              onTap: () => _onCompact(vm),
-            ),
-            const _Divider(),
-            _ActionTile(
-              key: const Key('qa-new-session'),
-              icon: LucideIcons.sparkles,
-              label: 'New session',
-              subtitle: 'Clears the conversation on the Pi.',
-              busy: busyAction == ActionName.sessionNew,
-              onTap: () => _onNewSession(vm),
-            ),
+            const _SheetTitle(text: 'Session'),
             const _Divider(),
             _ModelRow(
               currentLabel: vm.currentModel?.name ?? vm.currentModelName,
@@ -170,96 +169,6 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
         ),
       ),
     );
-  }
-
-  Future<void> _onCompact(QuickActionsViewModel vm) async {
-    try {
-      await vm.compact();
-    } catch (_) {
-      // Failure already surfaced as an error toast via `vm.errors`; leave
-      // the sheet open so the user can retry.
-      return;
-    }
-    // action_ok — just close the sheet (no success toast: compacting is a
-    // quiet, frequent action and the toast was noise).
-    if (!mounted) return;
-    Navigator.of(context).pop();
-  }
-
-  Future<void> _onNewSession(QuickActionsViewModel vm) async {
-    // Close the sheet up front — the confirm dialog stands on its own. We
-    // capture the root navigator BEFORE popping (our own context dies with
-    // the sheet) so the dialog is shown on the root, same as before. Toasts
-    // use `widget.messenger`, which outlives the sheet.
-    final rootNavigator = Navigator.of(context, rootNavigator: true);
-    Navigator.of(context).pop();
-    final confirm = await showDialog<bool>(
-      context: rootNavigator.context,
-      // Pop via the dialog's OWN context (dCtx) — Cancel/Start close the
-      // dialog regardless of which navigator it sits on.
-      builder: (dCtx) {
-        final colors = dCtx.colors;
-        return AlertDialog(
-          backgroundColor: colors.bg,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: colors.border),
-          ),
-          title: Text(
-            'Start a new session?',
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 14,
-              color: colors.text,
-            ),
-          ),
-          content: Text(
-            'This clears the Pi-side conversation history. The current '
-            'thread cannot be resumed.',
-            style: TextStyle(
-              fontFamily: kMonoFamily,
-              fontSize: 12,
-              color: colors.muted,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dCtx).pop(false),
-              child: Text(
-                'Cancel',
-                style: TextStyle(fontFamily: kMonoFamily, color: colors.muted),
-              ),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: colors.accent,
-                foregroundColor: colors.onAccent,
-              ),
-              onPressed: () => Navigator.of(dCtx).pop(true),
-              child: const Text(
-                'Start new',
-                style: TextStyle(fontFamily: kMonoFamily),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirm != true) return;
-    try {
-      await vm.newSession();
-    } on ActionFailure catch (e) {
-      // The sheet is already closed, so its `vm.errors` listener is gone —
-      // surface the failure toast directly through the captured messenger.
-      _showError(e.message);
-      return;
-    } catch (_) {
-      return;
-    }
-    // action_ok — wipe the local chat mirror so the UI reflects the fresh
-    // session. The sheet is already closed; no success toast (quiet action,
-    // the cleared chat is feedback enough).
-    await widget.onSessionReset?.call();
   }
 
   Future<void> _onThinking(
@@ -325,72 +234,6 @@ class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Divider(color: context.colors.border, height: 1, thickness: 1);
-}
-
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final bool busy;
-  final VoidCallback onTap;
-  const _ActionTile({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.busy,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return InkWell(
-      onTap: busy ? null : onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, color: colors.accent, size: 18),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 13,
-                      color: colors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: kMonoFamily,
-                      fontSize: 11,
-                      color: colors.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (busy)
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.6,
-                  color: colors.accent,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _ModelRow extends StatelessWidget {

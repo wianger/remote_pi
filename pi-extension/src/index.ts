@@ -4673,6 +4673,32 @@ export function _routeClientMessageFrom(
         msg,
       );
       break;
+    case "commands_get": {
+      let commands: Array<{
+        name: string;
+        description?: string;
+        source: "extension" | "prompt" | "skill";
+      }> = [];
+      try {
+        commands = _pi
+          .getCommands()
+          .filter((command) => command.name.trim().length > 0)
+          .map((command) => ({
+            name: command.name,
+            source: command.source,
+            ...(command.description ? { description: command.description } : {}),
+          }));
+      } catch {
+        // The app still keeps its built-in slash actions available when
+        // command discovery is unavailable.
+      }
+      sender.send({
+        type: "commands_list",
+        in_reply_to: msg.id,
+        commands,
+      });
+      break;
+    }
   }
 }
 

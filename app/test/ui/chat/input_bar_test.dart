@@ -1,6 +1,7 @@
 // Plan/28 Wave C — settings/quick-actions icon visibility in the
 // chat input bar.
 
+import 'package:app/domain/entities/agent_command.dart';
 import 'package:app/domain/session_state.dart';
 import 'package:app/ui/chat/widgets/input_bar.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,8 @@ void main() {
     required bool disabled,
     required bool streaming,
     VoidCallback? onOpenQuickActions,
+    void Function(String id, String raw)? onSlashCommand,
+    List<AgentCommand> agentCommands = const [],
   }) {
     return tester.pumpWidget(
       MaterialApp(
@@ -24,6 +27,8 @@ void main() {
             onSend: (_) {},
             onCancel: () {},
             onOpenQuickActions: onOpenQuickActions,
+            onSlashCommand: onSlashCommand,
+            agentCommands: agentCommands,
           ),
         ),
       ),
@@ -80,7 +85,64 @@ void main() {
     expectExpanded(tester);
   });
 
-  testWidgets('quick actions button hides (collapses) while typing', (
+  testWidgets('slash opens the built-in command palette and dispatches', (
+    tester,
+  ) async {
+    String? selectedId;
+    String? selectedRaw;
+    await pumpBar(
+      tester,
+      disabled: false,
+      streaming: false,
+      onSlashCommand: (id, raw) {
+        selectedId = id;
+        selectedRaw = raw;
+      },
+    );
+    await tester.enterText(find.byType(TextField), '/');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('slash-command-palette')), findsOneWidget);
+    expect(find.text('New session'), findsOneWidget);
+    await tester.tap(find.text('New session'));
+    await tester.pumpAndSettle();
+    expect(selectedId, 'new');
+    expect(selectedRaw, '/new');
+  });
+
+  testWidgets('slash palette exposes skills from the active agent', (
+    tester,
+  ) async {
+    String? selectedId;
+    String? selectedRaw;
+    await pumpBar(
+      tester,
+      disabled: false,
+      streaming: false,
+      agentCommands: const [
+        AgentCommand(
+          name: 'browser',
+          source: 'skill',
+          description: 'Operate a browser',
+        ),
+      ],
+      onSlashCommand: (id, raw) {
+        selectedId = id;
+        selectedRaw = raw;
+      },
+    );
+    await tester.enterText(find.byType(TextField), '/bro');
+    await tester.pumpAndSettle();
+
+    expect(find.text('/browser'), findsOneWidget);
+    expect(find.textContaining('Operate a browser'), findsOneWidget);
+    await tester.tap(find.text('/browser'));
+    await tester.pumpAndSettle();
+
+    expect(selectedId, 'agent');
+    expect(selectedRaw, '/browser');
+  });
+
+  testWidgets('quick actions button stays available while typing', (
     tester,
   ) async {
     await pumpBar(
@@ -90,9 +152,9 @@ void main() {
       onOpenQuickActions: () {},
     );
     await tester.enterText(find.byType(TextField), 'hello');
-    // Let the SizeTransition finish collapsing (it animates out over 320ms).
+    // Model/thinking stay reachable while a draft is present.
     await tester.pumpAndSettle();
-    expectCollapsed(tester);
+    expectExpanded(tester);
   });
 
   testWidgets('quick actions button hides (collapses) when disabled', (

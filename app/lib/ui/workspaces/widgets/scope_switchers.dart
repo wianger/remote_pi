@@ -10,12 +10,14 @@ class DeviceSwitcher extends StatelessWidget {
     required this.selected,
     required this.onSelected,
     this.enabled = true,
+    this.onRenameSelected,
   });
 
   final Map<String, String> devices;
   final String? selected;
   final ValueChanged<String> onSelected;
   final bool enabled;
+  final VoidCallback? onRenameSelected;
 
   Future<void> _pick(BuildContext context) async {
     final choice = await showModalBottomSheet<String>(
@@ -96,6 +98,7 @@ class DeviceSwitcher extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: enabled && devices.isNotEmpty ? () => _pick(context) : null,
+        onLongPress: enabled && selected != null ? onRenameSelected : null,
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
@@ -139,6 +142,17 @@ class DeviceSwitcher extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (onRenameSelected != null && selected != null)
+                IconButton(
+                  tooltip: 'Rename device',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: enabled ? onRenameSelected : null,
+                  icon: Icon(
+                    LucideIcons.pencil,
+                    size: 16,
+                    color: colors.muted2,
+                  ),
+                ),
               Icon(LucideIcons.chevronsUpDown, size: 17, color: colors.muted2),
             ],
           ),
@@ -153,17 +167,21 @@ class WorkspaceSwitcher extends StatelessWidget {
   const WorkspaceSwitcher({
     super.key,
     required this.workspaces,
+    this.labels = const {},
     required this.selected,
     required this.hasDevice,
     required this.onSelected,
+    this.onCreate,
     this.enabled = true,
   });
 
   final Map<String, String> workspaces;
+  final Map<String, String> labels;
   final String? selected;
   final bool hasDevice;
   final bool enabled;
   final ValueChanged<String> onSelected;
+  final VoidCallback? onCreate;
 
   String _name(String path) =>
       path
@@ -189,87 +207,125 @@ class WorkspaceSwitcher extends StatelessWidget {
             ),
           ),
         ),
-        PopupMenuButton<String>(
-          tooltip: 'Switch workspace',
-          enabled: enabled && workspaces.isNotEmpty,
-          position: PopupMenuPosition.under,
-          onSelected: onSelected,
-          itemBuilder: (_) => [
-            for (final entry in workspaces.entries)
-              PopupMenuItem(
-                value: entry.key,
-                height: 68,
-                child: Row(
-                  children: [
-                    Icon(LucideIcons.folder, size: 18, color: colors.muted2),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+        Row(
+          children: [
+            Expanded(
+              child: PopupMenuButton<String>(
+                tooltip: 'Switch workspace',
+                enabled: enabled && workspaces.isNotEmpty,
+                position: PopupMenuPosition.under,
+                onSelected: onSelected,
+                itemBuilder: (_) => [
+                  for (final entry in workspaces.entries)
+                    PopupMenuItem(
+                      value: entry.key,
+                      height: 68,
+                      child: Row(
                         children: [
-                          Text(
-                            _name(entry.value),
-                            style: context.typo.sansBody.copyWith(fontSize: 14),
+                          Icon(
+                            LucideIcons.layoutDashboard,
+                            size: 18,
+                            color: colors.muted2,
                           ),
-                          Text(
-                            entry.value,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.typo.monoSmall,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  labels[entry.key] ?? _name(entry.value),
+                                  style: context.typo.sansBody.copyWith(
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  entry.value,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: context.typo.monoSmall,
+                                ),
+                              ],
+                            ),
                           ),
+                          if (entry.key == selected) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              LucideIcons.check,
+                              size: 16,
+                              color: colors.accent,
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    if (entry.key == selected) ...[
-                      const SizedBox(width: 8),
-                      Icon(LucideIcons.check, size: 16, color: colors.accent),
-                    ],
-                  ],
-                ),
-              ),
-          ],
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              children: [
-                Icon(LucideIcons.folderOpen, size: 19, color: colors.muted2),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        path == null
-                            ? hasDevice
-                                  ? 'No workspaces yet'
-                                  : 'Choose a device first'
-                            : _name(path),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.typo.sansBody.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                      Icon(
+                        LucideIcons.layoutDashboard,
+                        size: 19,
+                        color: colors.muted2,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              path == null
+                                  ? hasDevice
+                                        ? 'No workspaces yet'
+                                        : 'Choose a device first'
+                                  : labels[selected] ?? _name(path),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.typo.sansBody.copyWith(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (path != null)
+                              Tooltip(
+                                message: path,
+                                child: Text(
+                                  path,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: context.typo.monoSmall,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      if (path != null)
-                        Tooltip(
-                          message: path,
-                          child: Text(
-                            path,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: context.typo.monoSmall,
-                          ),
-                        ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        LucideIcons.chevronDown,
+                        size: 16,
+                        color: colors.muted2,
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(LucideIcons.chevronDown, size: 16, color: colors.muted2),
-              ],
+              ),
             ),
-          ),
+            if (onCreate != null)
+              IconButton(
+                key: const Key('workspace-create'),
+                tooltip: 'New workspace',
+                onPressed: enabled ? onCreate : null,
+                icon: Icon(
+                  LucideIcons.folderPlus,
+                  size: 18,
+                  color: colors.accent,
+                ),
+              ),
+          ],
         ),
         Divider(height: 1, color: colors.border.withValues(alpha: .65)),
       ],

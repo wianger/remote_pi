@@ -87,7 +87,7 @@ void main() {
         prefs.selectedWorkspace,
         HomeViewModel.workspaceKey(peer.remoteEpk, '/code/beta'),
       );
-      await tester.tap(find.byKey(const ValueKey('session-menu-beta')));
+      await tester.longPress(find.text('Beta task'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Delete from phone'));
       await tester.pumpAndSettle();

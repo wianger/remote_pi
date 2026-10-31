@@ -5,8 +5,9 @@ import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/core/widgets/baya_glass_surface.dart';
 import 'package:app/ui/home/states/home_state.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
-import 'package:app/ui/workspaces/workspace_navigation.dart';
+import 'package:app/ui/workspaces/session_dialogs.dart';
 import 'package:app/ui/workspaces/widgets/scope_switchers.dart';
+import 'package:app/ui/workspaces/workspace_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -23,17 +24,18 @@ Future<void> _openSession(
     if (!context.mounted) return;
     final device = item.peer.nickname ?? item.peer.sessionName;
     final online = vm.isRoomLive(item.peer.remoteEpk, item.room.roomId);
+    final displayName = vm.displayNameOf(item);
     context.read<SessionSelection>().select(
       item.peer.remoteEpk,
       item.room.roomId,
-      item.displayName,
+      displayName,
       device,
       online,
     );
     close?.call();
     context.go(
       '/chat',
-      extra: {'title': item.displayName, 'device': device, 'online': online},
+      extra: {'title': displayName, 'device': device, 'online': online},
     );
   } catch (_) {
     if (context.mounted) {
@@ -86,6 +88,158 @@ Future<void> _deleteFromPhone(BuildContext context, HomeItem item) async {
       );
     }
   }
+}
+
+enum _SessionAction { rename, info, delete }
+
+Future<void> _showSessionActions(
+  BuildContext context,
+  HomeItem item, {
+  required String displayName,
+}) async {
+  final action = await showModalBottomSheet<_SessionAction>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(LucideIcons.pencil, size: 20),
+              title: const Text('Rename'),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_SessionAction.rename),
+            ),
+            ListTile(
+              leading: const Icon(LucideIcons.info, size: 20),
+              title: const Text('Info'),
+              onTap: () => Navigator.of(sheetContext).pop(_SessionAction.info),
+            ),
+            ListTile(
+              leading: Icon(
+                LucideIcons.trash2,
+                size: 20,
+                color: sheetContext.colors.error,
+              ),
+              title: Text(
+                'Delete from phone',
+                style: TextStyle(color: sheetContext.colors.error),
+              ),
+              onTap: () =>
+                  Navigator.of(sheetContext).pop(_SessionAction.delete),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  if (!context.mounted || action == null) return;
+  final vm = context.read<HomeViewModel>();
+  switch (action) {
+    case _SessionAction.rename:
+      final name = await showSessionRenameDialog(
+        context,
+        currentName: displayName,
+      );
+      if (name != null) await vm.renameSession(item, name);
+    case _SessionAction.info:
+      await showSessionInfoDialog(
+        context,
+        peer: item.peer,
+        room: item.room,
+        name: displayName,
+      );
+    case _SessionAction.delete:
+      await _deleteFromPhone(context, item);
+  }
+}
+
+Future<void> showCreateWorkspace(BuildContext context) async {
+  final vm = context.read<HomeViewModel>();
+  final device = vm.selectedDevice;
+  if (device == null) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Pair a device first.')));
+    return;
+  }
+  final name = TextEditingController();
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (sheetContext, setSheetState) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            18,
+            0,
+            18,
+            18 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('New workspace', style: sheetContext.typo.title),
+              const SizedBox(height: 8),
+              Text(
+                'A workspace groups sessions from any folders on this computer.',
+                style: sheetContext.typo.sansBody.copyWith(
+                  color: sheetContext.colors.muted,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: name,
+                autofocus: true,
+                onChanged: (_) => setSheetState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Workspace name',
+                  hintText: 'e.g. Remote Pi',
+                ),
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                onPressed: name.text.trim().isEmpty
+                    ? null
+                    : () async {
+                        await vm.createWorkspace(
+                          name: name.text,
+                          deviceEpk: device,
+                        );
+                        if (sheetContext.mounted) {
+                          Navigator.of(sheetContext).pop();
+                        }
+                      },
+                icon: const Icon(LucideIcons.layoutDashboard, size: 18),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Text('Create workspace'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  name.dispose();
+}
+
+Future<void> _startSession(BuildContext context, {VoidCallback? close}) async {
+  final vm = context.read<HomeViewModel>();
+  final workspace = vm.selectedWorkspace;
+  if (workspace == null) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Create a workspace first.')));
+    return;
+  }
+  close?.call();
+  await openNewSession(context, workspaceKey: workspace);
 }
 
 class SessionShell extends StatefulWidget {
@@ -234,16 +388,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                     color: colors.text,
                                   ),
                                 ),
-                                const Spacer(),
-                                if (widget.close != null)
-                                  IconButton(
-                                    onPressed: widget.close,
-                                    tooltip: 'Close sidebar',
-                                    icon: const Icon(
-                                      LucideIcons.panelLeftClose,
-                                      size: 19,
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
@@ -261,6 +405,24 @@ class _SessionSidebarState extends State<SessionSidebar> {
                               enabled: !_choosing,
                               onSelected: (value) =>
                                   _choose(() => vm.selectDevice(value)),
+                              onRenameSelected: vm.selectedDevice == null
+                                  ? null
+                                  : () async {
+                                      final epk = vm.selectedDevice!;
+                                      final peer = vm.devices[epk];
+                                      if (peer == null) return;
+                                      final name = await showDeviceRenameDialog(
+                                        context,
+                                        currentName:
+                                            peer.nickname ?? peer.sessionName,
+                                      );
+                                      if (name == null ||
+                                          name.trim().isEmpty ||
+                                          !context.mounted) {
+                                        return;
+                                      }
+                                      await vm.renameDevice(epk, name);
+                                    },
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -268,26 +430,32 @@ class _SessionSidebarState extends State<SessionSidebar> {
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: WorkspaceSwitcher(
                               key: const Key('workspace-selector'),
-                              workspaces: {
-                                for (final entry in workspaces.entries)
-                                  entry.key:
-                                      entry.value.room.cwd ?? 'Other sessions',
+                              workspaces: workspaces,
+                              labels: {
+                                for (final key in workspaces.keys)
+                                  key: vm.workspaceLabel(key) ?? key,
                               },
                               selected: vm.selectedWorkspace,
                               hasDevice: vm.selectedDevice != null,
                               enabled: !_choosing,
                               onSelected: (value) =>
                                   _choose(() => vm.selectWorkspace(value)),
+                              onCreate: () => showCreateWorkspace(context),
                             ),
                           ),
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                             child: FilledButton.icon(
-                              onPressed: () {
-                                widget.close?.call();
-                                openNewSession(context);
-                              },
-                              icon: const Icon(LucideIcons.plus, size: 17),
+                              onPressed: vm.selectedWorkspace == null
+                                  ? null
+                                  : () => _startSession(
+                                      context,
+                                      close: widget.close,
+                                    ),
+                              icon: const Icon(
+                                LucideIcons.messageSquarePlus,
+                                size: 17,
+                              ),
                               label: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 11),
                                 child: Text('New session'),
@@ -335,7 +503,8 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                         ? 'Pair a computer to get started.'
                                         : _query.isNotEmpty
                                         ? 'No matching sessions in this workspace.'
-                                        : 'No sessions on this device yet. Open a workspace to begin.',
+                                        : 'No sessions in this workspace yet. '
+                                              'Start one in any folder.',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: colors.muted,
@@ -356,6 +525,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                   for (final item in items)
                                     _SessionRow(
                                       item: item,
+                                      displayName: vm.displayNameOf(item),
                                       selected: selection.matches(
                                         item.peer.remoteEpk,
                                         item.room.roomId,
@@ -371,8 +541,11 @@ class _SessionSidebarState extends State<SessionSidebar> {
                                       onTap: _opening
                                           ? null
                                           : () => _open(item),
-                                      onDelete: () =>
-                                          _deleteFromPhone(context, item),
+                                      onLongPress: () => _showSessionActions(
+                                        context,
+                                        item,
+                                        displayName: vm.displayNameOf(item),
+                                      ),
                                     ),
                                 ],
                               ),
@@ -387,43 +560,58 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 indent: 20,
                 endIndent: 20,
               ),
-              ListTile(
-                dense: true,
-                leading: Icon(
-                  LucideIcons.scanLine,
-                  size: 18,
-                  color: colors.accent,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          widget.close?.call();
+                          context.push('/pair');
+                        },
+                        icon: Icon(
+                          LucideIcons.scanLine,
+                          size: 16,
+                          color: colors.accent,
+                        ),
+                        label: const Text(
+                          'Pair',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          side: BorderSide(color: colors.border),
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          widget.close?.call();
+                          context.push('/settings');
+                        },
+                        icon: Icon(
+                          LucideIcons.settings2,
+                          size: 16,
+                          color: colors.accent,
+                        ),
+                        label: const Text(
+                          'Settings',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          side: BorderSide(color: colors.border),
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                title: const Text(
-                  'Pair computer',
-                  style: TextStyle(fontSize: 13),
-                ),
-                onTap: () {
-                  widget.close?.call();
-                  context.push('/pair');
-                },
               ),
-              ListTile(
-                dense: true,
-                leading: Icon(
-                  LucideIcons.settings2,
-                  size: 18,
-                  color: colors.accent,
-                ),
-                title: const Text('Settings', style: TextStyle(fontSize: 13)),
-                trailing: Text(
-                  vm.isRelayConnected ? 'Connected' : 'Offline',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: vm.isRelayConnected ? colors.success : colors.muted,
-                  ),
-                ),
-                onTap: () {
-                  widget.close?.call();
-                  context.push('/settings');
-                },
-              ),
-              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -435,23 +623,25 @@ class _SessionSidebarState extends State<SessionSidebar> {
 class _SessionRow extends StatelessWidget {
   const _SessionRow({
     required this.item,
+    required this.displayName,
     required this.selected,
     required this.online,
     required this.working,
     this.onTap,
-    this.onDelete,
+    this.onLongPress,
   });
   final HomeItem item;
+  final String displayName;
   final bool selected, online, working;
   final VoidCallback? onTap;
-  final VoidCallback? onDelete;
+  final VoidCallback? onLongPress;
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final codex = item.room.name?.startsWith('Codex · ') == true;
     final title = codex
-        ? item.displayName.replaceFirst('Codex · ', '')
-        : item.displayName;
+        ? displayName.replaceFirst('Codex · ', '')
+        : displayName;
     final statusColor = working
         ? colors.working
         : online
@@ -484,43 +674,56 @@ class _SessionRow extends StatelessWidget {
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 5),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                codex ? 'Codex' : 'Pi',
-                style: TextStyle(fontSize: 11, color: colors.muted2),
+              Row(
+                children: [
+                  Text(
+                    codex ? 'Codex' : 'Pi',
+                    style: TextStyle(fontSize: 11, color: colors.muted2),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      working
+                          ? 'Working'
+                          : online
+                          ? 'Ready'
+                          : 'Offline',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: statusColor),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Container(
-                width: 5,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
+              if (item.room.cwd case final cwd?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    cwd,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.typo.monoSmall.copyWith(
+                      fontSize: 10,
+                      color: colors.muted,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                working
-                    ? 'Working'
-                    : online
-                    ? 'Ready'
-                    : 'Offline',
-                style: TextStyle(fontSize: 11, color: statusColor),
-              ),
             ],
           ),
         ),
-        trailing: PopupMenuButton<String>(
-          key: ValueKey('session-menu-${item.room.roomId}'),
-          tooltip: 'Session actions',
-          icon: Icon(LucideIcons.ellipsis, size: 18, color: colors.muted2),
-          onSelected: (_) => onDelete?.call(),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'delete', child: Text('Delete from phone')),
-          ],
-        ),
-        onLongPress: onDelete,
+        onLongPress: onLongPress,
         onTap: onTap,
       ),
     );
@@ -558,13 +761,6 @@ class SessionWelcome extends StatelessWidget {
                 tooltip: 'Sessions',
                 icon: const Icon(LucideIcons.panelLeft, size: 21),
               ),
-        actions: [
-          IconButton(
-            onPressed: () => openNewSession(context),
-            tooltip: 'New session',
-            icon: const Icon(LucideIcons.squarePen, size: 20),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Center(
@@ -587,16 +783,46 @@ class SessionWelcome extends StatelessWidget {
                   'Choose a device, a workspace, then a session.',
                   style: TextStyle(color: colors.muted2, fontSize: 15),
                 ),
-                const SizedBox(height: 28),
-                FilledButton.icon(
-                  onPressed: () => openNewSession(context),
-                  icon: const Icon(LucideIcons.plus, size: 18),
-                  label: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 13),
-                    child: Text('Open a workspace'),
-                  ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: vm.selectedDevice == null
+                            ? null
+                            : () => showCreateWorkspace(context),
+                        icon: const Icon(LucideIcons.folderPlus, size: 17),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 11),
+                          child: Text('New workspace'),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: vm.selectedWorkspace == null
+                            ? null
+                            : () => _startSession(context),
+                        icon: const Icon(
+                          LucideIcons.messageSquarePlus,
+                          size: 17,
+                        ),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 11),
+                          child: Text('New session'),
+                        ),
+                        style: FilledButton.styleFrom(
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 34),
+                const SizedBox(height: 28),
                 Row(
                   children: [
                     Text(
@@ -630,6 +856,7 @@ class SessionWelcome extends StatelessWidget {
                   for (final item in items)
                     _SessionRow(
                       item: item,
+                      displayName: vm.displayNameOf(item),
                       selected: false,
                       online: vm.isRoomLive(
                         item.peer.remoteEpk,
@@ -640,7 +867,11 @@ class SessionWelcome extends StatelessWidget {
                         item.room.roomId,
                       ),
                       onTap: () => _openSession(context, item),
-                      onDelete: () => _deleteFromPhone(context, item),
+                      onLongPress: () => _showSessionActions(
+                        context,
+                        item,
+                        displayName: vm.displayNameOf(item),
+                      ),
                     ),
               ],
             ),

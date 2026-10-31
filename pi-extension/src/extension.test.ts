@@ -391,6 +391,35 @@ describe("extension default export", () => {
     }
   });
 
+  test("commands_get publishes Pi extension, prompt and skill commands", () => {
+    const sender = { send: vi.fn() };
+    _setPiForTest({
+      getCommands: () => [
+        { name: "review", description: "Review a change", source: "extension" },
+        { name: "release", description: "Prepare a release", source: "prompt" },
+        { name: "browser", description: "Operate a browser", source: "skill" },
+      ],
+    });
+    try {
+      _routeClientMessageFrom(
+        sender as never,
+        { type: "commands_get", id: "commands-1" },
+        makeMockCtx(),
+      );
+      expect(sender.send).toHaveBeenCalledWith({
+        type: "commands_list",
+        in_reply_to: "commands-1",
+        commands: [
+          { name: "review", source: "extension", description: "Review a change" },
+          { name: "release", source: "prompt", description: "Prepare a release" },
+          { name: "browser", source: "skill", description: "Operate a browser" },
+        ],
+      });
+    } finally {
+      _setPiForTest(null);
+    }
+  });
+
   // README documents `/remote-pi rename <new>` but the verb had been dropped
   // from the TUI dispatcher (only the Cockpit `rename:` control path worked).
   // Re-adding it aligns the implementation with the documented surface.

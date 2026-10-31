@@ -197,7 +197,8 @@ class CompactionBubble extends StatelessWidget {
 
 class AssistantBubble extends StatelessWidget {
   final AssistantMsg message;
-  const AssistantBubble(this.message, {super.key});
+  final bool showCopy;
+  const AssistantBubble(this.message, {super.key, this.showCopy = true});
 
   @override
   Widget build(BuildContext context) {
@@ -211,27 +212,29 @@ class AssistantBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AgentMarkdown(message.text, selectable: true),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 30,
-            child: IconButton(
-              tooltip: 'Copy response',
-              padding: EdgeInsets.zero,
-              alignment: Alignment.centerLeft,
-              icon: Icon(
-                LucideIcons.copy,
-                size: 15,
-                color: context.colors.muted,
+          if (showCopy) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 30,
+              child: IconButton(
+                tooltip: 'Copy response',
+                padding: EdgeInsets.zero,
+                alignment: Alignment.centerLeft,
+                icon: Icon(
+                  LucideIcons.copy,
+                  size: 15,
+                  color: context.colors.muted,
+                ),
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: message.text));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Response copied')),
+                  );
+                },
               ),
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: message.text));
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Response copied')),
-                );
-              },
             ),
-          ),
+          ],
         ],
       ),
     );

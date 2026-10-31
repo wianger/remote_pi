@@ -1,0 +1,311 @@
+import 'package:app/ui/core/branding/app_brand.dart';
+import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/core/widgets/baya_glass_surface.dart';
+import 'package:app/ui/update/states/update_banner_state.dart';
+import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+/// About follows the same hierarchy as FlClash: identity, version, update
+/// action, then project resources. Settings keeps only configuration.
+class AboutPage extends StatelessWidget {
+  const AboutPage({super.key});
+
+  static final _project = Uri.parse('https://github.com/wianger/remote_pi');
+  static final _releases = Uri.parse(
+    'https://github.com/wianger/remote_pi/releases',
+  );
+
+  Future<void> _open(BuildContext context, Uri uri) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!context.mounted || ok) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not open the link.')));
+  }
+
+  Future<void> _download(BuildContext context) async {
+    final opened = await context.read<UpdateBannerViewModel>().download();
+    if (!context.mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not open the download. Open GitHub Releases instead.',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final vm = context.watch<UpdateBannerViewModel>();
+    final updateState = vm.state;
+    return Scaffold(
+      backgroundColor: colors.bg,
+      appBar: AppBar(
+        backgroundColor: colors.bg,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: Icon(LucideIcons.chevronLeft, size: 20, color: colors.text),
+          tooltip: 'Back',
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/home'),
+        ),
+        title: const Text('About'),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
+              children: [
+                const Center(child: AppMark(size: 104, tile: true)),
+                const SizedBox(height: 18),
+                Text(
+                  kAppName,
+                  textAlign: TextAlign.center,
+                  style: context.typo.title.copyWith(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.6,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.selection,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      child: Text(
+                        'v${vm.currentVersion} (${vm.currentBuildNumber})',
+                        style: context.typo.monoSmall.copyWith(
+                          color: colors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'A focused remote client for Pi and Codex sessions on your '
+                  'own computers.',
+                  textAlign: TextAlign.center,
+                  style: context.typo.sansBody.copyWith(
+                    color: colors.muted,
+                    height: 1.55,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Center(
+                  child: FilledButton.tonalIcon(
+                    key: const Key('check-github-updates'),
+                    onPressed: updateState is UpdateCheckInProgress
+                        ? null
+                        : vm.checkManually,
+                    icon: updateState is UpdateCheckInProgress
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(LucideIcons.refreshCw, size: 18),
+                    label: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        updateState is UpdateCheckInProgress
+                            ? 'Checking GitHub…'
+                            : 'Check for updates',
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                  ),
+                ),
+                if (updateState is UpdateCheckCurrent) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'You are using the latest development release.',
+                    textAlign: TextAlign.center,
+                    style: context.typo.sansBody.copyWith(
+                      color: colors.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                if (updateState is UpdateCheckFailed) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    updateState.message,
+                    textAlign: TextAlign.center,
+                    style: context.typo.sansBody.copyWith(
+                      color: colors.error,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+                if (updateState is UpdateBannerVisible) ...[
+                  const SizedBox(height: 16),
+                  BayaGlassSurface(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Version ${updateState.info.version} '
+                            '(${updateState.info.buildNumber}) is available.',
+                            style: context.typo.sansBody.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (updateState.info.notes.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              updateState.info.notes,
+                              maxLines: 12,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.typo.sansBody.copyWith(
+                                color: colors.muted,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            key: const Key('download-github-apk'),
+                            onPressed: () => _download(context),
+                            icon: const Icon(LucideIcons.download, size: 18),
+                            label: const Text('Download APK'),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Your pairings and settings are kept when Android '
+                            'installs the update.',
+                            style: context.typo.sansBody.copyWith(
+                              color: colors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 28),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 8),
+                  child: Text(
+                    'More',
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                BayaGlassSurface(
+                  child: Column(
+                    children: [
+                      _LinkTile(
+                        icon: LucideIcons.code,
+                        title: 'Project',
+                        subtitle: 'github.com/wianger/remote_pi',
+                        onTap: () => _open(context, _project),
+                      ),
+                      Divider(height: 1, color: colors.border),
+                      _LinkTile(
+                        icon: LucideIcons.tag,
+                        title: 'Releases',
+                        subtitle: 'Android development builds',
+                        onTap: () => _open(context, _releases),
+                      ),
+                      Divider(height: 1, color: colors.border),
+                      _LinkTile(
+                        icon: LucideIcons.fileText,
+                        title: 'Open-source licenses',
+                        subtitle: 'Fonts and package notices',
+                        onTap: () => showLicensePage(
+                          context: context,
+                          applicationName: kAppName,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 8),
+                  child: Text(
+                    'Built by',
+                    style: context.typo.sansBody.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                BayaGlassSurface(
+                  child: ListTile(
+                    leading: const AppMark(size: 42, tile: true),
+                    title: const Text('wianger'),
+                    subtitle: const Text('Remote Pi development'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LinkTile extends StatelessWidget {
+  const _LinkTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return ListTile(
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: colors.selection,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Icon(icon, size: 19, color: colors.text),
+      ),
+      title: Text(title),
+      subtitle: Text(
+        subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: context.typo.monoSmall.copyWith(color: colors.muted),
+      ),
+      trailing: Icon(LucideIcons.arrowUpRight, size: 17, color: colors.muted),
+      onTap: onTap,
+    );
+  }
+}

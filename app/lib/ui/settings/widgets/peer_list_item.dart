@@ -6,7 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 /// One row in the paired-peers list (Settings).
 ///
 /// - Swipe end-to-start → [onRevokeRequested]. Caller confirms + deletes.
-/// - Pencil icon → [onEditNickname].
+/// - Pencil icon → [onEditNickname] when supplied.
 /// - Title is `peer.nickname` when set, otherwise `peer.sessionName`. When
 ///   a nickname is present, the original session name appears beneath it
 ///   in muted style.
@@ -16,13 +16,13 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 class PeerListItem extends StatelessWidget {
   final PeerRecord peer;
   final Future<bool> Function() onRevokeRequested;
-  final VoidCallback onEditNickname;
+  final VoidCallback? onEditNickname;
 
   const PeerListItem({
     super.key,
     required this.peer,
     required this.onRevokeRequested,
-    required this.onEditNickname,
+    this.onEditNickname,
   });
 
   /// Platform hint for the secondary line (Mac / Linux / Windows / Pi
@@ -90,10 +90,7 @@ class PeerListItem extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       peer.sessionName,
-                      style: TextStyle(
-                        color: colors.muted2,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: colors.muted2, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
@@ -118,12 +115,13 @@ class PeerListItem extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              tooltip: 'Edit nickname',
-              icon: const Icon(LucideIcons.pencil, size: 18),
-              color: colors.muted2,
-              onPressed: onEditNickname,
-            ),
+            if (onEditNickname != null)
+              IconButton(
+                tooltip: 'Edit nickname',
+                icon: const Icon(LucideIcons.pencil, size: 18),
+                color: colors.muted2,
+                onPressed: onEditNickname,
+              ),
           ],
         ),
       ),

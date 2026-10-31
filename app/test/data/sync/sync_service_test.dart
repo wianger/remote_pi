@@ -64,7 +64,10 @@ void main() {
   Future<
     ({ConnectionManager conn, _FakeChannel ch, SyncService sync, String epk})
   >
-  setup({Duration pendingSendTimeout = const Duration(seconds: 20)}) async {
+  setup({
+    Duration pendingSendTimeout = const Duration(seconds: 20),
+    String room = 'main',
+  }) async {
     final ch = _FakeChannel();
     final conn = ConnectionManager(
       factory: (_, _) async => ch,
@@ -83,6 +86,7 @@ void main() {
       PeerRecord(
         remoteEpk: epk,
         sessionName: 'Pi',
+        roomId: room,
         relayUrl: 'ws://localhost',
         pairedAt: '2026-01-01T00:00:00Z',
       ),
@@ -91,8 +95,8 @@ void main() {
     return (conn: conn, ch: ch, sync: sync, epk: epk);
   }
 
-  List<MessageRecord> messages(String epk) {
-    final box = LocalBoxes().openMsgsBox(epk, 'main');
+  List<MessageRecord> messages(String epk, {String room = 'main'}) {
+    final box = LocalBoxes().openMsgsBox(epk, room);
     final out = [
       for (final v in box.values)
         MessageRecord.fromJson((v as Map).cast<String, dynamic>()),
@@ -100,6 +104,26 @@ void main() {
     out.sort((a, b) => a.seq.compareTo(b.seq));
     return out;
   }
+
+  test('daemon and interactive endpoints share one live writer', () async {
+    const daemon = 'pi_abcdefghijklmnop_d_ABCDEFGHIJKL';
+    const terminal = 'pi_abcdefghijklmnop_i_MNOPQRSTUVWX';
+    final s = await setup(room: daemon);
+    s.ch.push(UserInput(id: 'u', text: 'continue on the desktop'));
+    await _settle();
+
+    s.conn.switchRoom(terminal);
+    s.ch.push(AgentChunk(inReplyTo: 'u', delta: 'Resumed reply'));
+    s.ch.push(AgentDone(inReplyTo: 'u'));
+    await _settle();
+
+    final rows = messages(s.epk, room: daemon);
+    expect(rows, hasLength(2));
+    expect(rows.first.text, 'continue on the desktop');
+    expect(rows.last.text, 'Resumed reply');
+    s.conn.dispose();
+    s.sync.dispose();
+  });
 
   test(
     'Codex reconnect replaces the live cursor and saves one complete reply',

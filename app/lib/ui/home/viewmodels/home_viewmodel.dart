@@ -95,10 +95,146 @@ class HomeViewModel extends ViewModel<HomeState> {
       .where((item) => toStandardB64(item.peer.remoteEpk) == selectedDevice)
       .toList();
 
-  Map<String, HomeItem> get workspaces => {
-    for (final item in deviceItems)
-      workspaceKey(item.peer.remoteEpk, item.room.cwd): item,
-  };
+  static String _normalizePath(String path) {
+    var value = path.trim().replaceAll('\\', '/');
+    while (value.length > 1 && value.endsWith('/')) {
+      value = value.substring(0, value.length - 1);
+    }
+    return value;
+  }
+
+  static bool _isInside(String path, String root) {
+    final p = _normalizePath(path).toLowerCase();
+    final r = _normalizePath(root).toLowerCase();
+    return p == r || p.startsWith('$r/');
+  }
+
+  /// Older development builds used a folder path as the workspace identity.
+  /// Keep those names working while treating newly-created workspaces as
+  /// logical containers that can hold sessions from unrelated folders.
+  String? _legacyWorkspaceRootFor(HomeItem item) {
+    final cwd = item.room.cwd;
+    if (cwd == null || cwd.isEmpty) return null;
+    String? best;
+    for (final candidate in deviceItems) {
+      final root = candidate.room.cwd;
+      if (root == null || root.isEmpty) continue;
+      final key = workspaceKey(item.peer.remoteEpk, root);
+      if (!_prefs.isCustomWorkspace(key)) continue;
+      if (!_isInside(cwd, root)) continue;
+      if (best == null ||
+          _normalizePath(root).length > _normalizePath(best).length) {
+        best = root;
+      }
+    }
+    return best ?? cwd;
+  }
+
+  String? workspaceKeyFor(HomeItem item) {
+    final epk = item.peer.remoteEpk;
+    final explicit = _prefs.workspaceForSession(epk, item.room.roomId);
+    if (explicit != null) return explicit;
+    final legacyRoot = _legacyWorkspaceRootFor(item);
+    if (legacyRoot == null) return null;
+    return workspaceKey(epk, legacyRoot);
+  }
+
+  String? workspaceLabel(String? key) {
+    if (key == null) return null;
+    final custom = _prefs.workspaceName(key);
+    if (custom != null) return custom;
+    final raw = key.substring(key.indexOf(':') + 1);
+    final parts = _normalizePath(
+      raw,
+    ).split('/').where((part) => part.isNotEmpty).toList();
+    return parts.isEmpty ? raw : parts.last;
+  }
+
+  Future<String> createWorkspace({
+    required String name,
+    required String deviceEpk,
+  }) async {
+    if (name.trim().isEmpty) {
+      throw ArgumentError('A workspace needs a name.');
+    }
+    final device = toStandardB64(deviceEpk);
+    final key = '$device:workspace:${DateTime.now().microsecondsSinceEpoch}';
+    await _prefs.setWorkspaceName(key, name);
+    await _prefs.setSelectedWorkspace(key);
+    return key;
+  }
+
+  Future<void> assignSessionToWorkspace(HomeItem item, String workspaceKey) =>
+      _prefs.setSessionWorkspace(
+        item.peer.remoteEpk,
+        item.room.roomId,
+        workspaceKey,
+      );
+
+  Future<void> assignSessionRoomToWorkspace(
+    String deviceEpk,
+    String roomId,
+    String workspaceKey,
+  ) => _prefs.setSessionWorkspace(deviceEpk, roomId, workspaceKey);
+
+  /// Name shown in lists and the chat header. A phone-local rename wins over
+  /// the room name announced by the computer.
+  String displayNameOf(HomeItem item) =>
+      _prefs.sessionName(item.peer.remoteEpk, item.room.roomId) ??
+      item.displayName;
+
+  Future<void> renameSession(HomeItem item, String? name) =>
+      _prefs.setSessionName(item.peer.remoteEpk, item.room.roomId, name);
+
+  /// Rename the paired computer from the sidebar device card.
+  Future<void> renameDevice(String epk, String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final peers = switch (state) {
+      HomeList(:final peers) => peers,
+      _ => const <PeerRecord>[],
+    };
+    PeerRecord? target;
+    for (final peer in peers) {
+      if (toStandardB64(peer.remoteEpk) == toStandardB64(epk)) {
+        target = peer;
+        break;
+      }
+    }
+    if (target == null) return;
+    await _storage.savePeer(target.copyWith(nickname: trimmed));
+  }
+
+  /// Workspace id → the secondary line shown in the workspace picker.
+  Map<String, String> get workspaces {
+    final result = <String, String>{};
+    final device = selectedDevice;
+    if (device == null) return result;
+    for (final key in _prefs.customWorkspaceKeysForDevice(device)) {
+      result[key] = '';
+    }
+    for (final item in deviceItems) {
+      final key = workspaceKeyFor(item);
+      if (key != null) result.putIfAbsent(key, () => item.room.cwd ?? '');
+    }
+    for (final key in result.keys.toList()) {
+      final items = _itemsInWorkspace(key);
+      final folders = items
+          .map((item) => item.room.cwd)
+          .whereType<String>()
+          .toSet();
+      result[key] = items.isEmpty
+          ? 'No sessions yet'
+          : '${items.length} ${items.length == 1 ? 'session' : 'sessions'}'
+                '${folders.length > 1 ? ' · ${folders.length} folders' : ''}';
+    }
+    return result;
+  }
+
+  String? workspaceSubtitle(String key) {
+    if (_prefs.isCustomWorkspace(key)) return workspaces[key];
+    return key.substring(key.indexOf(':') + 1);
+  }
 
   String? get selectedWorkspace {
     final choices = workspaces;
@@ -113,20 +249,40 @@ class HomeViewModel extends ViewModel<HomeState> {
                   ? null
                   : toStandardB64(_prefs.selectedPeerEpk!)) &&
           item.room.roomId == _prefs.selectedRoomId) {
-        return workspaceKey(item.peer.remoteEpk, item.room.cwd);
+        return workspaceKeyFor(item);
       }
     }
     return choices.keys.firstOrNull;
   }
 
+  List<HomeItem> _itemsInWorkspace(String workspaceKey) {
+    final separator = workspaceKey.indexOf(':');
+    if (separator < 1) return const [];
+    final epk = workspaceKey.substring(0, separator);
+    final raw = workspaceKey.substring(separator + 1);
+    final custom = _prefs.isCustomWorkspace(workspaceKey);
+    return deviceItems.where((item) {
+      if (toStandardB64(item.peer.remoteEpk) != epk) return false;
+      final explicit = _prefs.workspaceForSession(
+        item.peer.remoteEpk,
+        item.room.roomId,
+      );
+      if (explicit != null) return explicit == workspaceKey;
+      if (!custom) {
+        final cwd = item.room.cwd;
+        return cwd != null && _isInside(cwd, raw);
+      }
+      // A path-shaped custom workspace is a legacy folder workspace.
+      final cwd = item.room.cwd;
+      final logicalWorkspace = raw.startsWith('workspace:');
+      return cwd != null && !logicalWorkspace && _isInside(cwd, raw);
+    }).toList();
+  }
+
   List<HomeItem> get workspaceItems {
     final selected = selectedWorkspace;
-    return deviceItems
-        .where(
-          (item) =>
-              workspaceKey(item.peer.remoteEpk, item.room.cwd) == selected,
-        )
-        .toList();
+    if (selected == null) return const [];
+    return _itemsInWorkspace(selected);
   }
 
   Future<void> selectDevice(String epk) async {
@@ -302,7 +458,10 @@ class HomeViewModel extends ViewModel<HomeState> {
         .roomsFor(epk)
         .where((r) => r.roomId == effectiveRoom)
         .firstOrNull;
-    if (metadata != null) {
+    final explicitWorkspace = _prefs.workspaceForSession(epk, effectiveRoom);
+    if (explicitWorkspace != null) {
+      await _prefs.setSelectedWorkspace(explicitWorkspace);
+    } else if (metadata != null) {
       await _prefs.setSelectedWorkspace(workspaceKey(epk, metadata.cwd));
     }
     await _prefs.restoreSession(epk, effectiveRoom);

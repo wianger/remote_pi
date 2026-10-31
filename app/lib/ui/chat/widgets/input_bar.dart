@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app/data/images/image_picker_service.dart';
 import 'package:app/domain/session_state.dart';
+import 'package:app/domain/entities/agent_command.dart';
 import 'package:app/ui/chat/attachment/states/attachment_state.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:app/ui/chat/voice/states/voice_input_state.dart';
@@ -41,6 +42,14 @@ class InputBar extends StatefulWidget {
   final void Function(String text) onSend;
   final VoidCallback? onCancel;
   final VoidCallback? onOpenQuickActions;
+
+  /// Slash-command palette selection. [id] is a built-in action; [raw] keeps
+  /// the full `/text` so the host can forward unknown commands to the agent.
+  final void Function(String id, String raw)? onSlashCommand;
+  final VoidCallback? onSlashOpen;
+  final List<AgentCommand> agentCommands;
+  final bool agentCommandsLoading;
+  final String? agentCommandsError;
   final VoidCallback? onStartAudio;
   final String agentLabel;
   final String modelLabel;
@@ -71,6 +80,11 @@ class InputBar extends StatefulWidget {
     required this.onSend,
     this.onCancel,
     this.onOpenQuickActions,
+    this.onSlashCommand,
+    this.onSlashOpen,
+    this.agentCommands = const [],
+    this.agentCommandsLoading = false,
+    this.agentCommandsError,
     this.onStartAudio,
     this.agentLabel = 'your agent',
     this.modelLabel = 'Session',
@@ -100,6 +114,7 @@ class _InputBarState extends State<InputBar> {
   // handling would consume Enter before an ancestor ever sees it.
   late final FocusNode _focusNode = FocusNode(onKeyEvent: _onComposerKey);
   bool _empty = true;
+  String? _slashQuery;
   bool _cancelArmed = false;
   // True while the hold-to-talk gesture is active. Lets `_beginVoice` tell
   // whether the user is still holding once `startRecording` resolves — if not
@@ -129,18 +144,28 @@ class _InputBarState extends State<InputBar> {
 
   void _onTranscript(String text) {
     if (!mounted || text.isEmpty) return; // empty → no-op (#12)
-    // The field is empty by construction (mic only shows when empty), so we
-    // replace rather than concatenate (#non-objetivo: no merge).
-    _controller.text = text;
-    _controller.selection = TextSelection.collapsed(offset: text.length);
+    // Voice stays available while typing: append the transcript after any
+    // existing draft instead of replacing the user's work.
+    final existing = _controller.text.trimRight();
+    final next = existing.isEmpty ? text : '$existing $text';
+    _controller.text = next;
+    _controller.selection = TextSelection.collapsed(offset: next.length);
   }
 
   void _onTextChange() {
-    final next = _controller.text.trim().isEmpty;
-    if (next == _empty) return;
+    final text = _controller.text;
+    final next = text.trim().isEmpty;
+    final trimmed = text.trimLeft();
+    final slash = trimmed.startsWith('/') && !trimmed.contains(' ')
+        ? trimmed.substring(1).toLowerCase()
+        : null;
+    final enteredSlash = slash != null && _slashQuery == null;
+    if (next == _empty && slash == _slashQuery) return;
     setState(() {
       _empty = next;
+      _slashQuery = slash;
     });
+    if (enteredSlash) widget.onSlashOpen?.call();
   }
 
   @override
@@ -317,13 +342,9 @@ class _InputBarState extends State<InputBar> {
         !visionBlocked &&
         !hasImage;
 
+    // Model/thinking stay reachable while a draft or image is present.
     final showQuickActions =
-        _empty &&
-        !hasImage &&
-        canInteract &&
-        !widget.streaming &&
-        !showStrip &&
-        hasQuickActions;
+        canInteract && !widget.streaming && !showStrip && hasQuickActions;
 
     // During a working turn with typed content, the main action sends steering;
     // keep a compact Stop affordance beside it so cancellation remains reachable.
@@ -346,6 +367,17 @@ class _InputBarState extends State<InputBar> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_slashQuery != null && canInteract && !showStrip)
+                    _SlashPalette(
+                      query: _slashQuery!,
+                      agentCommands: widget.agentCommands,
+                      loading: widget.agentCommandsLoading,
+                      error: widget.agentCommandsError,
+                      onSelected: (id, raw) {
+                        _controller.clear();
+                        widget.onSlashCommand?.call(id, raw);
+                      },
+                    ),
                   if (hasImage)
                     _AttachmentPreview(
                       image: attachState.image,
@@ -406,8 +438,7 @@ class _InputBarState extends State<InputBar> {
                           ),
                         ),
                       ),
-                      if (!hasContent &&
-                          !widget.streaming &&
+                      if (!widget.streaming &&
                           !voiceUnsupported &&
                           (widget.voice != null ||
                               widget.onStartAudio != null)) ...[
@@ -972,4 +1003,183 @@ class _ComposerActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SlashCommand {
+  const _SlashCommand(this.id, this.label, this.hint, this.icon);
+  final String id;
+  final String label;
+  final String hint;
+  final IconData icon;
+}
+
+class _SlashPalette extends StatelessWidget {
+  const _SlashPalette({
+    required this.query,
+    required this.agentCommands,
+    required this.loading,
+    required this.error,
+    required this.onSelected,
+  });
+
+  final String query;
+  final List<AgentCommand> agentCommands;
+  final bool loading;
+  final String? error;
+  final void Function(String id, String raw) onSelected;
+
+  static const _commands = [
+    _SlashCommand('new', 'New session', '/new', LucideIcons.squarePen),
+    _SlashCommand(
+      'workspace',
+      'New workspace',
+      '/workspace',
+      LucideIcons.folderPlus,
+    ),
+    _SlashCommand('model', 'Switch model', '/model', LucideIcons.cpu),
+    _SlashCommand('thinking', 'Thinking level', '/thinking', LucideIcons.brain),
+    _SlashCommand('compact', 'Compact context', '/compact', LucideIcons.shrink),
+    _SlashCommand('context', 'Context usage', '/context', LucideIcons.activity),
+    _SlashCommand('attach', 'Attach image', '/attach', LucideIcons.paperclip),
+    _SlashCommand('settings', 'Settings', '/settings', LucideIcons.settings2),
+    _SlashCommand('pair', 'Pair computer', '/pair', LucideIcons.scanLine),
+    _SlashCommand('about', 'About', '/about', LucideIcons.info),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = query.trim().toLowerCase();
+    final matches = _commands
+        .where(
+          (c) =>
+              normalized.isEmpty ||
+              c.id.startsWith(normalized) ||
+              c.label.toLowerCase().contains(normalized),
+        )
+        .toList();
+    final agentMatches = agentCommands
+        .where(
+          (command) =>
+              normalized.isEmpty ||
+              command.name.toLowerCase().startsWith(normalized) ||
+              command.description.toLowerCase().contains(normalized),
+        )
+        .toList();
+    final colors = context.colors;
+    return Container(
+      key: const Key('slash-command-palette'),
+      margin: const EdgeInsets.only(bottom: 8),
+      constraints: const BoxConstraints(maxHeight: 268),
+      decoration: BoxDecoration(
+        color: colors.inputFill,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          children: [
+            for (final command in matches)
+              ListTile(
+                dense: true,
+                leading: Icon(command.icon, size: 17, color: colors.muted2),
+                title: Text(
+                  command.label,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                subtitle: Text(
+                  command.hint,
+                  style: context.typo.monoSmall.copyWith(color: colors.muted),
+                ),
+                onTap: () => onSelected(command.id, command.hint),
+              ),
+            if (agentMatches.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                child: Text(
+                  'Agent commands & skills',
+                  style: context.typo.sansBody.copyWith(
+                    color: colors.muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              for (final command in agentMatches)
+                ListTile(
+                  dense: true,
+                  leading: Icon(
+                    command.source == 'skill'
+                        ? LucideIcons.sparkles
+                        : LucideIcons.terminal,
+                    size: 17,
+                    color: colors.accent,
+                  ),
+                  title: Text(
+                    '/${command.name}',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  subtitle: Text(
+                    command.description.isEmpty
+                        ? _sourceLabel(command.source)
+                        : '${_sourceLabel(command.source)} · ${command.description}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.typo.sansBody.copyWith(
+                      color: colors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                  onTap: () => onSelected('agent', '/${command.name}'),
+                ),
+            ] else if (loading)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Text(
+                  error!,
+                  style: context.typo.sansBody.copyWith(
+                    color: colors.error,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            Divider(height: 1, color: colors.border),
+            ListTile(
+              dense: true,
+              leading: Icon(
+                LucideIcons.terminal,
+                size: 17,
+                color: colors.accent,
+              ),
+              title: Text(
+                normalized.isEmpty
+                    ? 'Send a slash command to the agent'
+                    : 'Send /$normalized to the agent',
+                style: const TextStyle(fontSize: 13),
+              ),
+              onTap: () => onSelected('agent', '/$normalized'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _sourceLabel(String source) => switch (source) {
+    'skill' => 'Skill',
+    'prompt' => 'Prompt',
+    _ => 'Agent command',
+  };
 }

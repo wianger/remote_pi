@@ -84,7 +84,7 @@ void main() {
       );
       expect(find.text('Desktop one'), findsOneWidget);
       // Bottom actions stay pinned and tappable below the scroll area.
-      expect(find.text('Pair computer'), findsOneWidget);
+      expect(find.text('Pair'), findsOneWidget);
       expect(find.text('Settings'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       vm.dispose();
@@ -180,7 +180,10 @@ void main() {
       expect(find.text('Laptop task'), findsOneWidget);
       expect(find.text('Desktop notes'), findsNothing);
       expect(vm.workspaces.length, 1);
-      expect(vm.workspaces.values.single.peer.remoteEpk, laptop.remoteEpk);
+      expect(
+        vm.workspaces.keys.single,
+        HomeViewModel.workspaceKey(laptop.remoteEpk, '/code/shared'),
+      );
       await choose('device-selector', 'Empty device');
       expect(vm.workspaceItems, isEmpty);
       expect(vm.workspaces, isEmpty);
@@ -204,6 +207,81 @@ void main() {
       await tester.pump();
     },
   );
+
+  test('a logical workspace groups sessions from unrelated folders', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final pc = phoneTestPeer();
+    final prefs = Preferences();
+    await prefs.load();
+    final channel = PhoneTestChannel();
+    final storage = PhoneTestStorage([pc]);
+    final conn = ConnectionManager(
+      storage: storage,
+      factory: (_, _) async => channel,
+      emitDebounce: Duration.zero,
+    );
+    conn.adopt(channel, pc);
+    final vm = HomeViewModel(storage, prefs, conn);
+    channel.control.add(
+      RoomAnnounced(
+        peer: pc.remoteEpk,
+        roomId: 'room-alpha',
+        name: 'API',
+        cwd: '/code/api',
+        startedAt: 1,
+      ),
+    );
+    channel.control.add(
+      RoomAnnounced(
+        peer: pc.remoteEpk,
+        roomId: 'room-beta',
+        name: 'Mobile',
+        cwd: '/code/mobile',
+        startedAt: 1,
+      ),
+    );
+    await pumpEventQueue();
+    final alpha = vm.allItems.firstWhere(
+      (item) => item.room.roomId == 'room-alpha',
+    );
+    final beta = vm.allItems.firstWhere(
+      (item) => item.room.roomId == 'room-beta',
+    );
+
+    final workspace = await vm.createWorkspace(
+      name: 'Release train',
+      deviceEpk: pc.remoteEpk,
+    );
+    await vm.assignSessionToWorkspace(alpha, workspace);
+    await vm.assignSessionToWorkspace(beta, workspace);
+    await pumpEventQueue();
+
+    expect(vm.selectedWorkspace, workspace);
+    expect(
+      vm.workspaceItems.map((item) => item.room.roomId),
+      unorderedEquals(['room-alpha', 'room-beta']),
+    );
+    expect(vm.workspaces[workspace], '2 sessions · 2 folders');
+
+    await vm.openSession(pc.remoteEpk, roomId: 'room-alpha');
+    expect(
+      vm.selectedWorkspace,
+      workspace,
+      reason: 'opening a grouped session must keep its logical workspace',
+    );
+
+    final restored = Preferences();
+    await restored.load();
+    expect(restored.workspaceName(workspace), 'Release train');
+    expect(restored.workspaceForSession(pc.remoteEpk, 'room-alpha'), workspace);
+    expect(restored.workspaceForSession(pc.remoteEpk, 'room-beta'), workspace);
+
+    restored.dispose();
+    vm.dispose();
+    conn.dispose();
+    prefs.dispose();
+    await channel.disposeStreams();
+  });
 
   test(
     'migrates combined workspace and serializes per-device selections',

@@ -105,6 +105,23 @@ void main() {
     expect(find.byIcon(LucideIcons.arrowUp600), findsOneWidget);
   });
 
+  testWidgets('voice stays available while typing and appends the transcript', (
+    tester,
+  ) async {
+    await pumpBar(tester);
+    await tester.enterText(find.byType(TextField), 'draft');
+    await tester.pump();
+    expect(find.byIcon(LucideIcons.mic600), findsOneWidget);
+
+    final gesture = await startHold(tester);
+    await gesture.up();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('draft hello from voice'), findsOneWidget);
+  });
+
   testWidgets('slide-to-cancel discards — field stays empty, mic returns', (
     tester,
   ) async {
