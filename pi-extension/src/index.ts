@@ -74,7 +74,12 @@ import {
   createExtensionUiBridge,
   type ExtensionUiBridge,
 } from "./extension_ui_bridge.js";
-import { handleContextUsage, type ContextUsageReader } from "./context_usage.js";
+import {
+  contextUsageSnapshot,
+  handleContextUsage,
+  type ContextUsageReader,
+  type ContextUsageSnapshot,
+} from "./context_usage.js";
 import { roomIdForPiSession } from "./rooms.js";
 import { registerAgentTools } from "./session/tools.js";
 import { formatPeerInventory } from "./session/peer_inventory.js";
@@ -1113,6 +1118,10 @@ let _pi: ExtensionAPI | null = null;
 let _extensionUiBridge: ExtensionUiBridge | null = null;
 
 let _stopAutoListener: (() => void) | null = null;
+// Last reliable Pi usage captured from the session context. Some event
+// callbacks expose the model window but not token usage, so retaining this
+// avoids telling the phone "not reported" after a persisted turn.
+let _lastPiContextUsage: ContextUsageSnapshot = contextUsageSnapshot(null, null);
 
 // Cached keypair (loaded once, reused across start/pair cycles)
 let _cachedEd25519: Ed25519Keypair | null = null;
@@ -1172,6 +1181,22 @@ function _restoreSessionHistory(ctx: ExtensionContext): void {
     }
   }
   _messageBuffer = restored;
+}
+
+function _capturePiContextUsage(ctx: ContextUsageReader | null): ContextUsageSnapshot {
+  let usage: ReturnType<NonNullable<ContextUsageReader["getContextUsage"]>>;
+  let window: number | undefined;
+  try {
+    usage = ctx?.getContextUsage?.();
+    window = usage?.contextWindow ?? ctx?.model?.contextWindow;
+  } catch {
+    // A stale event context must not erase a usable persisted snapshot.
+  }
+  const next = contextUsageSnapshot(usage?.tokens, window);
+  if (next.tokens !== null || next.context_window !== null) {
+    _lastPiContextUsage = next;
+  }
+  return _lastPiContextUsage;
 }
 
 // ── Session sync limit (mirror cache cap) ─────────────────────────────────────
@@ -2330,10 +2355,12 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   // SDK fires model_select on settings load + every user switch. We cache the
   // friendly name and broadcast a room_meta_update so the relay can fan it
   // out to subscribed apps without needing a new pair.
-  pi.on("model_select", (event) => {
-    const m = event?.model as { name?: string; id?: string } | undefined;
+  pi.on("model_select", (event, ctx) => {
+    const m = event?.model as { name?: string; id?: string; contextWindow?: number } | undefined;
     const modelName = m?.name ?? m?.id;
     if (!modelName) return;
+    _lastPiContextUsage = contextUsageSnapshot(null, m?.contextWindow);
+    _capturePiContextUsage(ctx as ContextUsageReader);
     // Cache + fan out. Keeps the cached room_meta fresh so a future reconnect
     // carries the current model in its hello, and pushes a room_meta_update to
     // apps already subscribed.
@@ -2420,7 +2447,7 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   // turn — including turns initiated from the Pi terminal (source:"interactive")
   // or RPC. Previous impl overwrote on `agent_end` and lost everything but the
   // last turn (see diagnostics 14, 15).
-  pi.on("message_end", (event) => {
+  pi.on("message_end", (event, ctx) => {
     const m = event?.message as { role?: string; content?: unknown; stopReason?: string; errorMessage?: string } | undefined;
     if (!m) return;
     if (m.role === "user" && _anyPeerActive()) {
@@ -2428,6 +2455,9 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     }
     if (m.role === "user" || m.role === "assistant" || m.role === "toolResult") {
       _messageBuffer.push(m as unknown as BufferMsg);
+    }
+    if (m.role === "assistant") {
+      _capturePiContextUsage(ctx as ContextUsageReader);
     }
     // Forward a failed turn to connected owners. Without this the app just
     // hangs with no response when the provider errors (e.g. the TUI's
@@ -2529,6 +2559,11 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     // via message_end (only user/assistant/toolResult), so push a synthetic
     // marker the mapper turns into a `compaction` event — survives session_sync.
     _messageBuffer.push({ role: "compaction", content: summary, timestamp: ts, tokensBefore });
+    // Pi reports unknown tokens until the next assistant response.
+    _lastPiContextUsage = contextUsageSnapshot(
+      null,
+      _lastPiContextUsage.context_window,
+    );
     // (1) Live result to every connected owner.
     _broadcastToActive({ type: "compaction", summary, tokens_before: tokensBefore, ts });
     // (3) Working ends.
@@ -2543,6 +2578,8 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   // bound to the current session.
   pi.on("session_start", (_event, ctx) => {
     _lastEventCtx = ctx;
+    _lastPiContextUsage = contextUsageSnapshot(null, ctx.model?.contextWindow);
+    _capturePiContextUsage(ctx);
     _restoreSessionHistory(ctx);
     _lastHistorySync = null;
     // session_shutdown disposes per-session pi-ask subscriptions. A host that
@@ -4826,7 +4863,12 @@ export function _routeClientMessageFrom(
       handleThinkingSet(_pi, sender, msg);
       break;
     case "context_usage_get":
-      handleContextUsage((_lastEventCtx ?? _lastCtx) as ContextUsageReader | null, sender, msg.id);
+      handleContextUsage(
+        (_lastEventCtx ?? _lastCtx) as ContextUsageReader | null,
+        sender,
+        msg.id,
+        _lastPiContextUsage,
+      );
       break;
     case "list_models":
       handleListModels(

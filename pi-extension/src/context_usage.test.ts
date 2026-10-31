@@ -22,4 +22,20 @@ describe("context usage", () => {
       { send: (message) => replies.push(message) }, "stale");
     expect(replies[0]).toMatchObject({ type: "context_usage", tokens: null, context_window: null });
   });
+  test("uses the last persisted turn when an event context cannot reconstruct usage", () => {
+    const replies: ServerMessage[] = [];
+    handleContextUsage(
+      { model: { contextWindow: 200_000 } },
+      { send: (message) => replies.push(message) },
+      "cached",
+      contextUsageSnapshot(80_000, 200_000),
+    );
+    expect(replies[0]).toMatchObject({
+      type: "context_usage",
+      in_reply_to: "cached",
+      tokens: 80_000,
+      context_window: 200_000,
+      percent: 40,
+    });
+  });
 });
