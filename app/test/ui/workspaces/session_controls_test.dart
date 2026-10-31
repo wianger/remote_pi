@@ -203,8 +203,24 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('All'), findsNothing);
-      expect(find.text('New session'), findsNothing);
       expect(find.textContaining('Working'), findsNothing);
+      // Claude-style footer: settings circle + primary New session pill.
+      expect(find.byKey(const Key('sidebar-settings')), findsOneWidget);
+      expect(find.byKey(const Key('sidebar-new-session')), findsOneWidget);
+      expect(find.text('New session'), findsOneWidget);
+      // Search lives behind the header circle, not in an always-open field.
+      expect(find.byKey(const Key('sidebar-search-field')), findsNothing);
+      await tester.tap(find.byKey(const Key('sidebar-search')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('sidebar-search-field')), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('sidebar-search-field')),
+        'Beta',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Alpha task'), findsNothing);
+      await tester.tap(find.byKey(const Key('sidebar-search-close')));
+      await tester.pumpAndSettle();
       expect(find.text('Alpha task'), findsOneWidget);
       expect(find.text('Beta task'), findsNothing);
       await tester.tap(find.byKey(const Key('workspace-selector')));

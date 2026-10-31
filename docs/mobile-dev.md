@@ -471,3 +471,26 @@ instead of the intermediate Session sheet, and the voice/send actions use a
 flat accent send button and a neutral circular mic button. Settings detail
 pages are pushed with the route's `SettingsViewModel` re-injected, fixing the
 Relay page failing to open.
+
+## Sketch mark and Claude-style sidebar (1.2.19 / build 28)
+
+The brand mark is now white-backed line art: a graphite bird drawn as an open
+speech bubble with a gold beak and thread. `AppMarkPainter` strokes the outline
+and thickens it below 56px so the launcher icon stays legible, and the adaptive
+icon layers (`ic_launcher_foreground`, `ic_launcher_monochrome`,
+`baya_icon_background`) are regenerated from `branding/baya-mark.svg` by
+`branding/sync_android_icons.py`. The launcher background and launch background
+are `#FFFFFF`, and the palette keeps the graphite/soft-gold tokens for text and
+accents.
+
+The sidebar header follows the Claude drawer: the brand mark and app name sit
+beside a single circular search button. Tapping it swaps the header row for an
+inline search field with a close action, so search is no longer an
+always-visible row above the session list. The footer pairs a circular Settings
+button with one full-width `New session` pill; the pill is disabled until a
+workspace is selected.
+
+Tool cards are collapsed by default. A collapsed card shows the activity label,
+a one-line preview of the command or path, and its status; tapping it reveals
+the command block, output and outcome. Real approvals still open automatically
+so the Allow/Deny decision stays visible.

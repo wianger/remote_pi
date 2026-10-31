@@ -232,15 +232,18 @@ class AppColors extends ThemeExtension<AppColors> {
 
 /// Fixed launcher/brand tile colors, shared by light and dark presentations.
 abstract final class AppBrandColors {
-  static const background = Color(0xFF30343C);
-  static const backgroundLight = Color(0xFF535861);
-  static const backgroundDeep = Color(0xFF171B22);
-  static const foreground = Color(0xFFF5F0E7);
-  static const foregroundLight = Color(0xFFFFFDF7);
-  static const foregroundShade = Color(0xFFDDD9D2);
-  static const highlight = Color(0xFFE1B465);
-  static const highlightLight = Color(0xFFFFE9BC);
-  static const highlightDeep = Color(0xFFA97932);
+  /// Sketch treatment: a white tile with graphite line work and a small gold
+  /// accent, so the mark reads the same on light and dark launchers.
+  static const background = Color(0xFFFFFFFF);
+  static const backgroundLight = Color(0xFFFFFFFF);
+  static const backgroundDeep = Color(0xFFF4F1EB);
+  static const edge = Color(0xFFE6E2DA);
+  static const foreground = Color(0xFF2C313A);
+  static const foregroundLight = Color(0xFF3C424C);
+  static const foregroundShade = Color(0xFF1D2128);
+  static const highlight = Color(0xFFB98A3E);
+  static const highlightLight = Color(0xFFD8AE6A);
+  static const highlightDeep = Color(0xFF8C6326);
   static const reflection = Color(0xFFFFFFFF);
   static const shadow = Color(0xFF12151C);
 }

@@ -247,12 +247,33 @@ class _SessionSidebarState extends State<SessionSidebar> {
   String _query = '';
   bool _opening = false;
   bool _choosing = false;
+  bool _searching = false;
   final _search = TextEditingController();
+  final _searchFocus = FocusNode();
 
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  /// Claude-style header: search is a single circle until tapped, then the
+  /// text field takes the header row.
+  void _openSearch() {
+    setState(() => _searching = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _searchFocus.requestFocus();
+    });
+  }
+
+  void _closeSearch() {
+    _search.clear();
+    _searchFocus.unfocus();
+    setState(() {
+      _searching = false;
+      _query = '';
+    });
   }
 
   Future<void> _choose(Future<void> Function() action) async {
@@ -406,20 +427,36 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         padding: EdgeInsets.zero,
                         children: [
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 14, 12, 16),
-                            child: Row(
-                              children: [
-                                const AppMark(size: 36, tile: true),
-                                const SizedBox(width: 10),
-                                Text(
-                                  kAppName,
-                                  style: brandTextStyle(
-                                    fontSize: 22,
-                                    color: colors.text,
+                            padding: const EdgeInsets.fromLTRB(16, 14, 12, 16),
+                            child: _searching
+                                ? _SidebarSearchField(
+                                    controller: _search,
+                                    focusNode: _searchFocus,
+                                    onChanged: (value) =>
+                                        setState(() => _query = value),
+                                    onClose: _closeSearch,
+                                  )
+                                : Row(
+                                    children: [
+                                      const AppMark(size: 34, tile: true),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          kAppName,
+                                          style: brandTextStyle(
+                                            fontSize: 22,
+                                            color: colors.text,
+                                          ),
+                                        ),
+                                      ),
+                                      _SidebarCircleAction(
+                                        key: const Key('sidebar-search'),
+                                        tooltip: 'Search sessions',
+                                        icon: LucideIcons.search,
+                                        onPressed: _openSearch,
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
-                            ),
                           ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -466,22 +503,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: TextField(
-                              controller: _search,
-                              onChanged: (value) =>
-                                  setState(() => _query = value),
-                              style: context.typo.sansBody.copyWith(
-                                fontSize: 14,
-                              ),
-                              decoration: const InputDecoration(
-                                hintText: 'Search sessions',
-                                isDense: true,
-                                prefixIcon: Icon(LucideIcons.search, size: 17),
-                              ),
-                            ),
-                          ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                             child: Text(
@@ -560,10 +581,11 @@ class _SessionSidebarState extends State<SessionSidebar> {
                 indent: 20,
                 endIndent: 20,
               ),
+              // Claude-style footer: settings on the left, one primary pill
+              // for starting a session.
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     _SidebarCircleAction(
                       key: const Key('sidebar-settings'),
@@ -573,6 +595,26 @@ class _SessionSidebarState extends State<SessionSidebar> {
                         widget.close?.call();
                         context.push('/settings');
                       },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        key: const Key('sidebar-new-session'),
+                        onPressed: vm.selectedWorkspace == null
+                            ? null
+                            : () => _startSession(
+                                context,
+                                close: widget.close,
+                              ),
+                        icon: const Icon(LucideIcons.plus, size: 18),
+                        label: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('New session'),
+                        ),
+                        style: FilledButton.styleFrom(
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -600,17 +642,74 @@ class _SidebarCircleAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return BayaGlassSurface(
-      radius: 23,
-      padding: EdgeInsets.zero,
+    return Material(
+      color: colors.surface.withValues(alpha: .72),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
       child: SizedBox.square(
-        dimension: 46,
+        dimension: 44,
         child: IconButton(
           tooltip: tooltip,
           onPressed: onPressed,
-          icon: Icon(icon, size: 19, color: colors.accent),
+          icon: Icon(icon, size: 19, color: colors.muted2),
         ),
       ),
+    );
+  }
+}
+
+/// Header search that replaces the brand row once the search button is tapped.
+class _SidebarSearchField extends StatelessWidget {
+  const _SidebarSearchField({
+    required this.controller,
+    required this.focusNode,
+    required this.onChanged,
+    required this.onClose,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            key: const Key('sidebar-search-field'),
+            controller: controller,
+            focusNode: focusNode,
+            onChanged: onChanged,
+            style: context.typo.sansBody.copyWith(fontSize: 15),
+            decoration: InputDecoration(
+              hintText: 'Search sessions',
+              isDense: true,
+              filled: true,
+              fillColor: colors.surface.withValues(alpha: .72),
+              prefixIcon: Icon(
+                LucideIcons.search,
+                size: 18,
+                color: colors.muted,
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          key: const Key('sidebar-search-close'),
+          tooltip: 'Close search',
+          onPressed: onClose,
+          icon: Icon(LucideIcons.x, size: 19, color: colors.muted2),
+        ),
+      ],
     );
   }
 }

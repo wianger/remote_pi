@@ -28,9 +28,9 @@ class ToolRequestCard extends StatefulWidget {
 }
 
 class _ToolRequestCardState extends State<ToolRequestCard> {
-  /// Single calls in the chat flow show their command/summary immediately so
-  /// the transcript reads like a log; only the (potentially long) output is
-  /// behind the expander. Real approvals always render fully.
+  /// Cards start collapsed to a single readable row; tapping one reveals the
+  /// command, output and outcome. Real approvals always start open.
+  bool _expanded = false;
   bool _outputExpanded = false;
   ToolEvent get tool => widget.tool;
   void Function(String, ApproveDecision)? get onDecide => widget.onDecide;
@@ -75,48 +75,88 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
     final longOutput =
         hasOutput &&
         (output.length > 900 || '\n'.allMatches(output).length > 12);
-    final showOutput = hasOutput && (!longOutput || _outputExpanded);
-    return Material(
-      color: colors.bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            button: !_needsApproval && longOutput,
-            expanded: _outputExpanded,
-            child: InkWell(
-              key: ValueKey('tool-details-${tool.toolCallId}'),
-              borderRadius: BorderRadius.circular(8),
-              onTap: _needsApproval || !longOutput
-                  ? null
-                  : () => setState(() => _outputExpanded = !_outputExpanded),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 2,
-                  vertical: 10,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: _buildHeader(context, color)),
-                    const SizedBox(width: 10),
-                    if (longOutput && !_needsApproval)
-                      Icon(
-                        _outputExpanded
+    // Collapsed by default: the row shows what ran, and the command, output and
+    // outcome stay one tap away. Real approvals always start open.
+    final expanded = _expanded || _needsApproval;
+    final preview = _previewText();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          button: !_needsApproval,
+          expanded: expanded,
+          child: InkWell(
+            key: ValueKey('tool-details-${tool.toolCallId}'),
+            borderRadius: BorderRadius.circular(10),
+            onTap: _needsApproval
+                ? null
+                : () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 9),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Icon(
+                      _headerIcon,
+                      size: 16,
+                      color: color,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(context, color),
+                        if (!expanded && preview != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              preview,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: context.typo.monoSmall.copyWith(
+                                fontSize: 11.5,
+                                color: colors.muted,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: _buildStatus(context, color),
+                  ),
+                  if (!_needsApproval) ...[
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(
+                        expanded
                             ? LucideIcons.chevronDown
                             : LucideIcons.chevronRight,
                         size: 15,
                         color: colors.muted,
                       ),
+                    ),
                   ],
-                ),
+                ],
               ),
             ),
           ),
+        ),
+        if (expanded)
           Container(
-            margin: const EdgeInsets.only(left: 9, top: 4, bottom: 8),
+            margin: const EdgeInsets.only(left: 9, top: 2, bottom: 8),
             padding: const EdgeInsets.only(left: 17),
             decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: colors.border, width: 2)),
+              border: Border(
+                left: BorderSide(color: colors.border, width: 2),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +167,7 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
                   Container(
                     width: double.infinity,
                     constraints: BoxConstraints(
-                      maxHeight: showOutput ? 420 : 132,
+                      maxHeight: _outputExpanded ? 420 : 132,
                     ),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -194,11 +234,44 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
               ],
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
+  /// One-line, human-readable summary shown while the card is collapsed.
+  String? _previewText() {
+    if (_needsApproval) return null;
+    final args = tool.args;
+    if (args is Map) {
+      for (final key in const [
+        'command',
+        'cmd',
+        'path',
+        'file_path',
+        'query',
+        'prompt',
+      ]) {
+        final value = args[key];
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim().replaceAll('\n', ' ');
+        }
+      }
+    }
+    if (args is String && args.trim().isNotEmpty) {
+      return args.trim().replaceAll('\n', ' ');
+    }
+    return null;
+  }
+
+  IconData get _headerIcon => switch (tool.tool.toLowerCase()) {
+    'bash' || 'commandexecution' => LucideIcons.terminal,
+    'read' => LucideIcons.fileText,
+    'edit' || 'write' || 'apply_patch' || 'filechange' => LucideIcons.filePen,
+    'web_search' || 'websearch' => LucideIcons.search,
+    final other when other.contains('message') || other.contains('agent') =>
+      LucideIcons.send,
+    _ => LucideIcons.wrench,
+  };
   bool get _running =>
       tool.status == ToolEventStatus.pending ||
       tool.status == ToolEventStatus.allowed;
@@ -224,6 +297,17 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
   }
 
   Widget _buildHeader(BuildContext context, Color color) {
+    return Text(
+      _activityLabel,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: context.typo.sansBody.copyWith(fontSize: 14, color: color),
+    );
+  }
+
+  /// Compact right-edge state: spinner while running, a label for terminal
+  /// states, and a check once an ordinary call finishes.
+  Widget _buildStatus(BuildContext context, Color color) {
     final statusLabel = switch (tool.status) {
       ToolEventStatus.pending ||
       ToolEventStatus.allowed => _needsApproval ? 'Approval' : 'Running',
@@ -232,43 +316,20 @@ class _ToolRequestCardState extends State<ToolRequestCard> {
       ToolEventStatus.denied => 'Denied',
       ToolEventStatus.expired => 'Expired',
     };
-
-    return Row(
-      children: [
-        Icon(
-          switch (tool.tool.toLowerCase()) {
-            'bash' || 'commandexecution' => LucideIcons.terminal,
-            'web_search' || 'websearch' => LucideIcons.search,
-            _ => LucideIcons.fileText,
-          },
-          size: 16,
-          color: color,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            _activityLabel,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: context.typo.sansBody.copyWith(fontSize: 14, color: color),
-          ),
-        ),
-        const SizedBox(width: 8),
-        if (_running && !_needsApproval)
-          SizedBox(
-            width: 13,
-            height: 13,
-            child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
-          )
-        else if (tool.status != ToolEventStatus.completed)
-          Text(
-            statusLabel,
-            style: context.typo.sansBody.copyWith(fontSize: 11, color: color),
-          )
-        else
-          Icon(LucideIcons.check, size: 14, color: context.colors.muted),
-      ],
-    );
+    if (_running && !_needsApproval) {
+      return SizedBox(
+        width: 13,
+        height: 13,
+        child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
+      );
+    }
+    if (tool.status != ToolEventStatus.completed) {
+      return Text(
+        statusLabel,
+        style: context.typo.sansBody.copyWith(fontSize: 11, color: color),
+      );
+    }
+    return Icon(LucideIcons.check, size: 14, color: context.colors.muted);
   }
 
   Widget _buildCodeBlock(BuildContext context) {

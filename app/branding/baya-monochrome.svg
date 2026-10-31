@@ -1,8 +1,12 @@
 <?xml version='1.0' encoding='utf-8'?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
   <g transform="translate(11.88 11.88) scale(.78)">
-    <path d="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65ZM37 59C45 67 55 69 66 60C61 73 46 77 37 65ZM73.6 40a2.6 2.6 0 1 0-5.2 0a2.6 2.6 0 1 0 5.2 0Z" fill="#FFFFFF" fill-rule="evenodd" />
-    <path d="M49 39C51 29 58 25 67 26C73 26 78 30 80 36L64 36C58 36 54 39 49 43ZM79 42L90 48L78 51Z" fill="#FFFFFF" />
-    <path d="M88 51C88 76 77 88 58 88" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" />
+    <path d="M28 65C28 54 37 46 48 46C48 32 57 24 68 26C79 27 83 38 79 48C79 65 65 79 48 79L28 86L32 74C29 71 28 68 28 65Z" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M37.5 59.5C45 67 55 69 65.5 60.5C61 72.5 46.5 76 37.8 65" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M48.6 39.6C51 29.4 58 25.2 67 26.2C73 27 78 30.6 80 36.4" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M53.5 33.5C58.5 29.2 64 28.4 69.6 30.2" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M78.8 43.2L89.6 48L77.6 52.2Z" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M88 51.5C88 76 77 88 58 88" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="71" cy="40.4" r="2.4" fill="#FFFFFF" />
   </g>
 </svg>

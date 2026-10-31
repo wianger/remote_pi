@@ -52,10 +52,14 @@ void main() {
       ),
     );
     expect(find.text('Failed'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tool-details-failed-think')));
+    await tester.pump();
     expect(find.text('The tool could not continue.'), findsOneWidget);
   });
 
-  testWidgets('single call shows its command immediately', (tester) async {
+  testWidgets('single call collapses to one row and expands on tap', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _wrap(
         const ToolRequestCard(
@@ -70,10 +74,14 @@ void main() {
         ),
       ),
     );
-    // The command is visible without an extra tap, so the transcript reads
-    // like a log instead of a stack of collapsed rows.
+    // Collapsed default: the activity label and a dimmed command preview.
+    expect(find.text('Ran command'), findsOneWidget);
     expect(find.text('git status'), findsOneWidget);
-    // Short output is shown too.
+    // Output stays behind the tap.
+    expect(find.text('Working tree clean'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('tool-details-output')));
+    await tester.pump();
     expect(find.text('Working tree clean'), findsOneWidget);
   });
 
@@ -91,6 +99,8 @@ void main() {
     );
     await tester.pumpWidget(_wrap(ToolRequestCard(tool: tool)));
     expect(find.text('Ran command'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tool-details-long')));
+    await tester.pump();
     expect(find.text('Show full output'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('tool-output-toggle-long')));
     await tester.pump();
@@ -137,6 +147,8 @@ void main() {
       await tester.pumpWidget(
         _wrap(const ToolRequestCard(tool: _editToolWithHunk)),
       );
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc4')));
+      await tester.pump();
 
       expect(
         find.textContaining('   16 args: {', findRichText: true),
@@ -176,6 +188,8 @@ void main() {
       );
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: done)));
       expect(find.text('Ran command'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pump();
       expect(find.textContaining('Done'), findsAny);
     });
 
@@ -222,6 +236,8 @@ void main() {
         status: ToolEventStatus.completed,
       );
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: done)));
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pump();
       expect(outcomeColor(tester, 'Done'), AppColors.dark.muted2);
     });
 
@@ -236,6 +252,8 @@ void main() {
       );
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: failed)));
       expect(find.text('Failed'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pump();
       expect(
         outcomeColor(tester, 'command failed: exit 1'),
         AppColors.dark.error,
@@ -245,6 +263,8 @@ void main() {
     testWidgets('running stays subtle "Running…"', (tester) async {
       // pending defaults
       await tester.pumpWidget(_wrap(const ToolRequestCard(tool: _bashTool)));
+      await tester.tap(find.byKey(const ValueKey('tool-details-tc1')));
+      await tester.pump();
       expect(outcomeColor(tester, 'Running…'), AppColors.dark.muted2);
     });
   });
