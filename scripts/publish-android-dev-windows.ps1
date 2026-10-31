@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)][string]$NotesFile,
     [string]$SourceRoot = (Split-Path $PSScriptRoot -Parent),
     [string]$AndroidSdk = 'C:\Scoop\persist\android-clt',
+    [string]$JdkRoot = 'C:\Scoop\apps\temurin17-jdk\17.0.20-101',
     [string]$GhExe = 'gh',
     [string]$ExpectedCertificateSha256 = 'bdaba7b38a226cf6bcf2673d24a8f56453ffdce66f3b3402e48e0bca7b884eaa',
     [switch]$Publish
@@ -24,6 +25,10 @@ $versionMatch = [regex]::Match($pubspec, '(?m)^version:\s*(\d+\.\d+\.\d+)\+(\d+)
 if (-not $versionMatch.Success) { throw 'pubspec needs version x.y.z+buildNumber.' }
 $version = $versionMatch.Groups[1].Value
 $build = [int]$versionMatch.Groups[2].Value
+$java = Join-Path $JdkRoot 'bin\java.exe'
+if (-not (Test-Path -LiteralPath $java)) { throw "Missing Java runtime: $java" }
+$env:JAVA_HOME = $JdkRoot
+$env:PATH = "$(Join-Path $JdkRoot 'bin');$env:PATH"
 $tools = Join-Path $AndroidSdk 'build-tools\36.0.0'
 $badging = & (Join-Path $tools 'aapt2.exe') dump badging $apkFile
 if ($LASTEXITCODE -ne 0) { throw 'Could not inspect APK.' }
